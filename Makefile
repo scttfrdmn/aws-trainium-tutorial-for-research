@@ -12,22 +12,38 @@ install: ## Install package in development mode
 	$(PYTHON) -m pip install -e .
 
 install-dev: ## Install with development dependencies
-	$(PYTHON) -m pip install -e ".[dev,docs,benchmarking]"
+	$(PYTHON) -m pip install -e ".[dev,neuron,science,notebooks]"
+	$(PYTHON) -m pre-commit install
 
 install-neuron: ## Install Neuron SDK components
 	@echo "Installing Neuron SDK..."
 	$(PYTHON) -m pip install torch-neuronx neuronx-cc --extra-index-url https://pip.repos.neuron.amazonaws.com
 	@echo "✅ Neuron SDK installed"
 
-test: ## Run test suite
-	$(PYTHON) -m pytest tests/ -v
+test: ## Run all tests
+	$(PYTHON) -m pytest tests/ -v --cov=scripts --cov=examples --cov=advanced --cov-report=html --cov-report=term
 
-lint: ## Run linting checks
-	$(PYTHON) -m flake8 scripts/ examples/ advanced/
-	$(PYTHON) -m black --check scripts/ examples/ advanced/
+test-unit: ## Run unit tests only
+	$(PYTHON) -m pytest tests/unit/ -v -m "not aws and not neuron"
 
-format: ## Format code with black
-	$(PYTHON) -m black scripts/ examples/ advanced/
+test-integration: ## Run integration tests (requires AWS)
+	$(PYTHON) -m pytest tests/integration/ -v -m "aws"
+
+test-fast: ## Run fast tests only
+	$(PYTHON) -m pytest tests/ -v -m "not slow and not aws"
+
+lint: ## Run all linting checks
+	$(PYTHON) -m black --check scripts/ examples/ advanced/ tests/
+	$(PYTHON) -m isort --check-only scripts/ examples/ advanced/ tests/
+	$(PYTHON) -m flake8 scripts/ examples/ advanced/ tests/
+	$(PYTHON) -m mypy scripts/ --ignore-missing-imports
+
+format: ## Format all code
+	$(PYTHON) -m black scripts/ examples/ advanced/ tests/
+	$(PYTHON) -m isort scripts/ examples/ advanced/ tests/
+
+pre-commit: ## Run pre-commit hooks on all files
+	pre-commit run --all-files
 
 setup-aws: ## Set up AWS environment
 	$(PYTHON) scripts/setup_aws_environment.py
