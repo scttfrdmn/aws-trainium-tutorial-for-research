@@ -1,8 +1,13 @@
-# AWS Trainium & Inferentia: Complete Tutorial for Academic Researchers
+# AWS Trainium & Inferentia Tutorial for Research
 
-## Overview
+[![Open Source](https://img.shields.io/badge/Open%20Source-MIT-blue)](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research)
+[![GitHub Stars](https://img.shields.io/github/stars/scttfrdmn/aws-trainium-tutorial-for-research)](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/stargazers)
+[![Version](https://img.shields.io/badge/Version-2025.1.0-green)](VERSION_MATRIX.md)
+[![Neuron SDK](https://img.shields.io/badge/Neuron%20SDK-2.20.1-orange)](https://awsdocs-neuron.readthedocs-hosted.com/)
 
-This comprehensive tutorial provides everything academic researchers need to leverage AWS Trainium and Inferentia chips for cost-effective ML research, including advanced techniques, real-world examples, and production deployment patterns.
+## 🎯 Overview
+
+The world's most comprehensive, production-ready tutorial for AWS Trainium and Inferentia. This tutorial provides everything researchers and organizations need to leverage AWS Neuron hardware for cost-effective ML research and production deployment.
 
 ## Key Features
 

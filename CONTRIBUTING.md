@@ -1,6 +1,6 @@
 # Contributing to AWS Trainium & Inferentia Tutorial
 
-Thank you for your interest in contributing to this tutorial! This guide will help you get started.
+We welcome contributions from the community! This guide outlines how to contribute to the tutorial.
 
 ## 🎯 Types of Contributions
 
