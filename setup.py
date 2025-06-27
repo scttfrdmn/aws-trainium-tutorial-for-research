@@ -1,13 +1,16 @@
 """
 AWS Trainium & Inferentia Tutorial Package Setup
 """
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+    requirements = [
+        line.strip() for line in fh if line.strip() and not line.startswith("#")
+    ]
 
 setup(
     name="aws-trainium-inferentia-tutorial",
