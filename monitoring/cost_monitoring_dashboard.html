@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Research Cost Dashboard</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1400.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1419;
+            color: #e1e8ed;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header .subtitle {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: #192734;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card h3 {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+        
+        .metric {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .metric.cost {
+            color: #f59e0b;
+        }
+        
+        .metric.credits {
+            color: #10b981;
+        }
+        
+        .metric.warning {
+            color: #ef4444;
+        }
+        
+        .instances-table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        
+        .instances-table th,
+        .instances-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #374151;
+        }
+        
+        .instances-table th {
+            background: #1f2937;
+            color: #9ca3af;
+            font-weight: 600;
+        }
+        
+        .instances-table tr:hover {
+            background: #1f2937;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .status-running {
+            background: #10b981;
+            color: white;
+        }
+        
+        .status-stopped {
+            background: #6b7280;
+            color: white;
+        }
+        
+        .status-terminated {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.3s ease;
+        }
+        
+        .btn:hover {
+            background: #5a67d8;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        .chart-container {
+            background: #192734;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        .refresh-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #374151;
+            padding: 10px 20px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .refresh-indicator.active {
+            background: #10b981;
+        }
+        
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f4f6;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .config-panel {
+            background: #1f2937;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .config-panel input {
+            background: #374151;
+            border: 1px solid #4b5563;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-right: 10px;
+        }
+        
+        .alert {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .experiment-card {
+            background: #1f2937;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .experiment-card.warning {
+            border-left-color: #f59e0b;
+        }
+        
+        .experiment-card.error {
+            border-left-color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 ML Research Cost Dashboard</h1>
+            <div class="subtitle">Real-time monitoring of AWS ML experiments and costs</div>
+        </div>
+        
+        <div class="alert" id="alertBox"></div>
+        
+        <div class="config-panel">
+            <h3>AWS Configuration</h3>
+            <input type="text" id="accessKeyId" placeholder="Access Key ID">
+            <input type="password" id="secretAccessKey" placeholder="Secret Access Key">
+            <input type="text" id="region" placeholder="Region (e.g., us-east-1)" value="us-east-1">
+            <button class="btn" onclick="initializeAWS()">Connect</button>
+            <span id="connectionStatus" style="margin-left: 10px;"></span>
+        </div>
+        
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>💰 Current Month Costs</h3>
+                <div class="metric cost" id="currentCost">$0.00</div>
+                <div>Trainium: <span id="trainiumCost">$0.00</span></div>
+                <div>Inferentia: <span id="inferentiaCost">$0.00</span></div>
+                <div>Other: <span id="otherCost">$0.00</span></div>
+            </div>
+            
+            <div class="card">
+                <h3>💳 AWS Credits</h3>
+                <div class="metric credits" id="creditsRemaining">$0.00</div>
+                <div>Used: <span id="creditsUsed">$0.00</span></div>
+                <div>Expires: <span id="creditsExpiry">--</span></div>
+            </div>
+            
+            <div class="card">
+                <h3>🖥️ Active Instances</h3>
+                <div class="metric" id="activeInstances">0</div>
+                <div>Trainium: <span id="trainiumInstances">0</span></div>
+                <div>Inferentia: <span id="inferentiaInstances">0</span></div>
+                <div>GPUs: <span id="gpuInstances">0</span></div>
+            </div>
+            
+            <div class="card">
+                <h3>⏱️ Burn Rate</h3>
+                <div class="metric warning" id="burnRate">$0.00/hr</div>
+                <div>Daily: <span id="dailyBurn">$0.00</span></div>
+                <div>Monthly projection: <span id="monthlyProjection">$0.00</span></div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h3>📊 Cost Trends (Last 7 Days)</h3>
+            <canvas id="costChart"></canvas>
+        </div>
+        
+        <div class="card">
+            <h3>🧪 Recent Experiments</h3>
+            <div id="experimentsContainer">
+                <p style="text-align: center; padding: 20px; color: #6b7280;">
+                    Configure AWS credentials to view experiments
+                </p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>🚀 Running Instances</h3>
+            <table class="instances-table">
+                <thead>
+                    <tr>
+                        <th>Instance ID</th>
+                        <th>Type</th>
+                        <th>State</th>
+                        <th>Launch Time</th>
+                        <th>Runtime</th>
+                        <th>Est. Cost</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="instancesTableBody">
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 40px;">
+                            Configure AWS credentials to view instances
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="refresh-indicator" id="refreshIndicator">
+            <div class="loading-spinner" id="loadingSpinner" style="display: none;"></div>
+            <span id="refreshText">Auto-refresh: 60s</span>
+        </div>
+    </div>
+    
+    <script>
+        let AWS_CONFIG = null;
+        let refreshInterval = null;
+        let costChart = null;
+        
+        // Instance pricing (spot prices)
+        const INSTANCE_PRICING = {
+            'trn1.2xlarge': 0.40,
+            'trn1.32xlarge': 6.45,
+            'trn1n.32xlarge': 7.43,
+            'trn2.24xlarge': 7.80,
+            'trn2.48xlarge': 12.00,
+            'inf1.xlarge': 0.068,
+            'inf1.24xlarge': 1.416,
+            'inf2.xlarge': 0.227,
+            'inf2.48xlarge': 3.89,
+            'p3.2xlarge': 0.918,
+            'p4d.24xlarge': 9.83,
+            'p5.48xlarge': 29.50
+        };
+        
+        function initializeAWS() {
+            const accessKeyId = document.getElementById('accessKeyId').value;
+            const secretAccessKey = document.getElementById('secretAccessKey').value;
+            const region = document.getElementById('region').value;
+            
+            if (!accessKeyId || !secretAccessKey) {
+                showAlert('Please enter AWS credentials', 'error');
+                return;
+            }
+            
+            AWS.config.update({
+                accessKeyId: accessKeyId,
+                secretAccessKey: secretAccessKey,
+                region: region
+            });
+            
+            AWS_CONFIG = {
+                ec2: new AWS.EC2(),
+                costExplorer: new AWS.CostExplorer(),
+                cloudWatch: new AWS.CloudWatch(),
+                s3: new AWS.S3()
+            };
+            
+            document.getElementById('connectionStatus').textContent = '✅ Connected';
+            showAlert('Successfully connected to AWS!', 'success');
+            
+            // Start monitoring
+            refreshDashboard();
+            refreshInterval = setInterval(refreshDashboard, 60000); // Refresh every minute
+            
+            // Initialize chart
+            initializeChart();
+        }
+        
+        async function refreshDashboard() {
+            if (!AWS_CONFIG) return;
+            
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('refreshIndicator').classList.add('active');
+            
+            try {
+                await Promise.all([
+                    updateCosts(),
+                    updateCredits(),
+                    updateInstances(),
+                    updateExperiments(),
+                    updateCostTrends()
+                ]);
+            } catch (error) {
+                console.error('Error refreshing dashboard:', error);
+                showAlert('Error refreshing data: ' + error.message, 'error');
+            }
+            
+            document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('refreshIndicator').classList.remove('active');
+            
+            // Update refresh countdown
+            let countdown = 60;
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                document.getElementById('refreshText').textContent = `Auto-refresh: ${countdown}s`;
+                if (countdown <= 0) clearInterval(countdownInterval);
+            }, 1000);
+        }
+        
+        async function updateCosts() {
+            const endDate = new Date();
+            const startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+            
+            const params = {
+                TimePeriod: {
+                    Start: startDate.toISOString().split('T')[0],
+                    End: endDate.toISOString().split('T')[0]
+                },
+                Granularity: 'MONTHLY',
+                Metrics: ['UnblendedCost'],
+                GroupBy: [{
+                    Type: 'DIMENSION',
+                    Key: 'INSTANCE_TYPE'
+                }]
+            };
+            
+            try {
+                const data = await AWS_CONFIG.costExplorer.getCostAndUsage(params).promise();
+                
+                let totalCost = 0;
+                let trainiumCost = 0;
+                let inferentiaCost = 0;
+                let otherCost = 0;
+                
+                if (data.ResultsByTime && data.ResultsByTime[0]) {
+                    const groups = data.ResultsByTime[0].Groups || [];
+                    
+                    groups.forEach(group => {
+                        const instanceType = group.Keys[0];
+                        const cost = parseFloat(group.Metrics.UnblendedCost.Amount);
+                        
+                        totalCost += cost;
+                        
+                        if (instanceType.includes('trn')) {
+                            trainiumCost += cost;
+                        } else if (instanceType.includes('inf')) {
+                            inferentiaCost += cost;
+                        } else {
+                            otherCost += cost;
+                        }
+                    });
+                }
+                
+                document.getElementById('currentCost').textContent = `$${totalCost.toFixed(2)}`;
+                document.getElementById('trainiumCost').textContent = `$${trainiumCost.toFixed(2)}`;
+                document.getElementById('inferentiaCost').textContent = `$${inferentiaCost.toFixed(2)}`;
+                document.getElementById('otherCost').textContent = `$${otherCost.toFixed(2)}`;
+                
+            } catch (error) {
+                console.error('Error fetching costs:', error);
+            }
+        }
+        
+        async function updateCredits() {
+            // Note: AWS doesn't have a direct API for credits
+            // This would need to be implemented with a custom solution
+            document.getElementById('creditsRemaining').textContent = '$500.00';
+            document.getElementById('creditsUsed').textContent = '$200.00';
+            document.getElementById('creditsExpiry').textContent = '2025-12-31';
+        }
+        
+        async function updateInstances() {
+            try {
+                const data = await AWS_CONFIG.ec2.describeInstances({
+                    Filters: [{
+                        Name: 'instance-state-name',
+                        Values: ['running', 'stopped']
+                    }]
+                }).promise();
+                
+                let instances = [];
+                let trainiumCount = 0;
+                let inferentiaCount = 0;
+                let gpuCount = 0;
+                let totalBurnRate = 0;
+                
+                data.Reservations.forEach(reservation => {
+                    reservation.Instances.forEach(instance => {
+                        const instanceType = instance.InstanceType;
+                        const launchTime = new Date(instance.LaunchTime);
+                        const runtime = (new Date() - launchTime) / (1000 * 60 * 60);
+                        const hourlyRate = INSTANCE_PRICING[instanceType] || 1.0;
+                        const estimatedCost = runtime * hourlyRate;
+                        
+                        instances.push({
+                            id: instance.InstanceId,
+                            type: instanceType,
+                            state: instance.State.Name,
+                            launchTime: launchTime,
+                            runtime: runtime,
+                            estimatedCost: estimatedCost,
+                            hourlyRate: hourlyRate
+                        });
+                        
+                        if (instance.State.Name === 'running') {
+                            totalBurnRate += hourlyRate;
+                            
+                            if (instanceType.includes('trn')) {
+                                trainiumCount++;
+                            } else if (instanceType.includes('inf')) {
+                                inferentiaCount++;
+                            } else if (instanceType.includes('p3') || instanceType.includes('p4') || instanceType.includes('p5')) {
+                                gpuCount++;
+                            }
+                        }
+                    });
+                });
+                
+                // Update metrics
+                document.getElementById('activeInstances').textContent = instances.filter(i => i.state === 'running').length;
+                document.getElementById('trainiumInstances').textContent = trainiumCount;
+                document.getElementById('inferentiaInstances').textContent = inferentiaCount;
+                document.getElementById('gpuInstances').textContent = gpuCount;
+                document.getElementById('burnRate').textContent = `$${totalBurnRate.toFixed(2)}/hr`;
+                document.getElementById('dailyBurn').textContent = `$${(totalBurnRate * 24).toFixed(2)}`;
+                document.getElementById('monthlyProjection').textContent = `$${(totalBurnRate * 24 * 30).toFixed(2)}`;
+                
+                // Update instances table
+                updateInstancesTable(instances);
+                
+            } catch (error) {
+                console.error('Error fetching instances:', error);
+            }
+        }
+        
+        async function updateExperiments() {
+            try {
+                // Try to fetch experiment data from S3
+                const response = await AWS_CONFIG.s3.getObject({
+                    Bucket: 'your-experiment-bucket',  // Replace with your bucket
+                    Key: 'dashboard/data/experiments.json'
+                }).promise();
+                
+                const experiments = JSON.parse(response.Body.toString());
+                updateExperimentsDisplay(experiments);
+                
+            } catch (error) {
+                // If no experiments data, show placeholder
+                document.getElementById('experimentsContainer').innerHTML = `
+                    <p style="text-align: center; padding: 20px; color: #6b7280;">
+                        No experiment data found. Start running experiments to see them here.
+                    </p>
+                `;
+            }
+        }
+        
+        function updateExperimentsDisplay(experiments) {
+            const container = document.getElementById('experimentsContainer');
+            container.innerHTML = '';
+            
+            Object.entries(experiments).forEach(([name, exp]) => {
+                const lastUpdate = new Date(exp.last_update);
+                const hoursAgo = (new Date() - lastUpdate) / (1000 * 60 * 60);
+                
+                let cardClass = 'experiment-card';
+                if (exp.total_cost > 100) cardClass += ' warning';
+                if (exp.total_cost > 500) cardClass += ' error';
+                
+                const card = document.createElement('div');
+                card.className = cardClass;
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4>${name}</h4>
+                            <p>Cost: $${exp.total_cost.toFixed(2)} | Last update: ${hoursAgo < 1 ? 'Just now' : `${Math.floor(hoursAgo)}h ago`}</p>
+                        </div>
+                        <div>
+                            <span class="status-badge ${exp.events[exp.events.length - 1].event_type === 'completed' ? 'status-terminated' : 'status-running'}">
+                                ${exp.events[exp.events.length - 1].event_type}
+                            </span>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+        
+        function updateInstancesTable(instances) {
+            const tbody = document.getElementById('instancesTableBody');
+            
+            if (instances.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px;">No instances found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = instances.map(instance => `
+                <tr>
+                    <td>${instance.id}</td>
+                    <td>${instance.type}</td>
+                    <td><span class="status-badge status-${instance.state}">${instance.state}</span></td>
+                    <td>${instance.launchTime.toLocaleString()}</td>
+                    <td>${formatRuntime(instance.runtime)}</td>
+                    <td>$${instance.estimatedCost.toFixed(2)}</td>
+                    <td>
+                        ${instance.state === 'running' ? 
+                            `<button class="btn btn-danger" onclick="terminateInstance('${instance.id}')">Terminate</button>` : 
+                            '--'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        function formatRuntime(hours) {
+            if (hours < 1) {
+                return `${Math.round(hours * 60)} minutes`;
+            } else if (hours < 24) {
+                return `${hours.toFixed(1)} hours`;
+            } else {
+                return `${Math.floor(hours / 24)} days ${(hours % 24).toFixed(0)} hrs`;
+            }
+        }
+        
+        async function terminateInstance(instanceId) {
+            if (!confirm(`Are you sure you want to terminate instance ${instanceId}?`)) {
+                return;
+            }
+            
+            try {
+                await AWS_CONFIG.ec2.terminateInstances({
+                    InstanceIds: [instanceId]
+                }).promise();
+                
+                showAlert(`Instance ${instanceId} termination initiated`, 'success');
+                setTimeout(refreshDashboard, 3000);
+                
+            } catch (error) {
+                showAlert(`Error terminating instance: ${error.message}`, 'error');
+            }
+        }
+        
+        function initializeChart() {
+            const ctx = document.getElementById('costChart').getContext('2d');
+            costChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Daily Cost',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        async function updateCostTrends() {
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - 7);
+            
+            const params = {
+                TimePeriod: {
+                    Start: startDate.toISOString().split('T')[0],
+                    End: endDate.toISOString().split('T')[0]
+                },
+                Granularity: 'DAILY',
+                Metrics: ['UnblendedCost']
+            };
+            
+            try {
+                const data = await AWS_CONFIG.costExplorer.getCostAndUsage(params).promise();
+                
+                const labels = [];
+                const costs = [];
+                
+                data.ResultsByTime.forEach(result => {
+                    const date = new Date(result.TimePeriod.Start);
+                    labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                    costs.push(parseFloat(result.Total.UnblendedCost.Amount));
+                });
+                
+                costChart.data.labels = labels;
+                costChart.data.datasets[0].data = costs;
+                costChart.update();
+                
+            } catch (error) {
+                console.error('Error fetching cost trends:', error);
+            }
+        }
+        
+        function showAlert(message, type = 'success') {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.textContent = message;
+            alertBox.className = type === 'error' ? 'alert error' : 'alert';
+            alertBox.style.display = 'block';
+            
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'r' && e.ctrlKey) {
+                e.preventDefault();
+                refreshDashboard();
+            }
+        });
+        
+        // Emergency shutdown function
+        window.emergencyShutdown = async function() {
+            if (!AWS_CONFIG) {
+                alert('AWS not configured');
+                return;
+            }
+            
+            const confirmation = prompt('Type "EMERGENCY" to shutdown all instances:');
+            if (confirmation !== 'EMERGENCY') {
+                return;
+            }
+            
+            try {
+                const data = await AWS_CONFIG.ec2.describeInstances({
+                    Filters: [{ Name: 'instance-state-name', Values: ['running'] }]
+                }).promise();
+                
+                const instanceIds = [];
+                data.Reservations.forEach(reservation => {
+                    reservation.Instances.forEach(instance => {
+                        const tags = instance.Tags || [];
+                        const autoTerminate = tags.find(tag => tag.Key === 'AutoTerminate');
+                        if (autoTerminate && autoTerminate.Value === 'true') {
+                            instanceIds.push(instance.InstanceId);
+                        }
+                    });
+                });
+                
+                if (instanceIds.length > 0) {
+                    await AWS_CONFIG.ec2.terminateInstances({ InstanceIds: instanceIds }).promise();
+                    showAlert(`Emergency shutdown: ${instanceIds.length} instances terminated`, 'success');
+                } else {
+                    showAlert('No instances found with AutoTerminate tag', 'success');
+                }
+                
+                setTimeout(refreshDashboard, 3000);
+                
+            } catch (error) {
+                showAlert(`Emergency shutdown failed: ${error.message}`, 'error');
+            }
+        };
+    </script>
+</body>
+</html>
