@@ -12,8 +12,8 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 setup(
     name="aws-trainium-inferentia-tutorial",
     version="3.0.0",
-    author="AWS ML Research Community",
-    author_email="your-email@example.com",
+    author="Scott Friedman",
+    author_email="scott.friedman@example.com",
     description="Complete tutorial and tools for academic research using AWS Trainium and Inferentia chips",
     long_description=long_description,
     long_description_content_type="text/markdown",
