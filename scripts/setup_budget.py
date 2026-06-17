@@ -126,10 +126,16 @@ def create_research_budget(
             f"✅ Budget created! You'll get alerts at ${monthly_limit * 0.5:.0f}, ${monthly_limit * 0.8:.0f}, and ${monthly_limit}"
         )
         return response
-    except client.exceptions.DuplicateRecordException:
-        print("⚠️  Budget already exists. Use AWS console to modify existing budget.")
-        return None
     except Exception as e:
+        # A budget that already exists surfaces as a DuplicateRecordException. We detect it by name
+        # rather than catching client.exceptions.DuplicateRecordException directly: under a mocked
+        # boto3 client that attribute is a Mock (not an exception class), which would itself raise
+        # TypeError in an `except` clause. Matching on the class name works for both real and mocked.
+        if type(e).__name__ == "DuplicateRecordException":
+            print(
+                "⚠️  Budget already exists. Use AWS console to modify existing budget."
+            )
+            return None
         print(f"❌ Error creating budget: {e}")
         return None
 

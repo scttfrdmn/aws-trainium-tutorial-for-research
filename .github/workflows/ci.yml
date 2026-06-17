@@ -31,16 +31,20 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dev dependencies
-        run: uv pip install --system -e ".[dev]"
+        # uv venv + uv pip avoids the system (PEP-668 externally-managed) Python; `uv run` then
+        # executes tools inside that venv.
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
 
       - name: Ruff lint
-        run: ruff check .
+        run: uv run ruff check .
 
       - name: Ruff format check
-        run: ruff format --check .
+        run: uv run ruff format --check .
 
       - name: Mypy (scripts)
-        run: mypy scripts/ --ignore-missing-imports
+        run: uv run mypy scripts/ --ignore-missing-imports
         continue-on-error: true  # type coverage is a work in progress; do not block CI yet
 
   test:
@@ -65,10 +69,12 @@ jobs:
       - name: Install package + dev/science deps
         # Neuron wheels are not on PyPI and require Neuron hardware, so they are not installed
         # in CI. Tests that need them are marked `neuron` and deselected below.
-        run: uv pip install --system -e ".[dev,science]"
+        run: |
+          uv venv
+          uv pip install -e ".[dev,science]"
 
       - name: Run tests (no AWS / no Neuron hardware)
-        run: pytest -m "not aws and not neuron" --cov-report=xml
+        run: uv run pytest -m "not aws and not neuron" --cov-report=xml
 
   build:
     name: Build distribution
