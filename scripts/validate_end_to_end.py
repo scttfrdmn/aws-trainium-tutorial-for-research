@@ -14,8 +14,8 @@ Validation Categories:
 TESTED VERSIONS (Last validated: 2025-06-27):
     - Python: 3.11.7
     - PyTorch: 2.4.0
-    - torch-neuronx: 2.2.0
-    - AWS Neuron SDK: 2.20.1
+    - torch-neuronx: 2.9.x
+    - AWS Neuron SDK: 2.30.0
     - Test Status: ✅ Comprehensive end-to-end validation ready
 
 Usage:
@@ -38,11 +38,9 @@ import logging
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 # Configure logging
 logging.basicConfig(
@@ -54,7 +52,7 @@ logger = logging.getLogger(__name__)
 class EndToEndValidator:
     """Comprehensive end-to-end validation for the tutorial."""
 
-    def __init__(self, tutorial_root: Optional[str] = None):
+    def __init__(self, tutorial_root: str | None = None):
         """Initialize end-to-end validator."""
         self.tutorial_root = (
             Path(tutorial_root) if tutorial_root else Path(__file__).parent.parent
@@ -67,64 +65,42 @@ class EndToEndValidator:
             "overall_status": "unknown",
         }
 
-        # Define test categories and their examples
+        # Define test categories and their examples. These are the real, kept examples; the
+        # hardware-validated ones are exercised by the validation harness (validation/), which is
+        # the authoritative path. Legacy/mock examples live in examples/_legacy/ and are not checked.
         self.test_categories = {
-            "basic": {
-                "description": "Basic tutorial examples",
+            "use_cases": {
+                "description": "Validated + real-data use cases",
                 "examples": [
-                    "examples/basic/hello_trainium.py",
-                    "examples/datasets/aws_open_data.py",
+                    "examples/use_cases/biomedical_ner.py",
+                    "examples/use_cases/financial_modeling.py",
                 ],
                 "required": True,
             },
-            "frameworks": {
-                "description": "ML framework integration",
-                "examples": ["examples/frameworks/neuron_library_support.py"],
-                "required": True,
-            },
-            "advanced": {
-                "description": "Advanced NKI and optimization",
-                "examples": ["examples/advanced/nki_optimization.py"],
+            "debugging": {
+                "description": "Debugging walkthrough",
+                "examples": ["examples/debugging/diagnose_common_failures.py"],
                 "required": False,
             },
-            "production": {
-                "description": "Production deployment patterns",
-                "examples": ["examples/deployment/inferentia_serving.py"],
-                "required": False,
-            },
-            "integration": {
-                "description": "MLOps and enterprise integration",
+            "workflow": {
+                "description": "Train -> Inferentia pipeline (AWS-orchestration template)",
                 "examples": [
-                    "examples/integration/mlflow_neuron_integration.py",
-                    "examples/integration/kubeflow_neuron_pipeline.py",
+                    "examples/complete_workflow/trainium_to_inferentia_pipeline.py"
                 ],
                 "required": False,
-            },
-            "benchmarking": {
-                "description": "Performance benchmarking",
-                "examples": ["examples/benchmarking/neuron_vs_nvidia_comparison.py"],
-                "required": True,
             },
             "enterprise": {
                 "description": "Enterprise security and compliance",
                 "examples": ["examples/enterprise/security_compliance_patterns.py"],
                 "required": False,
             },
-            "easter_eggs": {
-                "description": "Creative computing examples",
-                "examples": [
-                    "examples/easter_eggs/creative_showcase.py",
-                    "examples/easter_eggs/precision_emulation.py",
-                ],
-                "required": False,
-            },
         }
 
-        logger.info(f"🔍 End-to-End Validator initialized")
+        logger.info("🔍 End-to-End Validator initialized")
         logger.info(f"   Tutorial root: {self.tutorial_root}")
         logger.info(f"   Categories: {len(self.test_categories)}")
 
-    def validate_environment(self) -> Dict:
+    def validate_environment(self) -> dict:
         """Validate the tutorial environment setup."""
         logger.info("🌍 Validating environment setup...")
 
@@ -142,7 +118,7 @@ class EndToEndValidator:
             "requirements.txt",
             "pyproject.toml",
             "VERSION_MATRIX.md",
-            "examples/basic/hello_trainium.py",
+            "examples/use_cases/biomedical_ner.py",
         ]
 
         for file_path in required_files:
@@ -180,7 +156,7 @@ class EndToEndValidator:
 
         return env_results
 
-    def validate_example(self, example_path: str, timeout: int = 120) -> Dict:
+    def validate_example(self, example_path: str, timeout: int = 120) -> dict:
         """Validate a single tutorial example."""
         full_path = self.tutorial_root / example_path
 
@@ -238,7 +214,7 @@ class EndToEndValidator:
 
         return result
 
-    def validate_category(self, category: str) -> Dict:
+    def validate_category(self, category: str) -> dict:
         """Validate all examples in a category."""
         if category not in self.test_categories:
             return {"status": "failed", "error": f"Unknown category: {category}"}
@@ -287,14 +263,14 @@ class EndToEndValidator:
         logger.info(f"   Category {category}: {passed}/{total} examples passed")
         return category_results
 
-    def run_smoke_test(self) -> Dict:
+    def run_smoke_test(self) -> dict:
         """Run quick smoke test of essential examples."""
         logger.info("💨 Running smoke test...")
 
-        # Essential examples for smoke test
+        # Essential examples for smoke test (the real, kept ones)
         smoke_examples = [
-            "examples/basic/hello_trainium.py",
-            "examples/datasets/aws_open_data.py",
+            "examples/use_cases/biomedical_ner.py",
+            "examples/debugging/diagnose_common_failures.py",
         ]
 
         smoke_results = {"test_type": "smoke_test", "examples": {}, "status": "unknown"}
@@ -312,7 +288,7 @@ class EndToEndValidator:
         smoke_results["status"] = "passed" if all_passed else "failed"
         return smoke_results
 
-    def run_full_validation(self) -> Dict:
+    def run_full_validation(self) -> dict:
         """Run complete end-to-end validation."""
         logger.info("🚀 Starting full end-to-end validation...")
 
@@ -338,7 +314,7 @@ class EndToEndValidator:
         )
         return self.validation_results
 
-    def run_category_validation(self, category: str) -> Dict:
+    def run_category_validation(self, category: str) -> dict:
         """Run validation for a specific category."""
         logger.info(f"🎯 Running validation for category: {category}")
 
@@ -371,24 +347,20 @@ class EndToEndValidator:
         required_total = len(required_categories)
 
         for category in required_categories:
-            if category in self.validation_results["categories"]:
-                if (
-                    self.validation_results["categories"][category]["status"]
-                    == "passed"
-                ):
-                    required_passed += 1
+            if category in self.validation_results["categories"] and (
+                self.validation_results["categories"][category]["status"] == "passed"
+            ):
+                required_passed += 1
 
         # Check optional categories
         optional_passed = 0
         optional_total = len(optional_categories)
 
         for category in optional_categories:
-            if category in self.validation_results["categories"]:
-                if (
-                    self.validation_results["categories"][category]["status"]
-                    == "passed"
-                ):
-                    optional_passed += 1
+            if category in self.validation_results["categories"] and (
+                self.validation_results["categories"][category]["status"] == "passed"
+            ):
+                optional_passed += 1
 
         # Determine overall status
         if required_passed == required_total:

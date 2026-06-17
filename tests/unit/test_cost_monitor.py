@@ -17,9 +17,11 @@ def test_generate_cost_report_success(
     mock_aws_credentials, mock_cost_explorer_response
 ):
     """Test successful cost report generation"""
-    with patch("boto3.client") as mock_client, patch(
-        "matplotlib.pyplot.savefig"
-    ) as mock_savefig, patch("matplotlib.pyplot.plot") as mock_plot:
+    with (
+        patch("boto3.client") as mock_client,
+        patch("matplotlib.pyplot.savefig") as mock_savefig,
+        patch("matplotlib.pyplot.plot"),
+    ):
         mock_ce = MagicMock()
         mock_ce.get_cost_and_usage.return_value = mock_cost_explorer_response
         mock_client.return_value = mock_ce
@@ -45,9 +47,10 @@ def test_generate_cost_report_no_data(mock_aws_credentials):
     """Test cost report generation with no data"""
     empty_response = {"ResultsByTime": []}
 
-    with patch("boto3.client") as mock_client, patch(
-        "matplotlib.pyplot.savefig"
-    ) as mock_savefig:
+    with (
+        patch("boto3.client") as mock_client,
+        patch("matplotlib.pyplot.savefig") as mock_savefig,
+    ):
         mock_ce = MagicMock()
         mock_ce.get_cost_and_usage.return_value = empty_response
         mock_client.return_value = mock_ce

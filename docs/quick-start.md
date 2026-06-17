@@ -1,89 +1,96 @@
 # Quick Start Guide
 
-## Prerequisites
+## Who this is for & what you'll get
 
-1. **AWS Account**: With access to Trainium/Inferentia instances
-2. **Python 3.8+**: Recommended version for compatibility
-3. **Basic ML Knowledge**: Familiarity with PyTorch and transformers
+**Before you start, you should have:**
+- An AWS account with access to Trainium/Inferentia instances (and permission to launch EC2).
+- Working Python knowledge and basic familiarity with PyTorch + Hugging Face `transformers`.
+- Comfort on the command line. No prior Neuron/Trainium experience required.
+
+**By the end of this quick start, you'll be able to:**
+- Set up the repo and cost guardrails.
+- Run the validated biomedical-NER example on CPU (smoke) and understand what a real Trainium run does.
+- Know where to go next (the full tutorial, the best-practices chapter, the validation harness).
+
+**Versions:** this tutorial targets **Neuron SDK 2.30**, **PyTorch 2.9** on the **PyTorch/XLA** path,
+Python **3.10–3.13** (3.12 recommended).
 
 ## Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/aws-trainium-inferentia-tutorial
-cd aws-trainium-inferentia-tutorial
+git clone https://github.com/scttfrdmn/aws-trainium-tutorial-for-research
+cd aws-trainium-tutorial-for-research
 
-# Install dependencies
+# Install with uv (recommended — see README for the plain-pip alternative)
 make install-dev
 
-# Install Neuron SDK
+# Neuron SDK (run this ON a Neuron instance / DLAMI, not your laptop)
 make install-neuron
 ```
 
 ## First Steps
 
-### 1. Set Up Cost Controls
+### 1. Set up cost controls (do this first)
 
 ```bash
-# Create budget alerts (IMPORTANT!)
 python scripts/setup_budget.py --limit 500 --email your-email@university.edu
 ```
 
 ### 2. Configure AWS
 
 ```bash
-# Set up your AWS credentials
 aws configure
-
-# Test your setup
-python scripts/cost_monitor.py
+python scripts/cost_monitor.py     # sanity-check credentials + spend
 ```
 
-### 3. Launch Your First Experiment
+### 3. Run the reference example on CPU (free)
+
+Before spending anything on hardware, run the **validated** example's smoke path on your laptop —
+it proves the code works end to end:
 
 ```bash
-# Launch a small test instance (auto-terminates in 2 hours)
+NER_SMOKE=1 python examples/use_cases/biomedical_ner.py
+```
+
+F1 will be near zero (tiny subset, 1 epoch) — that's expected; this step tests plumbing, not
+accuracy. See [`examples/use_cases/biomedical_ner.md`](../examples/use_cases/biomedical_ner.md).
+
+### 4. Launch a real, auto-terminating instance (optional, costs money)
+
+```bash
+# Auto-terminates after max-hours so a forgotten instance can't run up a bill
 python scripts/ephemeral_instance.py --name "test-experiment" --max-hours 2
 ```
 
-## Example Workflows
+### 5. Validate on real hardware (optional)
 
-### Climate Science Research
-```bash
-make run-climate-example
-```
-
-### RAG Pipeline
-```bash
-make run-rag-example
-```
-
-### Complete Training → Inference Pipeline
-```bash
-make run-workflow-example
-```
-
-## Cost Monitoring
-
-Monitor your spending in real-time:
+The harness launches an instance, runs the example, captures provenance, and self-terminates:
 
 ```bash
-# Generate cost report
-make monitor-costs
-
-# Emergency shutdown (if needed)
-make emergency-shutdown
+python -m validation.run_on_hardware --instance trn1.2xlarge --region us-east-2 \
+    --example ner_biomedical          # dry run (prints the plan, launches nothing)
+# add --yes to actually provision (spot + auto-terminate + cost ceiling)
 ```
 
-## Next Steps
+## Cost monitoring
 
-1. Read the [complete tutorial](docs/main_tutorial_doc.md)
-2. Explore [domain-specific examples](examples/domain_specific/)
-3. Try the [advanced patterns](advanced/)
-4. Set up [cost monitoring dashboard](monitoring/)
+```bash
+make monitor-costs        # cost report
+make emergency-shutdown   # terminate all ML instances if something runs away
+```
 
-## Getting Help
+## Next steps
 
-- Check the [troubleshooting guide](docs/troubleshooting.md)
-- Review [common issues](docs/faq.md)
-- Ask questions in [GitHub Discussions](../../discussions)
+1. Read the [complete tutorial](main_tutorial_doc.md).
+2. Read [Trainium development best practices](trainium_development_best_practices.md) — the
+   compile/bf16/static-shape lessons that save you hours.
+3. Explore the [use-case examples](../examples/use_cases/) and the
+   [validation harness](../validation/README.md).
+
+## Getting help
+
+- [Troubleshooting: common scenarios](troubleshooting/common_scenarios.md) and
+  [performance debugging](troubleshooting/performance_debugging.md).
+- [Error handling & debugging guide](error_handling_debugging.md).
+- Open an issue on [GitHub](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/issues).

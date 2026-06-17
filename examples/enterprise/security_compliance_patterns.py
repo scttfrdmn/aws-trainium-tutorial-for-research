@@ -14,7 +14,7 @@ Enterprise Features:
     - Security scanning and vulnerability management
 
 TESTED VERSIONS (Last validated: 2025-06-24):
-    - AWS Neuron SDK: 2.20.1
+    - AWS Neuron SDK: 2.30.0
     - boto3: 1.35.0
     - AWS CloudTrail: Latest API
     - AWS Config: Latest API
@@ -37,9 +37,7 @@ Date: 2025-06-24
 
 import json
 import logging
-import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Union
 
 import boto3
 from botocore.exceptions import ClientError
@@ -115,14 +113,14 @@ class NeuronSecurityManager:
             },
         }
 
-        logger.info(f"🔒 Neuron Security Manager initialized")
+        logger.info("🔒 Neuron Security Manager initialized")
         logger.info(f"   Organization: {organization_id}")
         logger.info(f"   Compliance: {compliance_framework}")
         logger.info(f"   Region: {aws_region}")
 
     def setup_tenant_isolation(
-        self, tenant_id: str, budget_limit: Optional[float] = None
-    ) -> Dict:
+        self, tenant_id: str, budget_limit: float | None = None
+    ) -> dict:
         """Setup multi-tenant resource isolation for Neuron workloads."""
         logger.info(f"🏢 Setting up tenant isolation: {tenant_id}")
 
@@ -168,7 +166,7 @@ class NeuronSecurityManager:
             logger.error(f"Failed to setup tenant isolation: {e}")
             raise
 
-    def _create_tenant_iam_role(self, tenant_id: str) -> Dict:
+    def _create_tenant_iam_role(self, tenant_id: str) -> dict:
         """Create tenant-specific IAM role with Neuron permissions."""
         role_name = f"NeuronTenant-{self.organization_id}-{tenant_id}"
 
@@ -287,7 +285,7 @@ class NeuronSecurityManager:
                 }
             raise
 
-    def _create_tenant_vpc(self, tenant_id: str) -> Dict:
+    def _create_tenant_vpc(self, tenant_id: str) -> dict:
         """Create tenant-specific VPC with security groups."""
         vpc_name = f"neuron-vpc-{tenant_id}"
 
@@ -364,7 +362,7 @@ class NeuronSecurityManager:
             logger.error(f"Failed to create VPC for tenant {tenant_id}: {e}")
             raise
 
-    def _create_tenant_s3_bucket(self, tenant_id: str) -> Dict:
+    def _create_tenant_s3_bucket(self, tenant_id: str) -> dict:
         """Create tenant-specific S3 bucket with encryption."""
         bucket_name = f"neuron-{self.organization_id}-{tenant_id}"
 
@@ -446,7 +444,7 @@ class NeuronSecurityManager:
             logger.error(f"Failed to create S3 bucket for tenant {tenant_id}: {e}")
             raise
 
-    def _setup_tenant_monitoring(self, tenant_id: str) -> Dict:
+    def _setup_tenant_monitoring(self, tenant_id: str) -> dict:
         """Setup comprehensive monitoring for tenant resources."""
         monitoring_config = {
             "cloudtrail": {
@@ -480,7 +478,7 @@ class NeuronSecurityManager:
 
         return monitoring_config
 
-    def _setup_tenant_budget(self, tenant_id: str, budget_limit: float) -> Dict:
+    def _setup_tenant_budget(self, tenant_id: str, budget_limit: float) -> dict:
         """Setup budget controls and cost monitoring."""
         budget_config = {
             "budget_name": f"neuron-budget-{tenant_id}",
@@ -495,7 +493,7 @@ class NeuronSecurityManager:
 
         return budget_config
 
-    def _setup_tenant_compliance(self, tenant_id: str) -> Dict:
+    def _setup_tenant_compliance(self, tenant_id: str) -> dict:
         """Setup compliance baseline for tenant."""
         compliance_config = {
             "framework": self.compliance_framework,
@@ -522,7 +520,7 @@ class NeuronSecurityManager:
 
         return compliance_config
 
-    def enable_encryption(self, kms_key_id: Optional[str] = None) -> Dict:
+    def enable_encryption(self, kms_key_id: str | None = None) -> dict:
         """Enable comprehensive encryption for Neuron workloads."""
         logger.info("🔐 Enabling encryption for Neuron workloads")
 
@@ -599,7 +597,7 @@ class NeuronSecurityManager:
 
         return encryption_config
 
-    def generate_compliance_report(self, tenant_id: Optional[str] = None) -> Dict:
+    def generate_compliance_report(self, tenant_id: str | None = None) -> dict:
         """Generate comprehensive compliance report."""
         logger.info(f"📋 Generating compliance report for {self.compliance_framework}")
 
@@ -647,7 +645,7 @@ class NeuronSecurityManager:
 
         return report
 
-    def _check_encryption_compliance(self) -> List[Dict]:
+    def _check_encryption_compliance(self) -> list[dict]:
         """Check encryption compliance controls."""
         findings = []
 
@@ -686,7 +684,7 @@ class NeuronSecurityManager:
 
         return findings
 
-    def _check_access_control_compliance(self) -> List[Dict]:
+    def _check_access_control_compliance(self) -> list[dict]:
         """Check access control compliance."""
         findings = []
 
@@ -730,7 +728,7 @@ class NeuronSecurityManager:
 
         return findings
 
-    def _check_monitoring_compliance(self) -> List[Dict]:
+    def _check_monitoring_compliance(self) -> list[dict]:
         """Check monitoring and logging compliance."""
         findings = []
 
@@ -756,7 +754,7 @@ class NeuronSecurityManager:
 
         return findings
 
-    def _check_data_protection_compliance(self) -> List[Dict]:
+    def _check_data_protection_compliance(self) -> list[dict]:
         """Check data protection compliance."""
         findings = []
 
@@ -804,7 +802,7 @@ class NeuronSecurityManager:
 
         return findings
 
-    def _generate_compliance_recommendations(self, findings: List[Dict]) -> List[Dict]:
+    def _generate_compliance_recommendations(self, findings: list[dict]) -> list[dict]:
         """Generate recommendations based on compliance findings."""
         recommendations = []
 
@@ -885,10 +883,11 @@ def main():
 
     # Setup tenant isolation
     tenant_config = security_manager.setup_tenant_isolation(
-        tenant_id="ml-research-team", budget_limit=10000.0  # $10,000 monthly budget
+        tenant_id="ml-research-team",
+        budget_limit=10000.0,  # $10,000 monthly budget
     )
 
-    print(f"✅ Tenant setup completed:")
+    print("✅ Tenant setup completed:")
     print(f"   IAM Role: {tenant_config['resources']['iam_role']['role_name']}")
     print(f"   VPC: {tenant_config['resources']['vpc']['vpc_id']}")
     print(f"   S3 Bucket: {tenant_config['resources']['s3_bucket']['bucket_name']}")
@@ -897,7 +896,7 @@ def main():
 
     # Enable encryption
     encryption_config = security_manager.enable_encryption()
-    print(f"✅ Encryption enabled:")
+    print("✅ Encryption enabled:")
     print(f"   KMS Key: {encryption_config['kms_key_id']}")
     print(f"   Encryption at rest: {encryption_config['encryption_at_rest']}")
     print(f"   Encryption in transit: {encryption_config['encryption_in_transit']}")
@@ -909,19 +908,19 @@ def main():
         tenant_id="ml-research-team"
     )
 
-    print(f"✅ Compliance report generated:")
+    print("✅ Compliance report generated:")
     print(f"   Framework: {compliance_report['compliance_framework']}")
     print(f"   Overall status: {compliance_report['overall_status']}")
     print(f"   Findings: {len(compliance_report['findings'])}")
     print(f"   Recommendations: {len(compliance_report['recommendations'])}")
 
     if compliance_report["findings"]:
-        print(f"\n⚠️ Key findings:")
+        print("\n⚠️ Key findings:")
         for finding in compliance_report["findings"][:3]:  # Show first 3
             print(f"   {finding['severity'].upper()}: {finding['description']}")
 
     if compliance_report["recommendations"]:
-        print(f"\n💡 Top recommendations:")
+        print("\n💡 Top recommendations:")
         for rec in compliance_report["recommendations"][:2]:  # Show first 2
             print(f"   {rec['priority'].upper()}: {rec['title']}")
 

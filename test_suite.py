@@ -1,7 +1,6 @@
 # tests/conftest.py
 """Pytest configuration and fixtures for AWS Trainium/Inferentia tutorial tests"""
 
-import os
 import tempfile
 from unittest.mock import Mock, patch
 
@@ -141,10 +140,8 @@ def mock_neuron_trace():
 # tests/test_core.py
 """Tests for core functionality"""
 
-from unittest.mock import Mock, patch
 
 import pytest
-import torch
 
 from aws_trainium_tutorial.core import (
     CostTracker,
@@ -246,7 +243,6 @@ class TestNeuronMigrationHelper:
 
 import pandas as pd
 import pytest
-import torch
 
 from aws_trainium_tutorial.examples import ClimateTransformer, MolecularTransformer
 
@@ -322,7 +318,7 @@ class TestMolecularTransformer:
         assert "bioavailability" in predictions
         assert "drug_likeness" in predictions
 
-        for prop_name, pred in predictions.items():
+        for _prop_name, pred in predictions.items():
             assert pred.shape == (batch_size, 1)
 
         assert attention_weights is not None
@@ -387,7 +383,7 @@ class TestCostEstimation:
 
         # First recommendation should meet constraints
         best_rec = recommendations[0]
-        assert best_rec["meets_constraints"] == True
+        assert best_rec["meets_constraints"]
         assert best_rec["estimated_cost"] <= 100
         assert best_rec["estimated_time"] <= 24
 
@@ -409,9 +405,7 @@ class TestCostEstimation:
 # tests/test_integration.py
 """Integration tests that require more setup"""
 
-import tempfile
 
-import pandas as pd
 import pytest
 
 from aws_trainium_tutorial.examples.domain_specific.climate_science import (
@@ -501,7 +495,6 @@ class TestIntegration:
 import time
 
 import pytest
-import torch
 
 from aws_trainium_tutorial.advanced import NeuronOptimizedAttention
 
@@ -565,7 +558,6 @@ class TestBenchmarks:
 # tests/test_utils.py
 """Tests for utility functions"""
 
-import json
 
 import pytest
 

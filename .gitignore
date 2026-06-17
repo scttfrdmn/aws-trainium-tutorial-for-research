@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 *.so
 .Python
 build/
@@ -33,14 +36,11 @@ checkpoints/
 logs/
 runs/
 wandb/
-
 # Jupyter Notebook
 .ipynb_checkpoints
-
 # IPython
 profile_default/
 ipython_config.py
-
 # Virtual environments
 .env
 .venv
@@ -49,21 +49,18 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
 # AWS credentials (NEVER commit these)
 .aws/
 credentials
 config
 *.pem
 *.key
-
 # Data files
 data/
 datasets/
@@ -72,26 +69,35 @@ datasets/
 *.parquet
 *.h5
 *.hdf5
-
 # Temporary files
 tmp/
 temp/
 *.tmp
 *.log
-
 # Cost reports and monitoring
 cost_reports/
 *.png
 *.pdf
-
 # Neuron specific
 neuron_cache/
 *.neff
-
+# Validation harness: keep result artifacts (they're the provenance record) but not raw logs.
+validation/logs/
+# Local working notes / internal status docs (not part of the public tutorial)
+PROJECT_STATUS.md
+DEVELOPMENT_COMPLETE.md
+NEXT_ACTIONS.md
+RESUMPTION_GUIDE.md
+# Personal/business artifacts kept local rather than published
+docs/aws_engagement/
+docs/research_papers/
 # macOS
 .DS_Store
-
 # Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+# Project tracking lives on GitHub (milestones/issues/labels), NOT in local files.
+# These are local working notes only — never commit them.
+ROADMAP.md
+docs/REVAMP_PLAN.md

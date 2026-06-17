@@ -31,8 +31,8 @@ Note:
     Requires AWS credentials with budgets:CreateBudget permissions.
     The script targets EC2 compute costs but can be extended to other services.
 """
+
 import argparse
-import json
 
 import boto3
 
@@ -123,13 +123,19 @@ def create_research_budget(
             NotificationsWithSubscribers=notifications,
         )
         print(
-            f"✅ Budget created! You'll get alerts at ${monthly_limit*0.5:.0f}, ${monthly_limit*0.8:.0f}, and ${monthly_limit}"
+            f"✅ Budget created! You'll get alerts at ${monthly_limit * 0.5:.0f}, ${monthly_limit * 0.8:.0f}, and ${monthly_limit}"
         )
         return response
-    except client.exceptions.DuplicateRecordException:
-        print("⚠️  Budget already exists. Use AWS console to modify existing budget.")
-        return None
     except Exception as e:
+        # A budget that already exists surfaces as a DuplicateRecordException. We detect it by name
+        # rather than catching client.exceptions.DuplicateRecordException directly: under a mocked
+        # boto3 client that attribute is a Mock (not an exception class), which would itself raise
+        # TypeError in an `except` clause. Matching on the class name works for both real and mocked.
+        if type(e).__name__ == "DuplicateRecordException":
+            print(
+                "⚠️  Budget already exists. Use AWS console to modify existing budget."
+            )
+            return None
         print(f"❌ Error creating budget: {e}")
         return None
 

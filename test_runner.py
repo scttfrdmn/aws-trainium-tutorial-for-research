@@ -2,11 +2,12 @@
 """
 Comprehensive test runner for AWS Trainium & Inferentia Tutorial
 """
+
 import argparse
 import subprocess
 import sys
 import time
-from pathlib import Path
+from importlib.util import find_spec
 
 
 def run_command(cmd: list, description: str) -> bool:
@@ -16,7 +17,7 @@ def run_command(cmd: list, description: str) -> bool:
 
     start_time = time.time()
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
         elapsed = time.time() - start_time
         print(f"✅ {description} completed in {elapsed:.1f}s")
         return True
@@ -183,14 +184,12 @@ def main():
             all_passed &= run_command(pytest_cmd, "Running fast tests")
 
     # Security check (if bandit is available)
-    try:
-        import bandit
-
+    if find_spec("bandit") is not None:
         all_passed &= run_command(
             ["python", "-m", "bandit", "-r", "scripts/", "examples/", "advanced/"],
             "Running security checks",
         )
-    except ImportError:
+    else:
         print("ℹ️  Bandit not available, skipping security checks")
 
     # Summary
