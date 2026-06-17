@@ -185,8 +185,6 @@ source = ["scripts", "examples", "advanced", "validation"]
 omit = [
     "*/tests/*",
     "*/test_*",
-    "setup.py",
-    "*/easter_eggs/*",  # Easter eggs are experimental
 ]
 branch = true
 

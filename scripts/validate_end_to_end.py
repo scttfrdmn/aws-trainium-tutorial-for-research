@@ -108,14 +108,6 @@ class EndToEndValidator:
                 "examples": ["examples/enterprise/security_compliance_patterns.py"],
                 "required": False,
             },
-            "easter_eggs": {
-                "description": "Creative computing examples",
-                "examples": [
-                    "examples/easter_eggs/creative_showcase.py",
-                    "examples/easter_eggs/precision_emulation.py",
-                ],
-                "required": False,
-            },
         }
 
         logger.info("🔍 End-to-End Validator initialized")
