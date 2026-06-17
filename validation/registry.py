@@ -65,6 +65,24 @@ EXAMPLES: tuple[Example, ...] = (
         est_runtime_min=18.0,
         description="Token-classification NER fine-tune on a real biomedical corpus (XLA/Trainium).",
     ),
+    Example(
+        key="satellite_landcover",
+        module="examples.use_cases.satellite_landcover",
+        entrypoint="run",
+        instances=("trn1.2xlarge",),
+        # EuroSAT land-cover is a 10-class problem a small CNN clears comfortably; gate at 0.80 to
+        # catch a broken pipeline without being flaky on a short run.
+        thresholds={"eval_acc": 0.80},
+        smoke_config={
+            "device": "cpu",
+            "epochs": 1,
+            "max_train_samples": 128,
+            "max_eval_samples": 128,
+        },
+        full_config={"device": "xla", "epochs": 5},
+        est_runtime_min=15.0,
+        description="Satellite land-cover CNN on EuroSAT (vision modality; XLA/Trainium).",
+    ),
 )
 
 # Examples that are NOT in the single-process auto-registry above because they require a multi-process
