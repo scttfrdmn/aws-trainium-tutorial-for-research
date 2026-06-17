@@ -53,3 +53,7 @@ The demo walks three outcomes:
 
 Detection is documented in the PyTorch/XLA troubleshooting guide; deeper signals: `PT_XLA_DEBUG_LEVEL=2`,
 and `NEURONX_DUMP_TO=./dir` for compiler logs. See [tools & debugging](../../docs/neuron_tools_and_debugging.md).
+
+> **Confirmed on real hardware** (trn1.2xlarge, Neuron 2.30, torch-neuronx 2.9): the `--only fallback`
+> demo showed `Counter: aten::nonzero` in `metrics_report()` for the `.nonzero()` path, and **0
+> `aten::` counters** for the `torch.where` path — i.e. detection and fix both work as described.

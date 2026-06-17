@@ -129,6 +129,7 @@ def train_ddp(cfg: DDPConfig) -> dict[str, float]:
     import torch.distributed as dist
     import torch_xla.core.xla_model as xm
     import torch_xla.distributed.parallel_loader as pl
+    import torch_xla.runtime as xr
     from transformers import (
         AutoModelForTokenClassification,
         AutoTokenizer,
@@ -139,8 +140,10 @@ def train_ddp(cfg: DDPConfig) -> dict[str, float]:
     device = xm.xla_device()
     # XLA is the collective backend for Neuron. torchrun sets RANK/WORLD_SIZE in the environment.
     dist.init_process_group(backend="xla")
-    rank = xm.get_ordinal()
-    world_size = xm.xrt_world_size()
+    # torch-xla 2.x: rank/world come from torch_xla.runtime (the older xm.get_ordinal /
+    # xm.xrt_world_size were removed). dist.get_rank()/get_world_size() also work post-init.
+    rank = xr.global_ordinal()
+    world_size = xr.world_size()
     if rank == 0:
         print(
             f"🧬 DDP NER | world_size={world_size} cores | model={cfg.model_name} | attn={cfg.attn_implementation}"
