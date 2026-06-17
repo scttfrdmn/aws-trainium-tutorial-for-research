@@ -22,33 +22,22 @@ This directory contains comprehensive video tutorial resources for learning AWS 
    - Trainium-native concerns: eager attention (bf16), static shapes, mark_step
    - Honest entity-level F1 + provenance capture
 
-4. **[Troubleshooting](04_troubleshooting.md)** (15 minutes)
-   - Common issues and solutions
-   - Interactive diagnosis tool
-   - Performance debugging
+### Planned (scripts not yet written)
 
-5. **[Production Deployment](05_production_deployment.md)** (20 minutes)
-   - Model optimization for inference
-   - Auto-scaling configuration
-   - Monitoring and alerting
+These are on the roadmap but **not yet available as scripts** — they're listed so contributors know
+the intended arc. Until they exist, the linked written docs cover the same ground:
 
-### Advanced Topics (Optional)
-**Target Duration: 60-90 minutes total**
-
-6. **[Multi-Instance Training](06_multi_instance_training.md)** (20 minutes)
-   - Distributed training setup
-   - Data parallelism patterns
-   - Performance scaling
-
-7. **[Cost Optimization](07_cost_optimization.md)** (15 minutes)
-   - Spot instance strategies
-   - Resource scheduling
-   - FinOps best practices
-
-8. **[Custom NKI Kernels](08_custom_nki_kernels.md)** (25 minutes)
-   - Writing custom kernels
-   - Performance optimization
-   - Integration patterns
+4. **Troubleshooting** *(planned)* — see [error handling & debugging](../error_handling_debugging.md)
+   and [troubleshooting/](../troubleshooting/).
+5. **Production Deployment** *(planned)* — see
+   [`examples/complete_workflow/`](../../examples/complete_workflow/) and
+   [`examples/deployment/`](../../examples/deployment/).
+6. **Multi-Instance / Distributed Training** *(planned)* — see
+   [`examples/distributed/`](../../examples/distributed/).
+7. **Cost Optimization** *(planned)* — see the FinOps scripts in [`scripts/`](../../scripts/).
+8. **Custom NKI Kernels** *(planned)* — see
+   [novel kernels on Trainium](../novel_kernels_on_trainium.md) and
+   [`advanced/`](../../advanced/).
 
 ## 🎬 Production Workflow
 

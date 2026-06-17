@@ -65,8 +65,8 @@ aws configure
 # 2. Create budget alerts
 python scripts/setup_budget.py --limit 500
 
-# 3. Launch ephemeral experiment
-python scripts/ephemeral_experiment.py \
+# 3. Launch an ephemeral, auto-terminating instance
+python scripts/ephemeral_instance.py \
     --name "bert-test" \
     --instance-type "trn1.2xlarge" \
     --max-hours 4
@@ -78,60 +78,46 @@ python scripts/cost_monitor.py
 ## Repository Structure
 
 ```
-aws-trainium-inferentia-tutorial/
+aws-trainium-tutorial-for-research/
 ├── README.md                          # This file
-├── docs/                              # Full tutorial documentation
-├── scripts/                           # Utility scripts
-├── examples/                          # Complete examples
-│   ├── climate_prediction/           # Climate science example
-│   ├── protein_structure/            # Biomedical example
-│   ├── social_media_analysis/        # Social sciences example
-│   └── rag_pipeline/                 # Modern RAG implementation
-├── containers/                        # Docker configurations
+├── docs/                              # Full tutorial + best-practices + troubleshooting
+├── scripts/                           # Utility scripts (budget, ephemeral instance, monitor)
+├── validation/                        # Hardware-validation harness + provenance artifacts
+├── examples/
+│   ├── use_cases/                    # biomedical_ner (validated), financial_modeling
+│   ├── complete_workflow/            # Trainium → Inferentia pipeline
+│   ├── deployment/ · integration/    # serving + MLflow/Kubeflow/CI templates
+│   └── advanced/                     # NKI patterns (illustrative)
+├── advanced/                          # Advanced NKI patterns (illustrative)
 ├── monitoring/                        # Cost monitoring dashboard
-├── advanced/                          # Advanced patterns (NKI, etc.)
-└── benchmarks/                        # Performance data and comparisons
+└── VALIDATED.md                       # Generated: which examples are hardware-validated
 ```
 
 ## Key Examples
 
+### Biomedical NER fine-tune — ⭐ hardware-validated
+
+The reference example: a real disease-NER fine-tune on the NCBI-disease corpus, **validated on a
+real `trn1.2xlarge`** (`eval_f1 = 0.846` — see [`VALIDATED.md`](VALIDATED.md)). It's the model the
+other examples aim to match: real data, honest metrics, the Trainium-native lessons baked in.
+
+```bash
+# Laptop smoke test (CPU, proves the code path):
+NER_SMOKE=1 python examples/use_cases/biomedical_ner.py
+
+# Real run on a Trainium instance:
+python examples/use_cases/biomedical_ner.py
+```
+
+See [`examples/use_cases/biomedical_ner.md`](examples/use_cases/biomedical_ner.md) and the
+[Trainium development best practices](docs/trainium_development_best_practices.md) it demonstrates.
+
 ### Complete Training → Inference Pipeline
 
-Train a climate prediction model on Trainium, then deploy on Inferentia:
-
-```python
-# Train on Trainium2
-pipeline = TrainiumToInferentiaPipeline('climate-prediction-v1')
-training_result = pipeline.train_on_trainium(
-    model_class='ClimateTransformer',
-    config={'epochs': 100, 'instance_type': 'trn2.48xlarge'}
-)
-
-# Deploy on Inferentia2  
-inference_result = pipeline.deploy_on_inferentia(
-    model_path=training_result['model_path']
-)
-
-# Cost analysis shows 60-70% savings vs GPU approach
-```
-
-### Modern RAG Implementation
-
-```python
-# RAG pipeline optimized for AWS ML chips
-rag = NeuronRAGPipeline(
-    embedding_model='BGE-base-en-v1.5',  # On Inferentia2
-    llm_model='Llama-2-7B'               # On Trainium2
-)
-
-# Index documents
-rag.index_documents(research_papers)
-
-# Query with cost tracking
-result = rag.generate("What are the latest findings in climate modeling?")
-print(f"Answer: {result['answer']}")
-print(f"Cost: ${result['inference_cost']:.4f}")
-```
+[`examples/complete_workflow/trainium_to_inferentia_pipeline.py`](examples/complete_workflow/trainium_to_inferentia_pipeline.py)
+shows the full lifecycle — train on Trainium (XLA path), then compile the trained model for
+Inferentia serving — with real `run_instances` calls, runtime DLAMI resolution, and auto-termination.
+It's a teaching template (edit the S3 bucket; it's not a hardened service).
 
 ### Advanced NKI Development
 

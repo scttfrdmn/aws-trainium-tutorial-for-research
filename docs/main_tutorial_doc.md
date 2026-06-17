@@ -53,13 +53,32 @@ This tutorial is designed for academic researchers who:
 - Trainium2: $40 × 24 × 14 = **$13,440** (59% savings)
 - With spot instances: ~$4,032 (88% savings)
 
-### What You'll Learn
-1. How to never accidentally leave instances running
-2. Setting up automatic cost controls and alerts
-3. Using containers for reproducible, ephemeral experiments
-4. Migrating CUDA code to AWS Neuron
-5. Real research examples in your domain
-6. Advanced patterns including NKI development and modern RAG
+### What you'll be able to do by the end
+
+Concrete, checkable outcomes — by the end of this tutorial you can:
+
+1. **Set up cost guardrails** so a forgotten instance can't run up a bill (budgets, ephemeral
+   auto-terminating instances, emergency shutdown).
+2. **Launch a Trainium instance and run a real fine-tune** on the PyTorch/XLA path — and read the
+   first-step compile cost and throughput honestly.
+3. **Apply the Trainium-native rules** that separate "it works" from "it crawls": static shapes to
+   avoid recompilation, bf16-stable model choices (e.g. eager attention), and `xm.mark_step()`
+   placement. (See the [best-practices chapter](trainium_development_best_practices.md).)
+4. **Decide whether Trainium fits your problem** at all, using the
+   [domain decision guide](choose_your_path.md).
+5. **Use the Neuron tools** to diagnose `nan`s, slow training, and compile problems
+   ([tools & debugging chapter](neuron_tools_and_debugging.md)).
+6. **Reason about custom kernels** — what Trainium's architecture does that's genuinely different,
+   and how to tell if your problem maps ([novel kernels chapter](novel_kernels_on_trainium.md)).
+7. **Validate your own work on real hardware** with the
+   [validation harness](../validation/README.md) — provenance, not hand-typed numbers.
+
+> **How this tutorial sets expectations:** every chapter and example opens with a short
+> *"assumed knowledge / what you'll be able to do"* block. We don't assume you "just know" Neuron —
+> if a concept matters, it's introduced before it's used.
+
+> ⚠️ The cost figures above are **illustrative** list/spot estimates for planning, not quotes —
+> confirm current [EC2 pricing](https://aws.amazon.com/ec2/pricing/) before budgeting.
 
 ---
 

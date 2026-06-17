@@ -27,13 +27,13 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
    ```
 
-2. **Install Python 3.8+**:
+2. **Install Python 3.10+ (3.12 recommended)**:
    ```bash
    # Using Homebrew (recommended)
    brew install python@3.11
 
    # Verify installation
-   python3 --version  # Should show 3.8+ or higher
+   python3 --version  # Should show 3.10 or newer
    ```
 
 3. **Install Git**:
@@ -102,7 +102,7 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
 
 #### Option B: Native Windows Setup
 
-1. **Install Python 3.8+**:
+1. **Install Python 3.10+ (3.12 recommended)**:
    - Download from [python.org](https://www.python.org/downloads/windows/)
    - ✅ Check "Add Python to PATH"
    - ✅ Check "Install for all users"
@@ -159,7 +159,7 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
    sudo apt update && sudo apt upgrade -y
    ```
 
-2. **Install Python 3.8+**:
+2. **Install Python 3.10+ (3.12 recommended)**:
    ```bash
    sudo apt install -y python3 python3-pip python3-venv python3-dev
 
@@ -221,7 +221,7 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-repo/aws-trainium-tutorial-for-research.git
+   git clone https://github.com/scttfrdmn/aws-trainium-tutorial-for-research.git
    cd aws-trainium-tutorial-for-research
    ```
 
@@ -282,7 +282,7 @@ pip install --user -e .[dev,science]
 # Check Python version
 python --version || python3 --version
 
-# If version is < 3.8, install newer version
+# If version is < 3.10, install newer version
 # Follow OS-specific Python installation above
 ```
 
@@ -373,8 +373,8 @@ sudo apt install -y python3-dev libffi-dev libssl-dev
 After completing this setup:
 
 1. ✅ **Verify environment**: Run `python scripts/aws_environment_checker.py`
-2. ✅ **Review AWS costs**: Understand pricing in `docs/cost_analysis.md`
-3. ✅ **Start with examples**: Begin with `examples/basic/hello_trainium.py`
+2. ✅ **Review AWS costs**: Set budget alerts with `python scripts/setup_budget.py`
+3. ✅ **Start with the validated example**: `NER_SMOKE=1 python examples/use_cases/biomedical_ner.py` (CPU smoke), then read [`docs/quick-start.md`](quick-start.md)
 4. ✅ **Join community**: Check `CONTRIBUTING.md` for contribution guidelines
 
 ## Support
@@ -382,9 +382,9 @@ After completing this setup:
 - 📖 **Documentation**: See `docs/` directory
 - 🐛 **Issues**: Report bugs via GitHub Issues
 - 💬 **Discussions**: Use GitHub Discussions for questions
-- 📧 **Contact**: scott.friedman@example.com
+- 📧 **Contact**: the GitHub issue tracker
 
 ---
 
-*Last updated: 2024-12-19*
+*Last updated: 2026-06-17 (targets Neuron SDK 2.30 / PyTorch 2.9, XLA path)*
 *Tested on: macOS 14, Windows 11, Ubuntu 22.04*
