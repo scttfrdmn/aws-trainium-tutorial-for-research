@@ -37,6 +37,21 @@ launcher for torch-neuronx/XLA training.
   batch shape identical, so the graph compiles ~once (see best-practices §1).
 - **Eager attention still matters.** bf16 + HF-default SDPA still `nan`s here; the example keeps
   `attn_implementation="eager"`.
-- This example is **not yet hardware-validated** through the harness (it needs a multi-core launch
-  the harness doesn't yet orchestrate). It's built to the same standards as the validated example;
-  validating it is tracked work. Until then, treat it as a correct *pattern*, not a measured result.
+
+## ✅ Hardware-validated
+
+Run on a real **trn1.2xlarge** (2 NeuronCores, Neuron 2.30 / torch-neuronx 2.9) via
+`torchrun --nproc_per_node=2`:
+
+| Metric | Value |
+|---|---|
+| `world_size` | 2 cores (gradient all-reduce working) |
+| epoch 1 → 2 loss | 0.179 → 0.032 (clean convergence, no nan) |
+| `eval_f1` | **0.826** (P 0.793 / R 0.862) |
+| checkpoint | saved via `xm._maybe_convert_to_cpu` + `torch.save` (rank 0) |
+
+> Note: it's validated by a **manual torchrun launch**, not the single-process harness (which
+> doesn't orchestrate multi-process runs yet) — so it doesn't appear in `VALIDATED.md`'s auto-table.
+> The captured result above is the proof. One API fix was needed and made along the way:
+> torch-xla 2.x replaced `xm.get_ordinal()`/`xm.xrt_world_size()` with
+> `torch_xla.runtime.global_ordinal()`/`world_size()`.
