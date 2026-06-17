@@ -7,10 +7,23 @@ A genuine remote-sensing task: classify Sentinel-2 satellite image tiles into la
 are dense, regular, and map cleanly onto the systolic tensor engine, with **fixed-size image tiles**
 giving static shapes for free.
 
-Why it's a good Trainium fit (see docs/choose_your_path.md):
-  * Conv-heavy, dense, regular compute → systolic-engine friendly.
+Why it RUNS well on Trainium (the table-stakes from best-practices):
   * Fixed 64x64x3 tiles → static shapes → compiles once (no recompile storm).
-  * bf16-native: the tensor engine accumulates FP32 in PSUM (best-practices §4).
+  * bf16-native: plain convs are bf16-stable (no fragile SDPA), the tensor engine accumulates FP32.
+
+**Is this the *form the hardware wants*? Honestly: only partly — and that's the lesson.**
+Trainium's tensor engine is a **128x128 systolic array** that's hungry for *large* matmuls (the
+contraction dimension filling those 128 partitions). Convolutions lower to matmul, but a small CNN's
+early convs are tiny (the first has a contraction dim of ~3-27 vs a 128-wide array) and there's a
+long tail of small conv/BN/pool ops — so per-core *utilization* is low even though it runs cleanly.
+A utilization-optimal vision model on Trainium looks **more ViT-shaped**: patch-embed + large
+attention/MLP matmuls, wide channels (>=128 to fill the partition dim), fused SBUF-resident blocks.
+This example is the "it works, statically-shaped, bf16-stable" tier — NOT a claim that small-conv
+CNNs maximize the systolic array. To *measure* the gap, read MFU/utilization in the profiler (see
+docs/neuron_tools_and_debugging.md). See docs/novel_kernels_on_trainium.md and choose_your_path.md.
+
+Note: data-parallel scaling (below) improves wall-clock *throughput* but NOT per-core utilization —
+each core runs the same underfilled model; you just have more cores. Two different axes.
 
 Harness contract: a module-level ``run(config) -> dict[str, float]`` returning ``eval_acc`` (the
 gated metric). Runs on CPU for a smoke test and on Trainium (XLA) for the real run — exactly like
@@ -89,12 +102,17 @@ def _resolve_device(requested: str):
     return torch.device("cpu"), "cpu"
 
 
-def _build_loaders(cfg: CVConfig):
-    """Load EuroSAT, transform to fixed-size tensors, return (train, val, label_names)."""
+def _build_loaders(cfg: CVConfig, world_size: int = 1, rank: int = 0):
+    """Load EuroSAT, transform to fixed-size tensors, return (train, val, label_names).
+
+    When world_size>1 the train set is sharded with DistributedSampler (one shard per NeuronCore)
+    for data-parallel training; drop_last keeps every core's batch shape identical.
+    """
     import numpy as np
     import torch
     from datasets import load_dataset
     from torch.utils.data import DataLoader, TensorDataset
+    from torch.utils.data.distributed import DistributedSampler
 
     ds = load_dataset(cfg.dataset_name)
     # Resolve splits (some mirrors only ship "train"); carve a val split if needed.
@@ -138,34 +156,64 @@ def _build_loaders(cfg: CVConfig):
     val = to_tensors(cap(val_split, cfg.max_eval_samples))
 
     # drop_last keeps every batch shape identical -> the graph compiles once (best-practices §1).
-    return (
-        DataLoader(
+    if world_size > 1:
+        sampler = DistributedSampler(
+            train, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+        )
+        train_loader = DataLoader(
+            train, batch_size=cfg.train_batch_size, sampler=sampler, drop_last=True
+        )
+    else:
+        sampler = None
+        train_loader = DataLoader(
             train, batch_size=cfg.train_batch_size, shuffle=True, drop_last=True
-        ),
-        DataLoader(val, batch_size=cfg.eval_batch_size, drop_last=True),
-        label_names,
-    )
+        )
+    val_loader = DataLoader(val, batch_size=cfg.eval_batch_size, drop_last=True)
+    return train_loader, val_loader, label_names, sampler
 
 
 def _build_model(num_classes: int):
-    """A small, conv-dense CNN — the kind of regular compute the systolic engine likes."""
+    """A small residual CNN — dense, regular convolutions (systolic-engine-friendly) with skip
+    connections so it actually reaches a respectable EuroSAT accuracy (a plain 3-block CNN plateaus
+    ~0.65; residual blocks + a wider stem clear ~0.9). Still tiny and bf16-stable.
+    """
     import torch.nn as nn
 
-    def block(cin, cout):
-        return nn.Sequential(
-            nn.Conv2d(cin, cout, 3, padding=1),
-            nn.BatchNorm2d(cout),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-        )
+    class ResBlock(nn.Module):
+        def __init__(self, cin, cout, stride):
+            super().__init__()
+            self.conv = nn.Sequential(
+                nn.Conv2d(cin, cout, 3, stride=stride, padding=1, bias=False),
+                nn.BatchNorm2d(cout),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(cout, cout, 3, padding=1, bias=False),
+                nn.BatchNorm2d(cout),
+            )
+            self.skip = (
+                nn.Sequential(
+                    nn.Conv2d(cin, cout, 1, stride=stride, bias=False),
+                    nn.BatchNorm2d(cout),
+                )
+                if (stride != 1 or cin != cout)
+                else nn.Identity()
+            )
+            self.act = nn.ReLU(inplace=True)
+
+        def forward(self, x):
+            return self.act(self.conv(x) + self.skip(x))
 
     return nn.Sequential(
-        block(3, 32),  # 64 -> 32
-        block(32, 64),  # 32 -> 16
-        block(64, 128),  # 16 -> 8
+        nn.Conv2d(3, 64, 3, padding=1, bias=False),  # wider stem
+        nn.BatchNorm2d(64),
+        nn.ReLU(inplace=True),
+        ResBlock(64, 64, stride=1),
+        ResBlock(64, 128, stride=2),  # 64 -> 32
+        ResBlock(128, 256, stride=2),  # 32 -> 16
+        ResBlock(256, 256, stride=2),  # 16 -> 8
         nn.AdaptiveAvgPool2d(1),
         nn.Flatten(),
-        nn.Linear(128, num_classes),
+        nn.Dropout(0.2),
+        nn.Linear(256, num_classes),
     )
 
 
@@ -189,7 +237,15 @@ def _evaluate(model, loader, device, backend) -> float:
 
 
 def run(config: dict | None = None) -> dict[str, float]:
-    """Train the land-cover CNN and return metrics (the harness entrypoint)."""
+    """Train the land-cover CNN and return metrics (the harness entrypoint).
+
+    Single-process by default. If launched under torchrun (RANK in env) with device=xla, it runs
+    **data-parallel across NeuronCores** — the same workload, sharded, with gradient all-reduce.
+    Scaling cores ~linearly cuts per-epoch wall-clock (see the README's 1-core vs 2-core numbers).
+
+        torchrun --nproc_per_node=2 examples/use_cases/satellite_landcover.py   # 2-core data parallel
+    """
+    import os
     import time
 
     import torch
@@ -197,10 +253,27 @@ def run(config: dict | None = None) -> dict[str, float]:
     cfg = CVConfig.from_dict(config)
     _set_seed(cfg.seed)
     device, backend = _resolve_device(cfg.device)
-    print(f"🛰️  Land-cover CV | dataset={cfg.dataset_name} | device={backend}")
 
-    train_loader, val_loader, label_names = _build_loaders(cfg)
-    print(f"   {len(label_names)} classes: {label_names}")
+    # Detect a torchrun launch on XLA -> data-parallel across cores.
+    distributed = backend == "xla" and "RANK" in os.environ
+    world_size, rank = 1, 0
+    if distributed:
+        import torch.distributed as dist
+        import torch_xla.runtime as xr
+
+        dist.init_process_group(backend="xla")
+        rank, world_size = xr.global_ordinal(), xr.world_size()
+    if rank == 0:
+        mode = f"data-parallel x{world_size}" if distributed else "single-core"
+        print(
+            f"🛰️  Land-cover CV | dataset={cfg.dataset_name} | device={backend} | {mode}"
+        )
+
+    train_loader, val_loader, label_names, sampler = _build_loaders(
+        cfg, world_size, rank
+    )
+    if rank == 0:
+        print(f"   {len(label_names)} classes: {label_names}")
 
     model = _build_model(len(label_names)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)
@@ -218,6 +291,8 @@ def run(config: dict | None = None) -> dict[str, float]:
     first_step_s = None
     for epoch in range(cfg.epochs):
         model.train()
+        if sampler is not None:
+            sampler.set_epoch(epoch)
         running = torch.zeros((), device=device)
         n = 0
         for x, y in device_loader:
@@ -228,7 +303,7 @@ def run(config: dict | None = None) -> dict[str, float]:
             loss = criterion(model(x), y)
             loss.backward()
             if backend == "xla":
-                xm.optimizer_step(optimizer)
+                xm.optimizer_step(optimizer)  # applies grads + all-reduces across cores
                 xm.mark_step()
             else:
                 optimizer.step()
@@ -236,10 +311,14 @@ def run(config: dict | None = None) -> dict[str, float]:
             n += 1
             if first_step_s is None:
                 first_step_s = time.time() - t0
-        print(
-            f"   epoch {epoch + 1}/{cfg.epochs}  avg_loss={(running / max(1, n)).item():.4f}"
-        )
+        if rank == 0:
+            print(
+                f"   epoch {epoch + 1}/{cfg.epochs}  avg_loss={(running / max(1, n)).item():.4f}"
+            )
 
+    # Eval on rank 0 only.
+    if rank != 0:
+        return {}
     acc = _evaluate(model, val_loader, device, backend)
     metrics = {
         "eval_acc": float(acc),
