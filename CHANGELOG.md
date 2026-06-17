@@ -24,14 +24,32 @@ Project work (milestones, issues, labels) is tracked on
 - `CHANGELOG.md` (Keep a Changelog) and SemVer 2.0.0 adoption.
 - GitHub project structure: milestones (v0.1.0 → v1.0.0), `type:`/`area:`/`status:` label
   taxonomy, and tracking issues.
+- **Learner-expectations framing** throughout — main tutorial and each chapter/example open with
+  "assumed knowledge / what you'll be able to do".
+- `docs/choose_your_path.md` — decision guide mapping research domains and problem-shapes to
+  Trainium fit (with honest "use a GPU instead" verdicts) and a starting example.
+- `docs/neuron_tools_and_debugging.md` — Neuron tools/profiling/tracing/simulator chapter
+  (neuron-ls/top/monitor, Neuron Explorer, torch_xla profiler, NKI simulation, compile cache),
+  with a symptom→tool table. Public sources; thin areas flagged.
+- `examples/debugging/diagnose_common_failures.py` (+README) — runnable reproduction of the
+  bf16 SDPA→`nan` and recompile-storm failures, with diagnosis + fix.
+- `docs/novel_kernels_on_trainium.md` — Trainium architecture (quoted from the public NKI
+  architecture guide) + a "does your problem map?" framework + the novel-kernel thesis: a
+  **better numerical result** via FP32-resident fusion (PSUM always accumulates FP32), not just speed.
+- `examples/distributed/data_parallel_ner.py` (+README) — real multi-NeuronCore data-parallel
+  training (torchrun + XLA DDP), demonstrating gradient all-reduce and Neuron-correct checkpointing.
 
 ### Changed
 - Tutorial refreshed for **June 2026**: Neuron SDK 2.30.0, PyTorch 2.9 (XLA path), a brief
   public note that 2.9 is the last XLA version, and Trainium-for-inference positioning.
 - Tooling modernized to **ruff** (lint+format), **uv**, pinned Python (3.12), and CI.
+- Fixed on-ramp blockers: README/quick-start/local-setup dead links, wrong script names, and
+  stale versions reconciled to the uv + Neuron 2.30 / PyTorch 2.9 path.
 
 ### Removed
 - Redundant `setup.py` (consolidated into `pyproject.toml`).
+- Toy/synthetic examples (easter-eggs, `np.random` "genomics"/"computer vision"); remaining
+  mock/stale/illustrative examples quarantined to `examples/_legacy/` with an honest banner.
 
 [Unreleased]: https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/compare/main...HEAD
 [#1]: https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/issues/1
