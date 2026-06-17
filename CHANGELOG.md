@@ -26,8 +26,8 @@ Project work (milestones, issues, labels) is tracked on
   taxonomy, and tracking issues.
 
 ### Changed
-- Tutorial refreshed for **June 2026**: Neuron SDK 2.30.0, PyTorch 2.9 (XLA), the PyTorch/XLA →
-  TorchNeuron transition, and Trainium-for-inference positioning.
+- Tutorial refreshed for **June 2026**: Neuron SDK 2.30.0, PyTorch 2.9 (XLA path), a brief
+  public note that 2.9 is the last XLA version, and Trainium-for-inference positioning.
 - Tooling modernized to **ruff** (lint+format), **uv**, pinned Python (3.12), and CI.
 
 ### Removed

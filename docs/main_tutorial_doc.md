@@ -134,15 +134,12 @@ Create a simple cost tracking dashboard - see `monitoring/` directory for the co
 
 ## 5. Migrating from CUDA to Neuron {#cuda-migration}
 
-> **⚠️ Heads-up (June 2026): this chapter teaches the PyTorch/XLA path, which is on its way out.**
-> Today, PyTorch on Neuron runs through XLA (`torch_xla`, `xm.xla_device()`, lazy graphs +
-> `xm.mark_step()`), and **PyTorch 2.9 is the last XLA-based version**. AWS has announced
-> **TorchNeuron**, a *native* (non-XLA) PyTorch backend that registers Trainium as a native
-> `PrivateUse1` device with **eager mode** and **`torch.compile`** — *"standard PyTorch runs
-> unchanged on Trainium."* It's in **private preview** and targets **PyTorch 2.10**. So: the XLA
-> idioms below remain correct for production now, but don't over-invest in deep `mark_step`-style
-> restructuring — the native backend will make most of this migration table obsolete. See
-> [VERSION_MATRIX.md](../VERSION_MATRIX.md#-the-pytorchxla--torchneuron-transition).
+> **Note (June 2026):** this chapter teaches the **PyTorch/XLA** path (`torch_xla`,
+> `xm.xla_device()`, lazy graphs + `xm.mark_step()`) — the production path on **PyTorch 2.9**, which
+> AWS's public docs note is the **last XLA-based version**. A future, non-XLA PyTorch path is
+> mentioned for **PyTorch 2.10+** but is not generally available yet, so everything below targets
+> the XLA path you can actually run today. See
+> [VERSION_MATRIX.md](../VERSION_MATRIX.md#-the-pytorch-path-xla-today).
 
 ### Understanding the Differences (PyTorch/XLA path)
 

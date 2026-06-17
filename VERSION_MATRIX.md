@@ -16,8 +16,7 @@ This document tracks software versions, dependencies, and the current platform d
 | Component | Version | Status | Notes |
 |-----------|---------|--------|-------|
 | **AWS Neuron SDK** | 2.30.0 | ✅ | Latest release (2026-05-21) |
-| **torch-neuronx** (PyTorch/XLA) | 2.9.x (`2.9.0.2.14.*`) | ✅ | PyTorch 2.9 — **last XLA-based version** |
-| **TorchNeuron** (native PyTorch backend) | — | 🔬 | Private preview; non-XLA, targets **PyTorch 2.10** (see below) |
+| **torch-neuronx** (PyTorch/XLA) | 2.9.x (`2.9.0.2.14.*`) | ✅ | PyTorch 2.9 — **last XLA-based version** (this tutorial's target) |
 | **NxD Training** (NeuronX Distributed) | 1.x | ✅ | Recommended path for distributed training |
 | **NxD Inference** (NeuronX Distributed) | 0.x | ✅ | Recommended serving lib; **Trn2+ only since 2.29** (Inf2/Trn1 → pin 2.28) |
 | **vLLM Neuron plugin** | current | ✅ | Standard high-throughput inference serving on Neuron |
@@ -32,33 +31,19 @@ This document tracks software versions, dependencies, and the current platform d
 > [component release notes](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/release-notes/index.html)
 > for the precise version bundled with your SDK.
 
-## 🔀 The PyTorch/XLA → TorchNeuron transition
+## 🔀 The PyTorch path: XLA today
 
-Historically, PyTorch on Neuron runs through **PyTorch/XLA**: you select an XLA device
-(`xm.xla_device()`), build a lazy graph, and materialize it with `xm.mark_step()`. Most code in
-this tutorial uses that model.
+This tutorial targets the **PyTorch/XLA** path (`torch-neuronx`): select an XLA device
+(`xm.xla_device()`), build a lazy graph, and materialize it with `xm.mark_step()`. On **PyTorch
+2.9** (the current Neuron-supported version) this is the production path, and it's what every
+example here uses.
 
-As of June 2026, AWS has announced **TorchNeuron**, an open-source **native** PyTorch backend:
-
-- Registers Trainium as a native PyTorch device via the **`PrivateUse1`** mechanism — *"standard
-  PyTorch runs unchanged on Trainium without platform-specific modifications."*
-- Provides **eager-mode execution**, native distributed APIs (FSDP, DTensor), and
-  **`torch.compile`** support for optimization.
-- Status: **private preview** (access via AWS account teams), licensed Apache 2.0.
-- Targets **PyTorch 2.10** support, planned for a future Neuron release.
-
-**Key consequences for this tutorial:**
-
-| | PyTorch/XLA (today) | TorchNeuron (coming) |
-|---|---|---|
-| Device | `xm.xla_device()` | native `PrivateUse1` device |
-| Execution | lazy graph + `xm.mark_step()` | eager + `torch.compile` |
-| Last/first PyTorch | **2.9 is the last XLA version** | **2.10+** |
-| Status | ✅ current, GA | 🔬 private preview |
-
-> **Guidance:** Keep using `torch-neuronx`/XLA for production on PyTorch ≤ 2.9. Don't over-invest
-> in deep `mark_step`-style restructuring for new code — expect to migrate to the native backend.
-> Source: [Neuron "What's New"](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/about-neuron/whats-new.html).
+> **Looking ahead:** AWS's public [Neuron "What's New"](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/about-neuron/whats-new.html)
+> states that **PyTorch 2.9 is the last version using PyTorch/XLA** and that a future release will
+> move to a native (non-XLA) PyTorch backend starting with **PyTorch 2.10**. That path is not yet
+> generally available, so this tutorial stays on XLA. A separate, forward-looking track covers the
+> native backend once it's broadly available — it is intentionally **not** part of this 2.9/XLA
+> tutorial.
 
 ## 🎯 When to use Inferentia2 vs Trainium2 for inference
 
@@ -100,9 +85,9 @@ mode**, not the forward-looking platform.
 ### PyTorch Stack (Neuron 2.30.0)
 | Component | Version | Status | Neuron Compatible |
 |-----------|---------|--------|-------------------|
-| **PyTorch** | 2.9 | ✅ | ✅ **Current — last PyTorch/XLA version** |
+| **PyTorch** | 2.9 | ✅ | ✅ **Current — last PyTorch/XLA version; this tutorial's target** |
 | **PyTorch** | 2.7 / 2.8 | ⚠️ | EOL in 2.29; pin to Neuron 2.28 if required |
-| **PyTorch** | 2.10 | 🔬 | Planned via **TorchNeuron** native backend (preview) |
+| **PyTorch** | 2.10+ | ⏭ | Public docs note a future non-XLA path; out of scope here (separate track) |
 | **torch-neuronx** | 2.9.x | ✅ | XLA-based path; required for Trainium today |
 | **torch-xla** | 2.9 | ✅ | Underpins `torch-neuronx` |
 | **transformers** | recent | ✅ | Use version paired with current `optimum-neuron` |
@@ -251,8 +236,8 @@ pip install neuronx-distributed neuronx-distributed-inference \
 # pip install jax-neuronx --extra-index-url https://pip.repos.neuron.amazonaws.com
 
 # NOTE: TensorFlow Neuron is archived — no install recipe is provided.
-# NOTE: PyTorch 2.10+ will use the native TorchNeuron backend (private preview); the install
-#       flow will change at that point. Track the Neuron "What's New" page.
+# NOTE: a future, non-XLA PyTorch path is mentioned in AWS's public docs but is out of scope for
+#       this PyTorch 2.9 / XLA tutorial. Track the Neuron "What's New" page for availability.
 
 # Development dependencies (latest tested versions)
 pip install \
@@ -305,7 +290,7 @@ previously appeared here.
 | Area | Now (June 2026) | Next |
 |------|-----------------|------|
 | **Neuron SDK** | 2.30.0 | Rolling ~monthly releases |
-| **PyTorch backend** | PyTorch/XLA (`torch-neuronx`), PyTorch 2.9 | **TorchNeuron** native backend, PyTorch 2.10 (preview → GA) |
+| **PyTorch backend** | PyTorch/XLA (`torch-neuronx`), PyTorch 2.9 | Public docs note a non-XLA path at PyTorch 2.10+ (separate track, not yet GA) |
 | **Inference serving** | NxD Inference + vLLM plugin (Trn2+) | Continued Trainium focus |
 | **Hardware** | Trn2 GA, Trn3 preview | Trn3 broader availability |
 

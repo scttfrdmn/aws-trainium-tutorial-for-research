@@ -11,9 +11,11 @@ A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This
 
 > ### 📅 Status as of June 2026
 >
-> This tutorial targets **Neuron SDK 2.30.0** (released May 21, 2026) and **PyTorch 2.9**. Two platform shifts shape how you should read it:
+> This tutorial targets **Neuron SDK 2.30.0** (released May 21, 2026) and **PyTorch 2.9** on the
+> **PyTorch/XLA** path (`torch_xla`, `xm.xla_device()`, `xm.mark_step()`) — the production path
+> available today. Two things to keep in mind:
 >
-> - **PyTorch backend transition.** AWS has announced **TorchNeuron**, a native (non-XLA) PyTorch backend that registers Trainium as a native device via PyTorch's `PrivateUse1` mechanism, with eager mode and `torch.compile` support. It is in **private preview** and targets **PyTorch 2.10**. **PyTorch 2.9 is the last version using PyTorch/XLA.** Most code here uses the XLA path (`torch_xla`, `xm.xla_device()`, `xm.mark_step()`) — the *outgoing* model. See [VERSION_MATRIX.md](VERSION_MATRIX.md#-the-pytorchxla--torchneuron-transition) for the migration outlook.
+> - **PyTorch path.** Per AWS's public [Neuron "What's New"](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/about-neuron/whats-new.html), **PyTorch 2.9 is the last version using PyTorch/XLA**, and a future release moves to a native (non-XLA) backend at **PyTorch 2.10+**. That path isn't generally available yet, so this tutorial stays on XLA; the native backend is a separate, forward-looking track.
 > - **Trainium is now the path for both training and inference.** AWS has not announced an Inferentia3, and the modern serving library (NxD Inference) **dropped Inf2/Trn1 support in Neuron 2.29** (pin to 2.28 if you need it on Inf2). Inferentia2 remains GA and useful for cost-optimized, latency-sensitive, smaller-model inference, but new work should generally target **Trainium2 (Trn2)**. See the [Inferentia decision guide](VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference).
 
 ## Key Features
