@@ -36,15 +36,10 @@ import argparse
 import json
 import logging
 import os
-import subprocess
 import sys
 import tempfile
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
-
-import numpy as np
 
 # Configure logging
 logging.basicConfig(
@@ -58,8 +53,8 @@ class SisterTutorialTester:
 
     def __init__(
         self,
-        neuron_tutorial_root: Optional[str] = None,
-        gpu_tutorial_root: Optional[str] = None,
+        neuron_tutorial_root: str | None = None,
+        gpu_tutorial_root: str | None = None,
     ):
         """Initialize sister tutorial tester."""
         # Set default paths
@@ -109,11 +104,11 @@ class SisterTutorialTester:
             },
         }
 
-        logger.info(f"🔍 Sister Tutorial Tester initialized")
+        logger.info("🔍 Sister Tutorial Tester initialized")
         logger.info(f"   Neuron tutorial: {self.neuron_root}")
         logger.info(f"   GPU tutorial: {self.gpu_root}")
 
-    def test_tutorial_availability(self) -> Dict:
+    def test_tutorial_availability(self) -> dict:
         """Test that both tutorials are available and accessible."""
         logger.info("📂 Testing tutorial availability...")
 
@@ -146,9 +141,9 @@ class SisterTutorialTester:
             ]
             for file in key_files:
                 file_path = self.neuron_root / file
-                availability_results["neuron_tutorial"]["key_files"][
-                    file
-                ] = file_path.exists()
+                availability_results["neuron_tutorial"]["key_files"][file] = (
+                    file_path.exists()
+                )
 
         # Check GPU tutorial
         if availability_results["gpu_tutorial"]["exists"]:
@@ -165,9 +160,9 @@ class SisterTutorialTester:
             ]
             for file in key_files:
                 file_path = self.gpu_root / file
-                availability_results["gpu_tutorial"]["key_files"][
-                    file
-                ] = file_path.exists()
+                availability_results["gpu_tutorial"]["key_files"][file] = (
+                    file_path.exists()
+                )
 
         # Determine status
         neuron_ok = (
@@ -190,7 +185,7 @@ class SisterTutorialTester:
 
         return availability_results
 
-    def test_structure_compatibility(self) -> Dict:
+    def test_structure_compatibility(self) -> dict:
         """Test directory structure and organization compatibility."""
         logger.info("🏗️ Testing structure compatibility...")
 
@@ -270,7 +265,7 @@ class SisterTutorialTester:
 
         return structure_results
 
-    def test_model_consistency(self) -> Dict:
+    def test_model_consistency(self) -> dict:
         """Test that model architectures are identical between tutorials."""
         logger.info("🧠 Testing model consistency...")
 
@@ -312,9 +307,9 @@ class SisterTutorialTester:
 
             if not (neuron_models_available and gpu_models_available):
                 model_results["status"] = "failed"
-                model_results[
-                    "error"
-                ] = "Could not import model suites from both tutorials"
+                model_results["error"] = (
+                    "Could not import model suites from both tutorials"
+                )
                 return model_results
 
             # Compare models
@@ -397,7 +392,7 @@ class SisterTutorialTester:
 
         return model_results
 
-    def test_dataset_compatibility(self) -> Dict:
+    def test_dataset_compatibility(self) -> dict:
         """Test dataset format and structure compatibility."""
         logger.info("📊 Testing dataset compatibility...")
 
@@ -435,9 +430,9 @@ class SisterTutorialTester:
 
             if not (neuron_data_available and gpu_data_available):
                 dataset_results["status"] = "failed"
-                dataset_results[
-                    "error"
-                ] = "Could not import data managers from both tutorials"
+                dataset_results["error"] = (
+                    "Could not import data managers from both tutorials"
+                )
                 return dataset_results
 
             # Create temporary directories for testing
@@ -473,9 +468,9 @@ class SisterTutorialTester:
                         )
 
                         # Load and compare
-                        with open(neuron_sample, "r") as f:
+                        with open(neuron_sample) as f:
                             neuron_data = json.load(f)
-                        with open(gpu_sample, "r") as f:
+                        with open(gpu_sample) as f:
                             gpu_data = json.load(f)
 
                         # Compare structure
@@ -526,7 +521,7 @@ class SisterTutorialTester:
 
         return dataset_results
 
-    def test_benchmarking_framework(self) -> Dict:
+    def test_benchmarking_framework(self) -> dict:
         """Test benchmarking framework compatibility and synchronization."""
         logger.info("⚡ Testing benchmarking framework...")
 
@@ -570,9 +565,9 @@ class SisterTutorialTester:
 
             if not (neuron_bench_available and gpu_bench_available):
                 benchmark_results["status"] = "failed"
-                benchmark_results[
-                    "error"
-                ] = "Could not import benchmark classes from both tutorials"
+                benchmark_results["error"] = (
+                    "Could not import benchmark classes from both tutorials"
+                )
                 return benchmark_results
 
             # Compare BenchmarkConfig fields
@@ -599,7 +594,7 @@ class SisterTutorialTester:
 
             # Test if we can create compatible configs
             try:
-                neuron_config = NeuronConfig(
+                NeuronConfig(
                     model_name="bert-base",
                     framework="pytorch",
                     task_type="inference",
@@ -607,7 +602,7 @@ class SisterTutorialTester:
                     instance_type="inf2.xlarge",
                 )
 
-                gpu_config = GPUConfig(
+                GPUConfig(
                     model_name="bert-base",
                     framework="pytorch",
                     task_type="inference",
@@ -618,9 +613,9 @@ class SisterTutorialTester:
                 benchmark_results["benchmark_methods"]["config_creation"] = "success"
 
             except Exception as e:
-                benchmark_results["benchmark_methods"][
-                    "config_creation"
-                ] = f"failed: {e}"
+                benchmark_results["benchmark_methods"]["config_creation"] = (
+                    f"failed: {e}"
+                )
 
             # Determine status
             config_match = benchmark_results["config_compatibility"]["match"]
@@ -645,7 +640,7 @@ class SisterTutorialTester:
 
         return benchmark_results
 
-    def test_version_alignment(self) -> Dict:
+    def test_version_alignment(self) -> dict:
         """Test software version alignment between tutorials."""
         logger.info("📋 Testing version alignment...")
 
@@ -662,7 +657,7 @@ class SisterTutorialTester:
             gpu_version_file = self.gpu_root / "VERSION_MATRIX.md"
 
             if neuron_version_file.exists():
-                with open(neuron_version_file, "r") as f:
+                with open(neuron_version_file) as f:
                     neuron_content = f.read()
                 version_results["version_matrices"]["neuron"] = "available"
             else:
@@ -670,7 +665,7 @@ class SisterTutorialTester:
                 neuron_content = ""
 
             if gpu_version_file.exists():
-                with open(gpu_version_file, "r") as f:
+                with open(gpu_version_file) as f:
                     gpu_content = f.read()
                 version_results["version_matrices"]["gpu"] = "available"
             else:
@@ -717,9 +712,7 @@ class SisterTutorialTester:
 
         return version_results
 
-    def _extract_version_from_content(
-        self, content: str, framework: str
-    ) -> Optional[str]:
+    def _extract_version_from_content(self, content: str, framework: str) -> str | None:
         """Extract version number for a framework from content."""
         import re
 
@@ -737,9 +730,7 @@ class SisterTutorialTester:
 
         return None
 
-    def _versions_compatible(
-        self, version1: Optional[str], version2: Optional[str]
-    ) -> bool:
+    def _versions_compatible(self, version1: str | None, version2: str | None) -> bool:
         """Check if two versions are compatible (same major.minor)."""
         if not version1 or not version2:
             return False
@@ -750,10 +741,10 @@ class SisterTutorialTester:
 
             # Check if major.minor versions match
             return v1_parts[0] == v2_parts[0] and v1_parts[1] == v2_parts[1]
-        except:
+        except Exception:
             return False
 
-    def run_full_comparison_test(self) -> Dict:
+    def run_full_comparison_test(self) -> dict:
         """Run complete sister tutorial comparison test suite."""
         logger.info("🚀 Running full sister tutorial comparison test...")
 
@@ -789,7 +780,7 @@ class SisterTutorialTester:
         )
         return self.test_results
 
-    def run_quick_comparison_test(self) -> Dict:
+    def run_quick_comparison_test(self) -> dict:
         """Run quick sister tutorial compatibility check."""
         logger.info("⚡ Running quick sister tutorial comparison...")
 
@@ -872,7 +863,7 @@ class SisterTutorialTester:
         # Summary
         if "summary" in self.test_results:
             summary = self.test_results["summary"]
-            report_lines.append(f"\n## Summary")
+            report_lines.append("\n## Summary")
             report_lines.append(
                 f"- **Compatibility Score**: {summary['compatibility_score']:.2%}"
             )

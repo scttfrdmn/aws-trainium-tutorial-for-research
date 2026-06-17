@@ -40,20 +40,22 @@ Examples:
         # Phase 3: Cost analysis
         cost_report = pipeline.run_cost_comparison(training_result, inference_result)
 
-Cost Analysis:
-    Training Phase (Trainium vs GPU):
-        - trn1.32xlarge: $6.45/hour vs H100 $29.50/hour (78% savings)
-        - trn2.48xlarge: $12.00/hour vs H100 $40.00/hour (70% savings)
+Cost Analysis (ILLUSTRATIVE — verify against current AWS pricing before budgeting):
+    The hourly rates below are rough, region-dependent estimates used to demonstrate the
+    cost-comparison logic, not quotes. Confirm at https://aws.amazon.com/ec2/pricing/.
+    Training Phase (Trainium vs GPU): typically 30-75% cheaper per hour.
+    Inference Phase (Inf2/Trn2 vs GPU): substantial savings, especially with spot.
 
-    Inference Phase (Inferentia vs GPU):
-        - inf2.xlarge: $0.227/hour vs p3.2xlarge $3.06/hour (93% savings)
-        - inf2.48xlarge: $3.89/hour vs p3.16xlarge $24.48/hour (84% savings)
+Platform note (June 2026):
+    AWS positions Trainium2 for both training AND inference, and NxD Inference dropped Inf2/Trn1
+    support in Neuron 2.29. This example uses Inf2 for inference for simplicity; for new or
+    large-scale serving, consider serving on Trn2 with NxD Inference + the vLLM plugin instead.
+    See ../../VERSION_MATRIX.md.
 
-Performance Benchmarks:
-    - Training throughput: Comparable to GPU with lower cost
-    - Inference latency: <100ms for most models
-    - Scalability: Auto-scaling based on demand
-    - Reliability: Built-in health monitoring and failover
+Status:
+    This is a teaching example. AMI ids are resolved at runtime from SSM, but the example uses
+    a placeholder dataset/model and is not a hardened production service (no auth on the Flask
+    endpoint, single instance, etc.). Treat latency/cost output as estimates.
 
 Research Applications:
     - Academic research with budget constraints
@@ -62,15 +64,12 @@ Research Applications:
     - Batch inference processing
     - Continuous model improvement cycles
 """
+
 import json
 import time
 from datetime import datetime
 
 import boto3
-import numpy as np
-import torch
-import torch_neuronx
-import torch_xla.core.xla_model as xm
 
 
 class TrainiumToInferentiaPipeline:
@@ -81,12 +80,40 @@ class TrainiumToInferentiaPipeline:
         self.s3_bucket = s3_bucket
         self.ec2 = boto3.client("ec2")
         self.s3 = boto3.client("s3")
+        self.ssm = boto3.client("ssm")
+
+    def _latest_neuron_dlami(self, pytorch_version="2.9", os_version="ubuntu-24.04"):
+        """Resolve the current AWS Neuron Deep Learning AMI id via SSM Parameter Store.
+
+        Hardcoding an AMI id (e.g. ami-0abc...) breaks across regions and over time, and AWS
+        publishes the latest DLAMI ids as public SSM parameters. This looks one up at launch
+        time so the example actually boots a Neuron-capable image.
+
+        The parameter path is versioned by PyTorch release, e.g. (verified us-west-2, June 2026):
+            /aws/service/neuron/dlami/pytorch-2.9/ubuntu-24.04/latest/image_id
+        which currently resolves to "Deep Learning AMI Neuron PyTorch 2.9 (Ubuntu 24.04)".
+        List available paths with:
+            aws ssm get-parameters-by-path \\
+                --path /aws/service/neuron --recursive --query 'Parameters[].Name'
+        """
+        param = (
+            f"/aws/service/neuron/dlami/pytorch-{pytorch_version}/"
+            f"{os_version}/latest/image_id"
+        )
+        try:
+            return self.ssm.get_parameter(Name=param)["Parameter"]["Value"]
+        except Exception as exc:  # noqa: BLE001 - surface a clear, actionable error
+            raise RuntimeError(
+                "Could not resolve the latest Neuron DLAMI from SSM "
+                f"(parameter '{param}'). Look up the current parameter name with "
+                "`aws ssm get-parameters-by-path --path /aws/service/neuron --recursive` "
+                "or pass an explicit AMI id."
+            ) from exc
 
     def train_on_trainium(self, model_class, dataset_path, config):
         """Train model on Trainium with automatic cost tracking"""
-
         print("🚀 Phase 1: Training on Trainium")
-        start_time = time.time()
+        time.time()
         instance_type = config.get("instance_type", "trn1.32xlarge")
 
         # Generate training script
@@ -138,9 +165,9 @@ sudo shutdown -h now
             Bucket=self.s3_bucket, Key="scripts/train.py", Body=training_script
         )
 
-        # Launch instance
+        # Launch instance on the current Neuron Deep Learning AMI (resolved at runtime).
         response = self.ec2.run_instances(
-            ImageId="ami-0abcdef1234567890",  # Deep Learning AMI
+            ImageId=self._latest_neuron_dlami(),
             InstanceType=instance_type,
             MinCount=1,
             MaxCount=1,
@@ -180,7 +207,6 @@ sudo shutdown -h now
 
     def deploy_on_inferentia(self, model_path, config):
         """Deploy trained model on Inferentia for inference"""
-
         print("\n🚀 Phase 2: Deploying on Inferentia")
 
         # Generate inference server script
@@ -207,7 +233,7 @@ nohup python3 /home/ubuntu/inference_monitor.py > /home/ubuntu/inference_cost_lo
 python3 /home/ubuntu/inference_server.py
 
 # Setup auto-shutdown after configured hours
-echo "sudo shutdown -h now" | at now + {config.get('inference_hours', 24)} hours
+echo "sudo shutdown -h now" | at now + {config.get("inference_hours", 24)} hours
 """
 
         # Upload inference script
@@ -217,9 +243,9 @@ echo "sudo shutdown -h now" | at now + {config.get('inference_hours', 24)} hours
             Body=inference_script,
         )
 
-        # Launch Inferentia instance
+        # Launch Inferentia instance on the current Neuron Deep Learning AMI.
         response = self.ec2.run_instances(
-            ImageId="ami-0abcdef1234567890",  # Deep Learning AMI
+            ImageId=self._latest_neuron_dlami(),
             InstanceType="inf2.xlarge",
             MinCount=1,
             MaxCount=1,
@@ -249,7 +275,7 @@ echo "sudo shutdown -h now" | at now + {config.get('inference_hours', 24)} hours
 
         print(f"✅ Deployed on Inferentia: {instance_id}")
         print(f"🌐 Inference endpoint: http://{public_ip}:8080/predict")
-        print(f"💰 Cost: $0.227/hour (spot) - $0.758/hour (on-demand)")
+        print("💰 Cost: $0.227/hour (spot) - $0.758/hour (on-demand)")
 
         return {
             "instance_id": instance_id,
@@ -259,7 +285,6 @@ echo "sudo shutdown -h now" | at now + {config.get('inference_hours', 24)} hours
 
     def _generate_training_script(self, model_class, dataset_path, config):
         """Generate training script for Trainium"""
-
         return f"""
 import torch
 import torch_xla.core.xla_model as xm
@@ -288,7 +313,11 @@ class ClimateDataset(Dataset):
 def train_model():
     print("🔄 Starting training on Trainium...")
 
-    # Setup device
+    # Setup XLA device. On Trainium, PyTorch training uses the PyTorch/XLA lazy-tensor path:
+    # place tensors on the XLA device, and materialize the graph with xm.mark_step().
+    # IMPORTANT: do NOT torch_neuronx.trace() the model for training -- trace() produces a
+    # frozen inference graph that you cannot backprop through. trace() is for inference only,
+    # after training (see the Inferentia compile step at the end).
     device = xm.xla_device()
     print(f"Using device: {{device}}")
 
@@ -297,41 +326,23 @@ def train_model():
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
-        num_labels={config.get('num_labels', 2)}
+        num_labels={config.get("num_labels", 2)}
     )
 
-    # Move to device
+    # Move the trainable model to the XLA (Trainium) device.
     model = model.to(device)
-
-    # Compile for Neuron (training)
-    print("🔧 Compiling model for Neuron...")
-    example_input = {{
-        'input_ids': torch.randint(0, 1000, (1, 512)),
-        'attention_mask': torch.ones(1, 512)
-    }}
-
-    model = torch_neuronx.trace(
-        model,
-        (example_input['input_ids'].to(device), example_input['attention_mask'].to(device)),
-        compiler_args=[
-            '--model-type=transformer',
-            '--enable-saturate-infinity',
-            '--neuroncore-pipeline-cores=16'
-        ]
-    )
-    print("✅ Model compilation complete")
 
     # Setup training
     dataset = ClimateDataset('dataset/train.csv')
-    train_loader = DataLoader(dataset, batch_size={config.get('batch_size', 32)}, shuffle=True)
+    train_loader = DataLoader(dataset, batch_size={config.get("batch_size", 32)}, shuffle=True)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr={config.get('learning_rate', 2e-5)})
+    optimizer = torch.optim.AdamW(model.parameters(), lr={config.get("learning_rate", 2e-5)})
     criterion = torch.nn.CrossEntropyLoss()
 
     # Training loop
     best_loss = float('inf')
 
-    for epoch in range({config.get('epochs', 10)}):
+    for epoch in range({config.get("epochs", 10)}):
         model.train()
         total_loss = 0
 
@@ -350,13 +361,15 @@ def train_model():
             labels = torch.tensor(batch['label']).to(device)
 
             # Forward pass
+            optimizer.zero_grad()
             outputs = model(input_ids, attention_mask)
             loss = criterion(outputs.logits, labels)
 
-            # Backward pass
-            optimizer.zero_grad()
+            # Backward pass. xm.optimizer_step() applies grads; xm.mark_step() materializes
+            # the lazy XLA graph (one compile/execute step on Trainium).
             loss.backward()
             xm.optimizer_step(optimizer)
+            xm.mark_step()
 
             total_loss += loss.item()
 
@@ -366,46 +379,46 @@ def train_model():
         avg_loss = total_loss / len(train_loader)
         print(f"Epoch {{epoch}} completed. Average Loss: {{avg_loss:.4f}}")
 
-        # Save best model
+        # Save best model (checkpoint only -- compile for Inferentia once, after training).
         if avg_loss < best_loss:
             best_loss = avg_loss
-
-            # Compile for Inferentia (inference)
-            print("🔧 Compiling model for Inferentia...")
-            inference_model = torch_neuronx.trace(
-                model,
-                (example_input['input_ids'].to(device)[:1], example_input['attention_mask'].to(device)[:1]),
-                compiler_args=[
-                    '--model-type=transformer',
-                    '--static-weights',
-                    '--batching_en',
-                    '--max-batch-size=32'
-                ]
-            )
-
-            # Save for Inferentia
-            torch.jit.save(inference_model, '/home/ubuntu/results/model_inferentia.pt')
-
-            # Save checkpoint
             torch.save({{
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'epoch': epoch,
                 'loss': avg_loss
             }}, '/home/ubuntu/results/checkpoint.pt')
-
-            print(f"✅ Saved new best model (loss: {{best_loss:.4f}})")
+            print(f"✅ Saved new best checkpoint (loss: {{best_loss:.4f}})")
 
     print("🎉 Training completed!")
+
+    # --- Compile the trained model for Inferentia (inference) -------------------------------
+    # Reload best weights onto CPU, then trace once for inference. Tracing happens on CPU
+    # tensors; torch_neuronx.trace() compiles the inference graph for Inf2/Trn2 serving.
+    print("🔧 Compiling best model for Inferentia inference...")
+    best_ckpt = torch.load('/home/ubuntu/results/checkpoint.pt', map_location='cpu')
+    cpu_model = AutoModelForSequenceClassification.from_pretrained(
+        model_name, num_labels={config.get("num_labels", 2)}
+    )
+    cpu_model.load_state_dict(best_ckpt['model_state_dict'])
+    cpu_model.eval()
+
+    example_inputs = (
+        torch.zeros(1, 512, dtype=torch.long),   # input_ids
+        torch.ones(1, 512, dtype=torch.long),    # attention_mask
+    )
+    inference_model = torch_neuronx.trace(cpu_model, example_inputs)
+    torch.jit.save(inference_model, '/home/ubuntu/results/model_inferentia.pt')
+    print("✅ Saved Inferentia-ready model: model_inferentia.pt")
 
     # Generate training report
     report = {{
         'project': '{self.project_name}',
         'training_completed': datetime.now().isoformat(),
         'final_loss': best_loss,
-        'epochs_trained': {config.get('epochs', 10)},
-        'batch_size': {config.get('batch_size', 32)},
-        'learning_rate': {config.get('learning_rate', 2e-5)}
+        'epochs_trained': {config.get("epochs", 10)},
+        'batch_size': {config.get("batch_size", 32)},
+        'learning_rate': {config.get("learning_rate", 2e-5)}
     }}
 
     with open('/home/ubuntu/results/training_report.json', 'w') as f:
@@ -419,8 +432,7 @@ if __name__ == "__main__":
 
     def _generate_inference_script(self, model_path, config):
         """Generate inference server script for Inferentia"""
-
-        return f"""
+        return """
 from flask import Flask, request, jsonify
 import torch
 import torch_neuronx
@@ -457,7 +469,9 @@ def load_model():
 def predict():
     global request_count, total_latency
 
-    start_time = time.time()
+    # Use a distinct name -- do NOT shadow the module-level `start_time` (a datetime used for
+    # uptime/cost), or the runtime math below raises TypeError (float minus datetime).
+    request_start = time.time()
 
     try:
         # Get input data
@@ -465,7 +479,7 @@ def predict():
         texts = data.get('texts', [])
 
         if not texts:
-            return jsonify({{'error': 'No texts provided'}}), 400
+            return jsonify({'error': 'No texts provided'}), 400
 
         # Tokenize
         encoded = tokenizer(
@@ -482,43 +496,43 @@ def predict():
             predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
 
         # Calculate latency
-        latency_ms = (time.time() - start_time) * 1000
+        latency_ms = (time.time() - request_start) * 1000
 
         # Update statistics
         request_count += len(texts)
         total_latency += latency_ms
         avg_latency = total_latency / request_count if request_count > 0 else 0
 
-        # Calculate costs
-        hourly_rate = 0.227  # inf2.xlarge spot price
+        # Calculate costs (server uptime since process start, not this request)
+        hourly_rate = 0.227  # inf2.xlarge spot price (verify current pricing)
         runtime_hours = (datetime.now() - start_time).total_seconds() / 3600
         total_cost = runtime_hours * hourly_rate
         cost_per_1k_requests = (total_cost / request_count) * 1000 if request_count > 0 else 0
 
-        return jsonify({{
+        return jsonify({
             'predictions': predictions.tolist(),
             'latency_ms': round(latency_ms, 2),
             'batch_size': len(texts),
-            'statistics': {{
+            'statistics': {
                 'total_requests': request_count,
                 'average_latency_ms': round(avg_latency, 2),
                 'total_cost_usd': round(total_cost, 4),
                 'cost_per_1k_requests': round(cost_per_1k_requests, 4),
                 'requests_per_dollar': round(1000 / cost_per_1k_requests, 0) if cost_per_1k_requests > 0 else 0
-            }}
-        }})
+            }
+        })
 
     except Exception as e:
-        return jsonify({{'error': str(e)}}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({{
+    return jsonify({
         'status': 'healthy',
         'model': 'loaded' if model is not None else 'not_loaded',
         'uptime_hours': round((datetime.now() - start_time).total_seconds() / 3600, 2),
         'total_requests': request_count
-    }})
+    })
 
 @app.route('/stats', methods=['GET'])
 def stats():
@@ -526,14 +540,14 @@ def stats():
     hourly_rate = 0.227
     total_cost = runtime_hours * hourly_rate
 
-    return jsonify({{
+    return jsonify({
         'runtime_hours': round(runtime_hours, 2),
         'total_requests': request_count,
         'total_cost_usd': round(total_cost, 4),
         'cost_per_request': round(total_cost / request_count, 6) if request_count > 0 else 0,
         'requests_per_hour': round(request_count / runtime_hours, 0) if runtime_hours > 0 else 0,
         'average_latency_ms': round(total_latency / request_count, 2) if request_count > 0 else 0
-    }})
+    })
 
 if __name__ == '__main__':
     load_model()
@@ -543,7 +557,6 @@ if __name__ == '__main__':
 
     def _get_cost_monitor_script(self, instance_type):
         """Generate cost monitoring script"""
-
         hourly_rates = {
             "trn1.2xlarge": 0.40,
             "trn1.32xlarge": 6.45,
@@ -597,7 +610,6 @@ monitor.run()
 
     def _get_inference_monitor_script(self):
         """Generate inference cost monitoring script"""
-
         return f"""
 import time
 import json
@@ -647,7 +659,6 @@ monitor.run()
 
     def _wait_for_training_completion(self, instance_id):
         """Wait for training instance to complete and calculate costs"""
-
         print("⏳ Waiting for training to complete...")
 
         start_time = time.time()
@@ -661,7 +672,7 @@ monitor.run()
                 training_time = (end_time - start_time) / 3600
                 training_cost = training_time * 6.45  # Spot price for trn1.32xlarge
 
-                print(f"✅ Training completed!")
+                print("✅ Training completed!")
                 print(f"⏱️  Training time: {training_time:.2f} hours")
                 print(f"💰 Training cost: ${training_cost:.2f}")
 
@@ -678,12 +689,11 @@ monitor.run()
 
     def run_cost_comparison(self, training_result, inference_result):
         """Generate cost comparison report"""
-
         print("\\n📊 Cost Comparison Report")
         print("=" * 50)
 
         # Training costs
-        print(f"Training Phase (Trainium):")
+        print("Training Phase (Trainium):")
         print(f"  Time: {training_result['training_time_hours']:.2f} hours")
         print(f"  Cost: ${training_result['training_cost_usd']:.2f}")
         print(
@@ -696,7 +706,7 @@ monitor.run()
         inferentia_monthly = inference_result["hourly_cost"] * monthly_hours
         gpu_monthly = 3.06 * monthly_hours  # p3.2xlarge
 
-        print(f"\\nInference Phase (Inferentia):")
+        print("\\nInference Phase (Inferentia):")
         print(f"  Hourly: ${inference_result['hourly_cost']:.3f}")
         print(f"  Monthly (24/7): ${inferentia_monthly:.2f}")
         print(f"  vs GPU monthly: ${gpu_monthly:.2f}")
@@ -708,7 +718,7 @@ monitor.run()
         total_aws_cost = training_result["training_cost_usd"] + inferentia_monthly
         total_gpu_cost = (training_result["training_cost_usd"] * 2.5) + gpu_monthly
 
-        print(f"\\nTotal Monthly Cost (Training + Inference):")
+        print("\\nTotal Monthly Cost (Training + Inference):")
         print(f"  AWS ML Chips: ${total_aws_cost:.2f}")
         print(f"  Traditional GPU: ${total_gpu_cost:.2f}")
         print(
@@ -747,7 +757,6 @@ monitor.run()
 # Example usage script
 def main():
     """Run complete Trainium to Inferentia pipeline"""
-
     # Configuration
     pipeline = TrainiumToInferentiaPipeline(
         project_name="climate-prediction-demo",
@@ -779,7 +788,7 @@ def main():
     )
 
     # Phase 3: Cost analysis
-    cost_report = pipeline.run_cost_comparison(training_result, inference_result)
+    pipeline.run_cost_comparison(training_result, inference_result)
 
     # Test the deployment
     print("\\n🧪 Testing inference endpoint...")
@@ -799,7 +808,7 @@ def main():
         )
         if response.status_code == 200:
             result = response.json()
-            print(f"✅ Inference test successful!")
+            print("✅ Inference test successful!")
             print(f"   Predictions: {len(result['predictions'])} results")
             print(f"   Latency: {result['latency_ms']:.2f}ms")
             print(

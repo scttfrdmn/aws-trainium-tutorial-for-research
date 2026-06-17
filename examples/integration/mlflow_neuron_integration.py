@@ -14,8 +14,8 @@ MLflow Integration Features:
 
 TESTED VERSIONS (Last validated: 2025-06-24):
     - MLflow: 2.15.0 (latest June 2025)
-    - torch-neuronx: 2.2.0
-    - AWS Neuron SDK: 2.20.1
+    - torch-neuronx: 2.9.x
+    - AWS Neuron SDK: 2.30.0
     - PyTorch: 2.4.0
     - boto3: 1.35.0
     - Test Status: ✅ Full MLflow integration validated
@@ -36,11 +36,9 @@ Date: 2025-06-24
 
 import json
 import logging
-import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 import boto3
 import mlflow
@@ -96,8 +94,8 @@ class NeuronMLflowIntegration:
     def __init__(
         self,
         experiment_name: str,
-        tracking_uri: Optional[str] = None,
-        artifact_location: Optional[str] = None,
+        tracking_uri: str | None = None,
+        artifact_location: str | None = None,
         aws_region: str = "us-east-1",
     ):
         """Initialize MLflow integration for Neuron."""
@@ -128,21 +126,21 @@ class NeuronMLflowIntegration:
 
         # Neuron-specific configuration
         self.neuron_config = {
-            "compiler_version": "2.20.1",
+            "compiler_version": "2.30.0",
             "torch_neuronx_version": "2.2.0",
             "target_device": "inferentia" if NEURON_AVAILABLE else "cpu",
         }
 
-        logger.info(f"🔬 MLflow Neuron Integration initialized")
+        logger.info("🔬 MLflow Neuron Integration initialized")
         logger.info(f"   Experiment: {experiment_name} (ID: {self.experiment_id})")
         logger.info(f"   Tracking URI: {mlflow.get_tracking_uri()}")
         logger.info(f"   Neuron available: {NEURON_AVAILABLE}")
 
-    def start_run(self, run_name: Optional[str] = None, tags: Optional[Dict] = None):
+    def start_run(self, run_name: str | None = None, tags: dict | None = None):
         """Start MLflow run with Neuron-specific tags."""
         default_tags = {
             "platform": "aws-neuron",
-            "neuron_sdk_version": "2.20.1",
+            "neuron_sdk_version": "2.30.0",
             "torch_neuronx_version": "2.2.0",
             "framework": "pytorch",
             "device_type": "trainium/inferentia",
@@ -155,7 +153,7 @@ class NeuronMLflowIntegration:
             experiment_id=self.experiment_id, run_name=run_name, tags=default_tags
         )
 
-    def log_neuron_metrics(self, metrics: Dict[str, float], step: Optional[int] = None):
+    def log_neuron_metrics(self, metrics: dict[str, float], step: int | None = None):
         """Log Neuron-specific performance metrics."""
         # Standard metrics
         for key, value in metrics.items():
@@ -177,9 +175,9 @@ class NeuronMLflowIntegration:
         self,
         model: nn.Module,
         model_name: str,
-        input_example: Optional[torch.Tensor] = None,
+        input_example: torch.Tensor | None = None,
         compile_for_inferentia: bool = True,
-        metadata: Optional[Dict] = None,
+        metadata: dict | None = None,
     ) -> str:
         """Log PyTorch model with Neuron compilation artifacts."""
         logger.info(f"📦 Logging Neuron model: {model_name}")
@@ -261,11 +259,11 @@ class NeuronMLflowIntegration:
             raise
 
     def _create_neuron_metadata_file(
-        self, metadata: Optional[Dict], compilation_time: float
-    ) -> List[str]:
+        self, metadata: dict | None, compilation_time: float
+    ) -> list[str]:
         """Create metadata file for Neuron model."""
         neuron_metadata = {
-            "neuron_sdk_version": "2.20.1",
+            "neuron_sdk_version": "2.30.0",
             "torch_neuronx_version": "2.2.0",
             "compilation_time_seconds": compilation_time,
             "target_device": "inferentia",
@@ -287,7 +285,7 @@ class NeuronMLflowIntegration:
         self,
         model: nn.Module,
         model_name: str,
-        compiled_model: Optional[nn.Module] = None,
+        compiled_model: nn.Module | None = None,
     ):
         """Log additional Neuron-specific artifacts."""
         # Log model architecture
@@ -365,10 +363,10 @@ class NeuronMLflowIntegration:
     def run_hyperparameter_sweep(
         self,
         train_fn,
-        param_grid: Dict[str, List],
+        param_grid: dict[str, list],
         metric_name: str = "validation_accuracy",
         max_runs: int = 10,
-    ) -> Tuple[Dict, str]:
+    ) -> tuple[dict, str]:
         """Run hyperparameter sweep with Neuron-optimized parameters."""
         logger.info(f"🔄 Starting hyperparameter sweep: {max_runs} runs")
 
@@ -380,10 +378,10 @@ class NeuronMLflowIntegration:
         param_combinations = self._generate_param_combinations(param_grid, max_runs)
 
         for i, params in enumerate(param_combinations):
-            run_name = f"hp_sweep_run_{i+1}"
+            run_name = f"hp_sweep_run_{i + 1}"
 
             with self.start_run(run_name=run_name) as run:
-                logger.info(f"   Run {i+1}/{len(param_combinations)}: {params}")
+                logger.info(f"   Run {i + 1}/{len(param_combinations)}: {params}")
 
                 # Log parameters
                 for key, value in params.items():
@@ -409,15 +407,15 @@ class NeuronMLflowIntegration:
                     mlflow.log_param("status", "failed")
                     mlflow.log_param("error", str(e))
 
-        logger.info(f"✅ Hyperparameter sweep completed")
+        logger.info("✅ Hyperparameter sweep completed")
         logger.info(f"   Best {metric_name}: {best_metric:.4f}")
         logger.info(f"   Best parameters: {best_params}")
 
         return best_params, best_run_id
 
     def _generate_param_combinations(
-        self, param_grid: Dict[str, List], max_runs: int
-    ) -> List[Dict]:
+        self, param_grid: dict[str, list], max_runs: int
+    ) -> list[dict]:
         """Generate parameter combinations for hyperparameter sweep."""
         import itertools
 
@@ -427,7 +425,7 @@ class NeuronMLflowIntegration:
 
         all_combinations = []
         for combination in itertools.product(*values):
-            param_dict = dict(zip(keys, combination))
+            param_dict = dict(zip(keys, combination, strict=False))
             all_combinations.append(param_dict)
 
         # Limit to max_runs
@@ -440,14 +438,14 @@ class NeuronMLflowIntegration:
 
         return all_combinations
 
-    def compare_models(self, model_uris: List[str], test_data: torch.Tensor) -> Dict:
+    def compare_models(self, model_uris: list[str], test_data: torch.Tensor) -> dict:
         """Compare multiple models on test data."""
         logger.info(f"🏆 Comparing {len(model_uris)} models")
 
         results = {}
 
         for i, model_uri in enumerate(model_uris):
-            logger.info(f"   Evaluating model {i+1}: {model_uri}")
+            logger.info(f"   Evaluating model {i + 1}: {model_uri}")
 
             try:
                 # Load model
@@ -457,7 +455,7 @@ class NeuronMLflowIntegration:
                 # Run inference
                 start_time = time.time()
                 with torch.no_grad():
-                    outputs = model(test_data)
+                    model(test_data)
                 inference_time = time.time() - start_time
 
                 # Calculate metrics
@@ -476,7 +474,7 @@ class NeuronMLflowIntegration:
 
         return results
 
-    def setup_model_monitoring(self, endpoint_name: str) -> Dict:
+    def setup_model_monitoring(self, endpoint_name: str) -> dict:
         """Setup monitoring for deployed Inferentia model."""
         logger.info(f"📈 Setting up monitoring for {endpoint_name}")
 

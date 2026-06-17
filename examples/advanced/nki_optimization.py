@@ -14,8 +14,8 @@ NKI Features Covered:
 
 TESTED VERSIONS (Last validated: 2025-06-24):
     - NKI: 0.4.0 (latest June 2025 stable release)
-    - torch-neuronx: 2.2.0 with enhanced NKI integration
-    - AWS Neuron SDK: 2.20.1
+    - torch-neuronx: 2.9.x with enhanced NKI integration
+    - AWS Neuron SDK: 2.30.0
     - PyTorch: 2.4.0 with full Neuron support
     - Instance Types: trn1.2xlarge, trn1.32xlarge, inf2.xlarge, inf2.8xlarge
     - Test Status: ✅ All advanced optimizations validated on latest hardware
@@ -35,10 +35,8 @@ Author: Scott Friedman
 Date: 2025-06-24
 """
 
-import json
 import time
 import warnings
-from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -49,13 +47,15 @@ try:
     import neuronxcc.nki as nki
     import neuronxcc.nki.isa as nisa
     import neuronxcc.nki.language as nl
-    from neuronxcc.nki import profiler  # New in v0.4.0
-    from neuronxcc.nki import benchmark
+    from neuronxcc.nki import (
+        benchmark,
+        profiler,  # New in v0.4.0
+    )
     from neuronxcc.nki.typing import tensor
 
     NKI_AVAILABLE = True
     print("✅ NKI (Neuron Kernel Interface) v0.4.0 available")
-    print(f"   Enhanced features: Advanced profiling, improved compiler optimizations")
+    print("   Enhanced features: Advanced profiling, improved compiler optimizations")
 except ImportError:
     NKI_AVAILABLE = False
     print("❌ NKI not available - using mock implementations")
@@ -130,15 +130,14 @@ class NKIPerformanceOptimizer:
         # Compilation cache
         self.kernel_cache = {}
 
-        print(f"🚀 NKI Performance Optimizer initialized")
+        print("🚀 NKI Performance Optimizer initialized")
         print(f"   Device: {device_type}")
         print(f"   Neuron cores: {neuron_core_count}")
         print(f"   Memory hierarchy: {self.hardware_specs['memory_hierarchy']}")
         print(f"   Compute units: {self.hardware_specs['compute_units']}")
 
-    def _get_hardware_specs(self, device_type: str) -> Dict:
+    def _get_hardware_specs(self, device_type: str) -> dict:
         """Get hardware specifications for optimization planning."""
-
         if device_type == "trainium":
             return {
                 "memory_hierarchy": {
@@ -190,7 +189,6 @@ class NKIPerformanceOptimizer:
         Returns:
             callable: Compiled NKI attention kernel
         """
-
         print(f"🔧 Creating custom attention kernel ({seq_len}x{num_heads}x{head_dim})")
 
         if not NKI_AVAILABLE:
@@ -204,8 +202,7 @@ class NKIPerformanceOptimizer:
             value: tensor[seq_len, num_heads, head_dim],
             output: tensor[seq_len, num_heads, head_dim],
         ):
-            """
-            Custom fused attention kernel optimized for Neuron hardware.
+            """Custom fused attention kernel optimized for Neuron hardware.
 
             This kernel implements:
             1. Fused QK^T computation with scaling
@@ -213,7 +210,6 @@ class NKIPerformanceOptimizer:
             3. Attention-weighted value aggregation
             4. Optimized memory access patterns
             """
-
             # Memory optimization: tile the computation to fit in SBUF
             sbuf_size = self.hardware_specs["memory_hierarchy"]["sbuf_size_kb"] * 1024
             tile_size = min(64, sbuf_size // (head_dim * 4))  # 4 bytes per bf16/fp32
@@ -301,7 +297,6 @@ class NKIPerformanceOptimizer:
         - Sparsity-aware computation
         - Memory access pattern optimization
         """
-
         print(
             f"🔧 Creating custom convolution kernel ({in_channels}->{out_channels}, k={kernel_size})"
         )
@@ -317,8 +312,7 @@ class NKIPerformanceOptimizer:
             weight_tensor: tensor,  # [C_out, K, K, C_in]
             output_tensor: tensor,  # [N, H_out, W_out, C_out]
         ):
-            """
-            Custom convolution kernel optimized for Neuron sparsity engines.
+            """Custom convolution kernel optimized for Neuron sparsity engines.
 
             Key optimizations:
             1. Data layout optimized for Neuron memory hierarchy
@@ -326,7 +320,6 @@ class NKIPerformanceOptimizer:
             3. Minimized memory transfers through intelligent tiling
             4. Vectorized operations for efficiency
             """
-
             # Get tensor dimensions
             batch_size, height, width, _ = input_tensor.shape
             out_channels, _, _, _ = weight_tensor.shape
@@ -429,7 +422,7 @@ class NKIPerformanceOptimizer:
                 ],
             )
 
-            print(f"   ✅ Convolution kernel compiled successfully")
+            print("   ✅ Convolution kernel compiled successfully")
             return compiled_kernel
 
         except Exception as e:
@@ -444,7 +437,6 @@ class NKIPerformanceOptimizer:
         Demonstrates how to leverage Neuron's sparsity engines for
         accelerating sparse matrix operations common in modern ML models.
         """
-
         print(
             f"🔧 Creating sparse matrix multiplication kernel (sparsity: {sparsity_ratio:.1%})"
         )
@@ -460,8 +452,7 @@ class NKIPerformanceOptimizer:
             indices: tensor,  # Sparse indices
             indptr: tensor,  # Sparse index pointer
         ):
-            """
-            Sparsity-optimized matrix multiplication using Neuron sparsity engines.
+            """Sparsity-optimized matrix multiplication using Neuron sparsity engines.
 
             This kernel:
             1. Uses compressed sparse row (CSR) format for efficient storage
@@ -469,7 +460,6 @@ class NKIPerformanceOptimizer:
             3. Optimizes memory access patterns for sparse data
             4. Provides significant speedup for high sparsity ratios
             """
-
             m, k = sparse_matrix.shape
             k2, n = dense_matrix.shape
             assert k == k2, "Matrix dimensions must match"
@@ -477,7 +467,7 @@ class NKIPerformanceOptimizer:
             # Tile for optimal sparsity engine utilization
             tile_m = min(64, m)
             tile_n = min(64, n)
-            tile_k = min(128, k)
+            min(128, k)
 
             for m_tile in nl.affine_range(0, m, tile_m):
                 for n_tile in nl.affine_range(0, n, tile_n):
@@ -530,7 +520,7 @@ class NKIPerformanceOptimizer:
                 ],
             )
 
-            print(f"   ✅ Sparse matmul kernel compiled successfully")
+            print("   ✅ Sparse matmul kernel compiled successfully")
             return compiled_kernel
 
         except Exception as e:
@@ -538,14 +528,13 @@ class NKIPerformanceOptimizer:
             return self._create_mock_sparse_matmul_kernel(sparsity_ratio)
 
     def optimize_memory_layout(
-        self, tensor_shapes: List[Tuple], access_patterns: List[str]
-    ) -> Dict:
+        self, tensor_shapes: list[tuple], access_patterns: list[str]
+    ) -> dict:
         """Optimize tensor memory layouts for Neuron hardware.
 
         This function analyzes tensor access patterns and recommends optimal
         memory layouts to maximize bandwidth utilization and minimize transfers.
         """
-
         print("🧠 Analyzing memory layout optimization opportunities...")
 
         recommendations = {
@@ -556,11 +545,11 @@ class NKIPerformanceOptimizer:
             "prefetch_strategies": [],
         }
 
-        hbm_bandwidth = self.hardware_specs["memory_hierarchy"]["hbm_bandwidth_gb_s"]
+        self.hardware_specs["memory_hierarchy"]["hbm_bandwidth_gb_s"]
         sbuf_size = self.hardware_specs["memory_hierarchy"]["sbuf_size_kb"] * 1024
 
         for i, (shape, access_pattern) in enumerate(
-            zip(tensor_shapes, access_patterns)
+            zip(tensor_shapes, access_patterns, strict=False)
         ):
             tensor_size_bytes = np.prod(shape) * 4  # Assume fp32
 
@@ -611,7 +600,7 @@ class NKIPerformanceOptimizer:
             if np.prod(shape) > 1024
         )
 
-        print(f"   📊 Analysis complete:")
+        print("   📊 Analysis complete:")
         print(f"      Layout recommendations: {len(recommendations['layout_changes'])}")
         print(
             f"      Bandwidth improvement: {recommendations['bandwidth_improvement_percent']:.1f}%"
@@ -621,8 +610,8 @@ class NKIPerformanceOptimizer:
         return recommendations
 
     def performance_profiling_nki(
-        self, kernels: List[callable], test_inputs: List[torch.Tensor]
-    ) -> Dict:
+        self, kernels: list[callable], test_inputs: list[torch.Tensor]
+    ) -> dict:
         """Advanced performance profiling for NKI kernels.
 
         Provides detailed performance analysis including:
@@ -631,7 +620,6 @@ class NKIPerformanceOptimizer:
         - Instruction pipeline efficiency
         - Bottleneck identification
         """
-
         print("📊 Running advanced NKI performance profiling...")
 
         if not NKI_AVAILABLE:
@@ -644,7 +632,9 @@ class NKIPerformanceOptimizer:
             "optimization_suggestions": [],
         }
 
-        for i, (kernel, test_input) in enumerate(zip(kernels, test_inputs)):
+        for i, (kernel, test_input) in enumerate(
+            zip(kernels, test_inputs, strict=False)
+        ):
             kernel_name = f"kernel_{i}"
             print(f"   🔄 Profiling {kernel_name}...")
 
@@ -661,7 +651,7 @@ class NKIPerformanceOptimizer:
                 # Profiled runs
                 start_time = time.time()
                 for _ in range(10):
-                    result = kernel(test_input)
+                    kernel(test_input)
                 end_time = time.time()
 
                 avg_execution_time = (end_time - start_time) / 10
@@ -710,11 +700,11 @@ class NKIPerformanceOptimizer:
             profiling_results["bottleneck_analysis"][kernel_name] = bottlenecks
 
         # Generate optimization suggestions
-        profiling_results[
-            "optimization_suggestions"
-        ] = self._generate_optimization_suggestions(
-            profiling_results["kernel_performance"],
-            profiling_results["bottleneck_analysis"],
+        profiling_results["optimization_suggestions"] = (
+            self._generate_optimization_suggestions(
+                profiling_results["kernel_performance"],
+                profiling_results["bottleneck_analysis"],
+            )
         )
 
         self._print_profiling_summary(profiling_results)
@@ -730,8 +720,8 @@ class NKIPerformanceOptimizer:
         return gops
 
     def _identify_bottlenecks(
-        self, execution_breakdown: Dict, memory_utilization: Dict
-    ) -> List[str]:
+        self, execution_breakdown: dict, memory_utilization: dict
+    ) -> list[str]:
         """Identify performance bottlenecks from profiling data."""
         bottlenecks = []
 
@@ -759,8 +749,8 @@ class NKIPerformanceOptimizer:
         return bottlenecks
 
     def _generate_optimization_suggestions(
-        self, performance_data: Dict, bottleneck_data: Dict
-    ) -> List[str]:
+        self, performance_data: dict, bottleneck_data: dict
+    ) -> list[str]:
         """Generate specific optimization suggestions based on profiling."""
         suggestions = []
 
@@ -797,9 +787,9 @@ class NKIPerformanceOptimizer:
 
         return suggestions
 
-    def _print_profiling_summary(self, results: Dict):
+    def _print_profiling_summary(self, results: dict):
         """Print comprehensive profiling summary."""
-        print(f"\n📈 NKI PERFORMANCE PROFILING SUMMARY")
+        print("\n📈 NKI PERFORMANCE PROFILING SUMMARY")
         print("=" * 60)
 
         for kernel_name, perf_data in results["kernel_performance"].items():
@@ -807,7 +797,7 @@ class NKIPerformanceOptimizer:
 
             # Execution breakdown
             exec_breakdown = perf_data["execution_breakdown"]
-            print(f"   Execution Time Breakdown:")
+            print("   Execution Time Breakdown:")
             print(
                 f"      Vector engines: {exec_breakdown['vector_engine_time_ms']:.2f}ms"
             )
@@ -838,7 +828,7 @@ class NKIPerformanceOptimizer:
         # Optimization suggestions
         suggestions = results["optimization_suggestions"]
         if suggestions:
-            print(f"\n💡 OPTIMIZATION SUGGESTIONS:")
+            print("\n💡 OPTIMIZATION SUGGESTIONS:")
             for i, suggestion in enumerate(suggestions[:5], 1):  # Show top 5
                 print(f"   {i}. {suggestion}")
 
@@ -879,8 +869,8 @@ class NKIPerformanceOptimizer:
         return mock_sparse_matmul
 
     def _mock_performance_profiling(
-        self, kernels: List[callable], test_inputs: List[torch.Tensor]
-    ) -> Dict:
+        self, kernels: list[callable], test_inputs: list[torch.Tensor]
+    ) -> dict:
         """Mock performance profiling for non-Neuron environments."""
         print("   📝 Using mock performance profiling (NKI not available)")
 
@@ -933,7 +923,6 @@ class NKIModelOptimizer:
 
     def optimize_transformer_model(self, model: nn.Module) -> nn.Module:
         """Optimize transformer model with custom NKI kernels."""
-
         print("🔧 Optimizing transformer model with NKI...")
 
         # Find attention layers and replace with NKI-optimized versions
@@ -961,7 +950,6 @@ class NKIModelOptimizer:
 
     def optimize_cnn_model(self, model: nn.Module) -> nn.Module:
         """Optimize CNN model with custom NKI convolution kernels."""
-
         print("🔧 Optimizing CNN model with NKI...")
 
         # Find convolution layers and replace with NKI-optimized versions
@@ -990,7 +978,6 @@ class NKIModelOptimizer:
 # Convenience functions and examples
 def demonstrate_nki_optimization():
     """Demonstrate comprehensive NKI optimization workflow."""
-
     print("🌟 NKI Advanced Optimization Demonstration")
     print("=" * 60)
 
@@ -1037,7 +1024,7 @@ def demonstrate_nki_optimization():
 
     optimized_model = model_optimizer.optimize_transformer_model(sample_transformer)
 
-    print(f"\n🎉 NKI OPTIMIZATION COMPLETE!")
+    print("\n🎉 NKI OPTIMIZATION COMPLETE!")
     print(f"   Custom kernels created: {len(optimizer.custom_kernels) + 3}")
     print(f"   Memory optimizations: {len(memory_recommendations['layout_changes'])}")
     print(
@@ -1057,9 +1044,9 @@ if __name__ == "__main__":
     # Run comprehensive NKI optimization demonstration
     results = demonstrate_nki_optimization()
 
-    print(f"\n✅ Advanced NKI optimization demonstration complete!")
-    print(f"   Check results for detailed optimization insights")
-    print(f"   NKI enables 2-10x performance gains for specialized operations")
+    print("\n✅ Advanced NKI optimization demonstration complete!")
+    print("   Check results for detailed optimization insights")
+    print("   NKI enables 2-10x performance gains for specialized operations")
     print(
-        f"   💡 Use NKI for bottleneck operations that standard frameworks can't optimize"
+        "   💡 Use NKI for bottleneck operations that standard frameworks can't optimize"
     )

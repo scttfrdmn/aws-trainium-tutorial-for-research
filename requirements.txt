@@ -1,14 +1,16 @@
 # Core AWS and ML dependencies
 boto3>=1.34.0
-torch>=2.0.0
-torch-xla>=2.0.0
-transformers>=4.30.0
+transformers>=4.40.0
 datasets>=2.14.0
-accelerate>=0.20.0
+accelerate>=0.30.0
 
-# Neuron SDK (installed separately via pip index)
-# torch-neuronx>=1.13.0
-# neuronx-cc>=2.0.0
+# Neuron SDK — install from the AWS Neuron pip index, NOT from PyPI.
+# torch / torch-xla are pulled in (and pinned) by torch-neuronx, so we deliberately do NOT pin
+# torch here — let the Neuron wheel resolve a matched version. See VERSION_MATRIX.md.
+#   pip install torch-neuronx neuronx-cc \
+#       --extra-index-url https://pip.repos.neuron.amazonaws.com
+# As of Neuron SDK 2.30.0 this is the PyTorch 2.9 / XLA path. PyTorch 2.10+ will use the native
+# TorchNeuron backend (private preview).
 
 # Data processing and analysis
 pandas>=1.5.0

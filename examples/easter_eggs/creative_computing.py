@@ -51,10 +51,8 @@ tensor computing" rather than trying to turn ML chips into general CPUs.
 
 import json
 import math
-import random
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import torch
@@ -123,7 +121,7 @@ class CreativeNeuronComputing:
 
     def massive_parallel_matrix_ops(
         self, size: int = 1000, iterations: int = 100
-    ) -> Dict:
+    ) -> dict:
         """Demonstrate massively parallel matrix operations beyond typical ML.
 
         This showcases how ML chips can accelerate linear algebra operations
@@ -165,7 +163,7 @@ class CreativeNeuronComputing:
 
             def forward(self, input_matrices):
                 """Perform complex matrix operations using tensor operations."""
-                batch_size = input_matrices.shape[0]
+                input_matrices.shape[0]
 
                 # Matrix multiplication chains (common in physics simulations)
                 result1 = torch.matmul(input_matrices, self.transform_matrix)
@@ -292,7 +290,7 @@ class CreativeNeuronComputing:
 
     def monte_carlo_simulation_engine(
         self, simulations: int = 1000000, dimensions: int = 4
-    ) -> Dict:
+    ) -> dict:
         """Monte Carlo simulations using tensor parallelization.
 
         Demonstrates how ML chip parallel processing can accelerate Monte Carlo
@@ -433,7 +431,7 @@ class CreativeNeuronComputing:
                 elapsed = time.time() - simulation_start
                 simulations_per_sec = (batch + 1) * self.batch_size / elapsed
                 print(
-                    f"   Progress: {batch+1}/{num_batches} batches, "
+                    f"   Progress: {batch + 1}/{num_batches} batches, "
                     f"{simulations_per_sec:.1f} simulations/sec"
                 )
 
@@ -497,7 +495,7 @@ class CreativeNeuronComputing:
 
     def procedural_art_generator(
         self, resolution: int = 512, iterations: int = 100
-    ) -> Dict:
+    ) -> dict:
         """Generate procedural art using tensor operations for creative expression.
 
         This demonstrates how ML chips can be used for creative computing,
@@ -550,7 +548,7 @@ class CreativeNeuronComputing:
                 # Create complex patterns using multiple frequency components
                 art_channels = []
 
-                for channel in range(3):  # RGB channels
+                for _channel in range(3):  # RGB channels
                     channel_pattern = torch.zeros_like(grid_x)
 
                     # Combine multiple sinusoidal components (Fourier-like synthesis)
@@ -676,7 +674,7 @@ class CreativeNeuronComputing:
                 elapsed = time.time() - generation_start
                 art_per_sec = total_art_pieces / elapsed
                 print(
-                    f"   Progress: {batch+1}/{num_batches} batches, {art_per_sec:.1f} art pieces/sec"
+                    f"   Progress: {batch + 1}/{num_batches} batches, {art_per_sec:.1f} art pieces/sec"
                 )
 
         total_time = time.time() - start_time
@@ -746,7 +744,7 @@ class CreativeNeuronComputing:
 
     def cryptographic_playground(
         self, hash_iterations: int = 100000, key_size: int = 256
-    ) -> Dict:
+    ) -> dict:
         """Explore cryptographic operations using tensor parallelization.
 
         ⚠️  WARNING: This is for educational purposes only. Do not use for
@@ -936,7 +934,7 @@ class CreativeNeuronComputing:
                 elapsed = time.time() - crypto_start
                 ops_per_sec = total_operations / elapsed
                 print(
-                    f"   Progress: {batch+1}/{num_batches} batches, {ops_per_sec:.1f} ops/sec"
+                    f"   Progress: {batch + 1}/{num_batches} batches, {ops_per_sec:.1f} ops/sec"
                 )
 
         total_time = time.time() - start_time
@@ -988,7 +986,7 @@ class CreativeNeuronComputing:
 
     def _calculate_cost_savings(
         self, operation_type: str, runtime_seconds: float
-    ) -> Dict:
+    ) -> dict:
         """Calculate cost savings compared to traditional computing methods."""
 
         # Cost rates (per hour)
@@ -1027,8 +1025,8 @@ class CreativeNeuronComputing:
         }
 
     def emulate_fp64_precision(
-        self, test_values: List[float] = None, operations: int = 1000
-    ) -> Dict:
+        self, test_values: list[float] = None, operations: int = 1000
+    ) -> dict:
         """Emulate double precision (fp64) using pairs of single precision (fp32) values.
 
         This demonstrates a critical technique used in scientific computing when
@@ -1087,7 +1085,7 @@ class CreativeNeuronComputing:
 
             def dekker_split(
                 self, a: torch.Tensor
-            ) -> Tuple[torch.Tensor, torch.Tensor]:
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 """Split fp32 into high and low precision components."""
                 temp = self.splitter * a
                 high = temp - (temp - a)
@@ -1096,7 +1094,7 @@ class CreativeNeuronComputing:
 
             def two_sum(
                 self, a: torch.Tensor, b: torch.Tensor
-            ) -> Tuple[torch.Tensor, torch.Tensor]:
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 """Add two fp32 values with error compensation."""
                 s = a + b
                 temp = s - a
@@ -1105,7 +1103,7 @@ class CreativeNeuronComputing:
 
             def two_product(
                 self, a: torch.Tensor, b: torch.Tensor
-            ) -> Tuple[torch.Tensor, torch.Tensor]:
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 """Multiply two fp32 values with error compensation."""
                 p = a * b
                 a_hi, a_lo = self.dekker_split(a)
@@ -1119,7 +1117,7 @@ class CreativeNeuronComputing:
                 a_lo: torch.Tensor,
                 b_hi: torch.Tensor,
                 b_lo: torch.Tensor,
-            ) -> Tuple[torch.Tensor, torch.Tensor]:
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 """Add two double-single precision numbers."""
                 s, e = self.two_sum(a_hi, b_hi)
                 e = e + (a_lo + b_lo)
@@ -1132,14 +1130,14 @@ class CreativeNeuronComputing:
                 a_lo: torch.Tensor,
                 b_hi: torch.Tensor,
                 b_lo: torch.Tensor,
-            ) -> Tuple[torch.Tensor, torch.Tensor]:
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 """Multiply two double-single precision numbers."""
                 p, e = self.two_product(a_hi, b_hi)
                 e = e + (a_hi * b_lo + a_lo * b_hi)
                 hi, lo = self.two_sum(p, e)
                 return hi, lo
 
-            def forward(self, values_tensor: torch.Tensor) -> Dict[str, torch.Tensor]:
+            def forward(self, values_tensor: torch.Tensor) -> dict[str, torch.Tensor]:
                 """Perform high-precision operations on batch of values."""
                 batch_size = values_tensor.shape[0]
 
@@ -1249,7 +1247,7 @@ class CreativeNeuronComputing:
                 ops_completed = (batch + 1) * len(test_values) * 2
                 ops_per_sec = ops_completed / elapsed
                 print(
-                    f"   Progress: {batch+1}/{num_batches} batches, {ops_per_sec:.1f} precision ops/sec"
+                    f"   Progress: {batch + 1}/{num_batches} batches, {ops_per_sec:.1f} precision ops/sec"
                 )
 
         total_time = time.time() - start_time
@@ -1342,7 +1340,7 @@ class CreativeNeuronComputing:
 
         return result
 
-    def run_complete_showcase(self) -> Dict:
+    def run_complete_showcase(self) -> dict:
         """Run all creative computing demonstrations for a comprehensive showcase."""
         print("🚀 Creative Neuron Computing - Complete Showcase")
         print("=" * 60)
@@ -1425,7 +1423,7 @@ class CreativeNeuronComputing:
 
         return showcase_report
 
-    def _generate_performance_comparison(self, results: Dict) -> Dict:
+    def _generate_performance_comparison(self, results: dict) -> dict:
         """Generate performance comparison across all experiments."""
         comparison = {}
 
@@ -1444,7 +1442,7 @@ class CreativeNeuronComputing:
 
         return comparison
 
-    def _extract_throughput_metric(self, exp_name: str, result: Dict) -> Dict:
+    def _extract_throughput_metric(self, exp_name: str, result: dict) -> dict:
         """Extract the most relevant throughput metric for each experiment."""
         perf = result.get("performance", {})
 
@@ -1462,7 +1460,7 @@ class CreativeNeuronComputing:
         else:
             return {"metric": "unknown", "value": 0}
 
-    def _generate_cost_summary(self, results: Dict) -> Dict:
+    def _generate_cost_summary(self, results: dict) -> dict:
         """Generate overall cost analysis summary."""
         total_cost = 0
         total_gpu_cost = 0
@@ -1493,11 +1491,11 @@ class CreativeNeuronComputing:
             else 0,
         }
 
-    def _generate_conclusions(self, results: Dict) -> List[str]:
+    def _generate_conclusions(self, results: dict) -> list[str]:
         """Generate insights and conclusions from the experiments."""
         conclusions = [
             "🧠 Creative Neuron Computing demonstrates the versatility of ML chips beyond traditional ML workloads.",
-            f"💰 Significant cost savings achieved: typically 40-60% vs GPU, 50-70% vs CPU alternatives.",
+            "💰 Significant cost savings achieved: typically 40-60% vs GPU, 50-70% vs CPU alternatives.",
             "⚡ Tensor operations enable massive parallelization of mathematical computations.",
             "🎨 Creative applications show the artistic potential of mathematical computing.",
             "🔐 Cryptographic experiments reveal both possibilities and limitations (educational only).",
@@ -1510,7 +1508,7 @@ class CreativeNeuronComputing:
 
         return conclusions
 
-    def _print_showcase_summary(self, report: Dict):
+    def _print_showcase_summary(self, report: dict):
         """Print a comprehensive summary of the showcase results."""
         print("\\n" + "=" * 60)
         print("🎯 CREATIVE NEURON COMPUTING SHOWCASE RESULTS")
@@ -1617,10 +1615,10 @@ def main():
             + art_result["cost_analysis"]["savings_vs_gpu"]["absolute"]
         )
 
-        print(f"\\nCost Efficiency:")
+        print("\\nCost Efficiency:")
         print(f"  Total Cost: ${total_cost:.4f}")
         print(f"  Savings vs GPU: ${total_savings:.4f}")
-        print(f"  Efficiency Gain: {(total_savings/total_cost)*100:.1f}%")
+        print(f"  Efficiency Gain: {(total_savings / total_cost) * 100:.1f}%")
 
         print("\\n🎯 Key Takeaways:")
         print("  • ML chips excel at tensor-based parallel computations")

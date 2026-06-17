@@ -14,7 +14,9 @@
 11. [Advanced Cost Optimization](#advanced-optimization)
 12. [Performance Benchmarks & Sizing](#benchmarks)
 13. [Advanced Patterns: NKI & Modern Architectures](#advanced-patterns)
-14. [Troubleshooting & Resources](#troubleshooting)
+14. [Compilation: Why Your First Step Takes Forever](#compilation)
+15. [The Neuron Simulator: What It Can & Can't Do](#simulator)
+16. [Troubleshooting & Resources](#troubleshooting)
 
 ---
 
@@ -105,7 +107,12 @@ Create a simple cost tracking dashboard - see `monitoring/` directory for the co
 
 ## 4. Understanding AWS ML Chips vs NVIDIA GPUs {#chip-comparison}
 
-### Comprehensive Performance Comparison (Updated June 2025)
+### Comprehensive Performance Comparison
+
+> Figures below are approximate, drawn from vendor specs and public benchmarks for planning only;
+> verify against the [Trn2 architecture page](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/arch/neuron-hardware/trn2-arch.html)
+> and current [EC2 pricing](https://aws.amazon.com/ec2/pricing/) before relying on them. **Trainium3
+> (Trn3)** was announced at re:Invent 2025 and is in private preview at UltraServer scale.
 
 | Metric | V100 (16GB) | A100 (40GB) | H100 (80GB) | Trainium1 | Trainium2 | Inferentia2 |
 |--------|-------------|-------------|-------------|-----------|-----------|-------------|
@@ -127,7 +134,17 @@ Create a simple cost tracking dashboard - see `monitoring/` directory for the co
 
 ## 5. Migrating from CUDA to Neuron {#cuda-migration}
 
-### Understanding the Differences
+> **⚠️ Heads-up (June 2026): this chapter teaches the PyTorch/XLA path, which is on its way out.**
+> Today, PyTorch on Neuron runs through XLA (`torch_xla`, `xm.xla_device()`, lazy graphs +
+> `xm.mark_step()`), and **PyTorch 2.9 is the last XLA-based version**. AWS has announced
+> **TorchNeuron**, a *native* (non-XLA) PyTorch backend that registers Trainium as a native
+> `PrivateUse1` device with **eager mode** and **`torch.compile`** — *"standard PyTorch runs
+> unchanged on Trainium."* It's in **private preview** and targets **PyTorch 2.10**. So: the XLA
+> idioms below remain correct for production now, but don't over-invest in deep `mark_step`-style
+> restructuring — the native backend will make most of this migration table obsolete. See
+> [VERSION_MATRIX.md](../VERSION_MATRIX.md#-the-pytorchxla--torchneuron-transition).
+
+### Understanding the Differences (PyTorch/XLA path)
 
 | CUDA Concept | Neuron Equivalent | Key Differences |
 |--------------|-------------------|-----------------|
@@ -144,9 +161,18 @@ See `scripts/neuron_migration.py` for the complete migration helper.
 
 ## 8. Complete Trainium → Inferentia Workflow {#complete-workflow}
 
+> **📌 2026 framing: "train on Trainium, serve on Inferentia" is now one option, not the default.**
+> AWS has not announced an Inferentia3, and the modern serving stack (NxD Inference) **dropped
+> Inf2/Trn1 support in Neuron 2.29** (pin to 2.28 to keep using it on Inf2). AWS now positions
+> **Trainium2 for both training and inference**. Inferentia2 is still GA and is a fine,
+> cost-optimized target for **smaller, latency-sensitive models** — but for new or large-scale
+> serving, consider keeping inference on **Trn2** with NxD Inference + the vLLM plugin. See the
+> [Inferentia vs Trainium decision guide](../VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference).
+
 ### End-to-End Example: Climate Model Training and Deployment
 
-This example shows the complete workflow of training a model on Trainium and deploying it on Inferentia for cost-effective inference.
+This example shows a complete workflow of training a model on Trainium and deploying it on
+Inferentia for cost-effective inference. The same pattern works with Trn2 as the inference target.
 
 **Key Features:**
 - Training on Trainium2 with automatic cost tracking
@@ -168,7 +194,13 @@ See `examples/complete_workflow/` for the full implementation.
 
 ### Neuron Kernel Interface (NKI) Development
 
-For advanced users who want hardware-level optimization:
+For advanced users who want hardware-level optimization.
+
+> **Note:** The kernel below is **illustrative pseudocode** showing the *shape* of an NKI kernel
+> and the NeuronCore memory hierarchy — it will not run verbatim. The real `neuronxcc.nki.language`
+> API works on tiles with explicit partition/free-axis reductions, masking, and accumulation. Use
+> the [official NKI guide and sample kernels](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/nki/index.html)
+> as your starting point for production kernels.
 
 ```python
 import neuronxcc.nki as nki
@@ -176,7 +208,7 @@ import neuronxcc.nki.language as nl
 
 @nki.jit
 def flash_attention_kernel(q_tensor, k_tensor, v_tensor, scale):
-    """Custom Flash Attention implementation for Trainium"""
+    """Illustrative Flash Attention sketch for Trainium (NOT runnable as-is)"""
     # NeuronCore has 24MB SBUF and 2MB PSUM
     # Tile computations to fit in on-chip memory
     
@@ -308,9 +340,97 @@ class TrainiumDistributedTrainer:
 
 ---
 
-## Performance Benchmarks (June 2025 Update)
+## Compilation: why your first step takes forever (and how to tame it) {#compilation}
 
-### Real-World Benchmark Results
+The single biggest surprise for people coming from CUDA is **compilation time**. Neuron is an
+ahead-of-time (AOT) compiled platform: the Neuron compiler (`neuronx-cc`) turns your model graph
+into a NEFF (Neuron Executable File Format) binary before it can run. This is very different from
+eager CUDA execution.
+
+### Why compiles can take *hours*
+
+- **Every distinct graph shape triggers a compile.** Under PyTorch/XLA, a new input shape, batch
+  size, or sequence length produces a new graph. Dynamic shapes (variable sequence lengths,
+  `if`-on-tensor control flow, padding that changes per batch) can cause **recompilation on almost
+  every step** — this is the classic "my training loop never makes progress" symptom.
+- **Large models = large graphs.** Multi-billion-parameter models, big fused attention graphs, and
+  aggressive optimization levels expand compiler search/scheduling time substantially. Hours-long
+  compiles for large LLMs are not unusual on a first run.
+- **First-run cost is paid once — if you let it cache.** Without caching, you re-pay on every job.
+
+### How to tame it
+
+1. **Use the persistent compile cache.** Point `NEURON_COMPILE_CACHE_URL` at a local dir or an S3
+   bucket so compiled NEFFs are reused across runs and across nodes:
+   ```bash
+   export NEURON_COMPILE_CACHE_URL="s3://my-bucket/neuron-cache"   # or a local path
+   ```
+   A warm cache turns an hours-long startup into seconds. Share the cache across a cluster.
+
+2. **Pre-compile ahead of the run with `neuron_parallel_compile`.** Instead of compiling lazily
+   during the first (very slow) training epoch, do a trial run that *collects* all graphs and
+   compiles them in parallel, populating the cache:
+   ```bash
+   neuron_parallel_compile python train.py     # collects graphs, compiles in parallel → cache
+   python train.py                             # real run, now uses the warm cache
+   ```
+   The first command runs your script with execution stubbed so it only captures graphs.
+
+3. **Keep shapes static.** Pad to fixed sequence lengths and use fixed batch sizes so the same
+   graph is reused. Bucketing (a small set of fixed shapes) beats fully dynamic shapes. Watch for
+   accidental recompiles with `NEURON_RT_LOG_LEVEL=INFO` or the profiler.
+
+4. **Right-size the optimization level.** The compiler accepts flags via `NEURON_CC_FLAGS`
+   (e.g. `--optlevel`/`-O`); lower levels compile faster for debugging, higher levels run faster.
+   Iterate at a low level, then compile once at the high level for the production run.
+
+> **Rule of thumb:** if "training" seems stuck with high host CPU and no step progress, you are
+> almost certainly recompiling every step. Fix the shapes, then warm the cache.
+
+## The Neuron simulator / NKI simulation: what it can and can't do {#simulator}
+
+You do **not** need a Trainium/Inferentia instance to start developing — especially for custom
+**NKI** kernels. NKI provides a **simulation mode** that runs a kernel on CPU using NumPy semantics
+so you can develop and validate numerically before paying for hardware.
+
+```python
+import neuronxcc.nki as nki
+import numpy as np
+
+# Run an NKI kernel on CPU via simulation (no Trainium required):
+out = nki.simulate_kernel(my_kernel, a_tensor, b_tensor)   # returns NumPy results
+np.testing.assert_allclose(out, reference, rtol=1e-2)
+```
+
+### What the simulator **can** do
+- **Validate numerical correctness** of an NKI kernel against a NumPy/PyTorch reference.
+- **Develop without hardware** — iterate on tiling, indexing, and math on a laptop or CI runner.
+- **Catch logic bugs early** (wrong reductions, indexing, accumulation) before a real compile.
+- **Run in CI** — kernel correctness tests don't need a Neuron instance.
+
+### What the simulator **cannot** do
+- **It does not give you real performance numbers.** It models semantics, not the hardware's
+  timing, memory bandwidth, or engine scheduling — no throughput/latency you can trust.
+- **It is not cycle-accurate** and won't surface real-hardware bottlenecks (SBUF/PSUM pressure,
+  DMA stalls, engine occupancy). For those, profile on a real instance with the Neuron profiler.
+- **It doesn't replace end-to-end model compilation.** It's for NKI kernels, not a substitute for
+  compiling and running your full model on Trainium/Inferentia.
+- **Coverage can lag the hardware.** Newer instructions/intrinsics may not be fully modeled.
+
+> **Workflow:** develop and unit-test NKI kernels in simulation (cheap, fast, CI-friendly) → then
+> compile and **profile on real hardware** for performance. Simulation answers "is it correct?";
+> only hardware answers "is it fast?".
+
+---
+
+## Performance Benchmarks (illustrative)
+
+> ⚠️ The table below contains **illustrative estimates** for planning, not measurements from a
+> single controlled run on the current SDK. Times, costs, and quality vary with SDK version, batch
+> size, hyperparameters, and region/spot pricing. Reproduce with your own workload before relying
+> on any figure.
+
+### Estimated Benchmark Results
 
 | Model | Platform | Time (hours) | Cost ($) | Quality Score |
 |-------|----------|--------------|----------|---------------|
@@ -363,5 +483,5 @@ The future of academic ML research is cost-efficient, and AWS ML chips provide t
 
 ---
 
-*Last Updated: June 26, 2025*
-*Tutorial Version: 3.0 - Complete Research Edition*
+*Last Updated: June 16, 2026*
+*Tutorial Version: 2026.1.0 — targets Neuron SDK 2.30.0 / PyTorch 2.9 (PyTorch/XLA)*

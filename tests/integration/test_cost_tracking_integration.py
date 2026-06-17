@@ -26,14 +26,10 @@ def test_full_cost_tracking_workflow(mock_aws_credentials):
         mock_ec2 = MagicMock()
 
         # Configure different clients
+        clients = {"budgets": mock_budgets, "ce": mock_ce, "ec2": mock_ec2}
+
         def client_side_effect(service_name, **kwargs):
-            if service_name == "budgets":
-                return mock_budgets
-            elif service_name == "ce":
-                return mock_ce
-            elif service_name == "ec2":
-                return mock_ec2
-            return MagicMock()
+            return clients.get(service_name, MagicMock())
 
         mock_client.side_effect = client_side_effect
 
@@ -135,7 +131,9 @@ def test_cost_estimation_accuracy():
 
             assert (
                 scenario["expected_min"] <= estimated_cost <= scenario["expected_max"]
-            ), f"Cost estimate {estimated_cost} not in range [{scenario['expected_min']}, {scenario['expected_max']}] for {scenario['instance_type']}"
+            ), (
+                f"Cost estimate {estimated_cost} not in range [{scenario['expected_min']}, {scenario['expected_max']}] for {scenario['instance_type']}"
+            )
 
 
 @pytest.mark.integration
@@ -143,8 +141,9 @@ def test_emergency_shutdown_workflow(mock_aws_credentials):
     """Test emergency shutdown functionality"""
     from emergency_shutdown import emergency_shutdown_all
 
-    with patch("boto3.client") as mock_client, patch(
-        "builtins.input", return_value="EMERGENCY"
+    with (
+        patch("boto3.client") as mock_client,
+        patch("builtins.input", return_value="EMERGENCY"),
     ):
         mock_ec2 = MagicMock()
         mock_client.return_value = mock_ec2
@@ -184,7 +183,6 @@ def test_emergency_shutdown_workflow(mock_aws_credentials):
 @pytest.mark.slow
 def test_model_training_cost_tracking():
     """Test cost tracking during model training simulation"""
-    import time
     from datetime import datetime
 
     # Simulate a training session with cost tracking

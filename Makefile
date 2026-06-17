@@ -1,7 +1,8 @@
-.PHONY: install install-dev install-neuron test lint format clean docs build help
+.PHONY: install install-dev install-neuron test test-unit test-integration test-fast lint format pre-commit clean build help
 
-# Default Python version
+# Use uv when available, falling back to python3 -m pip. uv is the recommended workflow.
 PYTHON := python3
+UV := $(shell command -v uv 2>/dev/null)
 
 help: ## Show this help message
 	@echo "AWS Trainium & Inferentia Tutorial - Available Commands:"
@@ -9,15 +10,28 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \\033[36m%-20s\\033[0m %s\\n", $$1, $$2}'
 
 install: ## Install package in development mode
+ifeq ($(UV),)
 	$(PYTHON) -m pip install -e .
+else
+	uv pip install -e .
+endif
 
-install-dev: ## Install with development dependencies
+install-dev: ## Install with development dependencies (+ pre-commit hooks)
+ifeq ($(UV),)
 	$(PYTHON) -m pip install -e ".[dev,neuron,science,notebooks]"
-	$(PYTHON) -m pre-commit install
+else
+	uv venv
+	uv pip install -e ".[dev,neuron,science,notebooks]"
+endif
+	pre-commit install
 
-install-neuron: ## Install Neuron SDK components
-	@echo "Installing Neuron SDK..."
+install-neuron: ## Install Neuron SDK components (run on a Neuron instance/DLAMI)
+	@echo "Installing Neuron SDK from the AWS Neuron pip index..."
+ifeq ($(UV),)
 	$(PYTHON) -m pip install torch-neuronx neuronx-cc --extra-index-url https://pip.repos.neuron.amazonaws.com
+else
+	uv pip install torch-neuronx neuronx-cc --extra-index-url https://pip.repos.neuron.amazonaws.com
+endif
 	@echo "✅ Neuron SDK installed"
 
 test: ## Run all tests
@@ -32,15 +46,14 @@ test-integration: ## Run integration tests (requires AWS)
 test-fast: ## Run fast tests only
 	$(PYTHON) -m pytest tests/ -v -m "not slow and not aws"
 
-lint: ## Run all linting checks
-	$(PYTHON) -m black --check scripts/ examples/ advanced/ tests/
-	$(PYTHON) -m isort --check-only scripts/ examples/ advanced/ tests/
-	$(PYTHON) -m flake8 scripts/ examples/ advanced/ tests/
+lint: ## Run all linting checks (ruff + mypy)
+	$(PYTHON) -m ruff check scripts/ examples/ advanced/ tests/
+	$(PYTHON) -m ruff format --check scripts/ examples/ advanced/ tests/
 	$(PYTHON) -m mypy scripts/ --ignore-missing-imports
 
-format: ## Format all code
-	$(PYTHON) -m black scripts/ examples/ advanced/ tests/
-	$(PYTHON) -m isort scripts/ examples/ advanced/ tests/
+format: ## Format all code and auto-fix lint issues (ruff)
+	$(PYTHON) -m ruff check --fix scripts/ examples/ advanced/ tests/
+	$(PYTHON) -m ruff format scripts/ examples/ advanced/ tests/
 
 pre-commit: ## Run pre-commit hooks on all files
 	pre-commit run --all-files

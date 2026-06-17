@@ -47,12 +47,10 @@ Cost Implications:
 import argparse
 import json
 import sys
-import time
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
 
 import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
+from botocore.exceptions import NoCredentialsError
 
 
 class AWSEnvironmentChecker:
@@ -168,7 +166,7 @@ class AWSEnvironmentChecker:
             },
         }
 
-    def run_comprehensive_check(self) -> Dict:
+    def run_comprehensive_check(self) -> dict:
         """Run complete AWS environment validation with detailed reporting.
 
         Returns:
@@ -243,7 +241,7 @@ class AWSEnvironmentChecker:
 
         return results
 
-    def _check_credentials_and_permissions(self) -> Dict:
+    def _check_credentials_and_permissions(self) -> dict:
         """Validate AWS credentials and required IAM permissions.
 
         Returns:
@@ -296,7 +294,7 @@ class AWSEnvironmentChecker:
 
         return result
 
-    def _test_ec2_permissions(self) -> Dict:
+    def _test_ec2_permissions(self) -> dict:
         """Test EC2 permissions required for ML workloads."""
         # Test various EC2 operations
         tests = {
@@ -306,7 +304,9 @@ class AWSEnvironmentChecker:
                 MaxResults=5
             ),
             "describe_instances": lambda: self.ec2.describe_instances(MaxResults=5),
-            "describe_availability_zones": lambda: self.ec2.describe_availability_zones(),
+            "describe_availability_zones": lambda: (
+                self.ec2.describe_availability_zones()
+            ),
         }
 
         results = {}
@@ -320,7 +320,7 @@ class AWSEnvironmentChecker:
 
         return results
 
-    def _test_iam_permissions(self) -> Dict:
+    def _test_iam_permissions(self) -> dict:
         """Test IAM permissions for role and policy management."""
         tests = {
             "get_user": lambda: self.iam.get_user(),
@@ -341,7 +341,7 @@ class AWSEnvironmentChecker:
 
         return results
 
-    def _test_budgets_permissions(self) -> Dict:
+    def _test_budgets_permissions(self) -> dict:
         """Test AWS Budgets permissions for cost control."""
         try:
             self.budgets.describe_budgets(AccountId=self.account_id, MaxResults=5)
@@ -349,7 +349,7 @@ class AWSEnvironmentChecker:
         except Exception as e:
             return {"describe_budgets": f"❌ Failed: {e}"}
 
-    def _test_service_quotas_permissions(self) -> Dict:
+    def _test_service_quotas_permissions(self) -> dict:
         """Test Service Quotas permissions for instance limit checking."""
         try:
             self.service_quotas.list_services(MaxResults=5)
@@ -357,7 +357,7 @@ class AWSEnvironmentChecker:
         except Exception as e:
             return {"list_services": f"❌ Failed: {e}"}
 
-    def _check_vpc_and_networking(self) -> Dict:
+    def _check_vpc_and_networking(self) -> dict:
         """Validate or create VPC networking infrastructure for ML workloads.
 
         Returns:
@@ -429,7 +429,7 @@ class AWSEnvironmentChecker:
 
         return result
 
-    def _check_subnets(self, vpc_id: str) -> Dict:
+    def _check_subnets(self, vpc_id: str) -> dict:
         """Check for suitable subnets within a VPC."""
         try:
             subnets_response = self.ec2.describe_subnets(
@@ -447,7 +447,7 @@ class AWSEnvironmentChecker:
                     private_subnets.append(subnet)
 
             # Check availability zones
-            az_coverage = set(subnet["AvailabilityZone"] for subnet in subnets)
+            az_coverage = {subnet["AvailabilityZone"] for subnet in subnets}
 
             return {
                 "total_subnets": len(subnets),
@@ -469,7 +469,7 @@ class AWSEnvironmentChecker:
         except Exception as e:
             return {"error": str(e), "suitable_subnets": False}
 
-    def _check_internet_connectivity(self, vpc_id: str) -> Dict:
+    def _check_internet_connectivity(self, vpc_id: str) -> dict:
         """Check if VPC has proper internet connectivity."""
         try:
             # Check for Internet Gateway
@@ -501,7 +501,7 @@ class AWSEnvironmentChecker:
         except Exception as e:
             return {"error": str(e), "has_internet_access": False}
 
-    def _create_ml_vpc(self) -> Dict:
+    def _create_ml_vpc(self) -> dict:
         """Create a complete VPC infrastructure optimized for ML workloads."""
         print("🏗️  Creating ML-optimized VPC infrastructure...")
 
@@ -549,7 +549,7 @@ class AWSEnvironmentChecker:
                 # Public subnet
                 public_subnet = self.ec2.create_subnet(
                     VpcId=vpc_id,
-                    CidrBlock=f"10.0.{i*2+1}.0/24",
+                    CidrBlock=f"10.0.{i * 2 + 1}.0/24",
                     AvailabilityZone=az,
                     TagSpecifications=[
                         {
@@ -565,7 +565,7 @@ class AWSEnvironmentChecker:
                 # Private subnet
                 private_subnet = self.ec2.create_subnet(
                     VpcId=vpc_id,
-                    CidrBlock=f"10.0.{i*2+2}.0/24",
+                    CidrBlock=f"10.0.{i * 2 + 2}.0/24",
                     AvailabilityZone=az,
                     TagSpecifications=[
                         {
@@ -611,7 +611,7 @@ class AWSEnvironmentChecker:
                 GatewayId=igw_id,
             )
 
-            print(f"✅ Created complete VPC infrastructure:")
+            print("✅ Created complete VPC infrastructure:")
             print(f"   VPC ID: {vpc_id}")
             print(f"   Subnets: {len(subnets)} across {len(azs)} AZs")
             print(f"   Internet Gateway: {igw_id}")
@@ -636,7 +636,7 @@ class AWSEnvironmentChecker:
                 "message": "VPC creation failed",
             }
 
-    def _check_security_groups(self) -> Dict:
+    def _check_security_groups(self) -> dict:
         """Validate or create security groups for ML workloads."""
         result = {"passed": False, "details": {}}
 
@@ -664,9 +664,9 @@ class AWSEnvironmentChecker:
 
                 if rules_valid["valid"]:
                     result["passed"] = True
-                    result[
-                        "message"
-                    ] = f"Security group {sg['GroupId']} is properly configured"
+                    result["message"] = (
+                        f"Security group {sg['GroupId']} is properly configured"
+                    )
                 else:
                     if self.auto_fix:
                         self._fix_security_group_rules(sg["GroupId"])
@@ -692,7 +692,7 @@ class AWSEnvironmentChecker:
 
         return result
 
-    def _validate_sg_rules(self, security_group: Dict) -> Dict:
+    def _validate_sg_rules(self, security_group: dict) -> dict:
         """Validate security group rules for ML workloads."""
         required_rules = {
             "ssh_access": {"port": 22, "protocol": "tcp"},
@@ -719,7 +719,7 @@ class AWSEnvironmentChecker:
             ],
         }
 
-    def _check_sg_rule_exists(self, rules: List, required_rule: Dict) -> bool:
+    def _check_sg_rule_exists(self, rules: list, required_rule: dict) -> bool:
         """Check if a specific security group rule exists."""
         for rule in rules:
             if rule.get("IpProtocol") == required_rule["protocol"]:
@@ -735,7 +735,7 @@ class AWSEnvironmentChecker:
                         return True
         return False
 
-    def _create_ml_security_group(self) -> Dict:
+    def _create_ml_security_group(self) -> dict:
         """Create a security group optimized for ML research workloads."""
         print("🛡️  Creating ML research security group...")
 
@@ -816,7 +816,7 @@ class AWSEnvironmentChecker:
         except Exception as e:
             return {"passed": False, "error": f"Failed to create security group: {e}"}
 
-    def _check_service_quotas(self) -> Dict:
+    def _check_service_quotas(self) -> dict:
         """Check service quotas for ML instance types."""
         result = {"passed": False, "details": {}}
 
@@ -865,9 +865,9 @@ class AWSEnvironmentChecker:
                     "Request quota increases for required instance types"
                 )
             else:
-                result[
-                    "message"
-                ] = f"Sufficient quotas for {len(sufficient_instances)} instance types"
+                result["message"] = (
+                    f"Sufficient quotas for {len(sufficient_instances)} instance types"
+                )
 
         except Exception as e:
             result["error"] = str(e)
@@ -882,11 +882,11 @@ class AWSEnvironmentChecker:
                 ServiceCode=service_code, QuotaCode=quota_code
             )
             return int(response["Quota"]["Value"])
-        except:
+        except Exception:
             # Fallback to default quota if API call fails
             return 256  # Conservative default for vCPUs
 
-    def _check_budget_controls(self) -> Dict:
+    def _check_budget_controls(self) -> dict:
         """Check for existing budget controls and cost management setup."""
         result = {"passed": False, "details": {}}
 
@@ -914,9 +914,9 @@ class AWSEnvironmentChecker:
 
             if ml_budgets or len(existing_budgets) > 0:
                 result["passed"] = True
-                result[
-                    "message"
-                ] = f"Found {len(existing_budgets)} budget(s), {len(ml_budgets)} ML-specific"
+                result["message"] = (
+                    f"Found {len(existing_budgets)} budget(s), {len(ml_budgets)} ML-specific"
+                )
             else:
                 if self.auto_fix:
                     budget_result = self._create_ml_budget()
@@ -935,7 +935,7 @@ class AWSEnvironmentChecker:
 
         return result
 
-    def _create_ml_budget(self) -> Dict:
+    def _create_ml_budget(self) -> dict:
         """Create a budget specifically for ML research costs."""
         print("💰 Creating ML research budget...")
 
@@ -967,7 +967,7 @@ class AWSEnvironmentChecker:
         except Exception as e:
             return {"passed": False, "error": f"Failed to create budget: {e}"}
 
-    def _check_neuron_dependencies(self) -> Dict:
+    def _check_neuron_dependencies(self) -> dict:
         """Check for Neuron SDK and related dependencies."""
         result = {"passed": False, "details": {}}
 
@@ -992,7 +992,7 @@ class AWSEnvironmentChecker:
                         text=True,
                     )
                     package_status[package] = result_check.returncode == 0
-                except:
+                except Exception:
                     package_status[package] = False
 
             result["details"]["python_packages"] = package_status
@@ -1028,7 +1028,7 @@ class AWSEnvironmentChecker:
 
         return result
 
-    def _check_system_dependencies(self) -> Dict:
+    def _check_system_dependencies(self) -> dict:
         """Check system-level dependencies."""
         import subprocess
 
@@ -1048,12 +1048,12 @@ class AWSEnvironmentChecker:
                     if result.returncode == 0
                     else None,
                 }
-            except:
+            except Exception:
                 status[name] = {"available": False}
 
         return status
 
-    def _check_instance_availability(self) -> Dict:
+    def _check_instance_availability(self) -> dict:
         """Check availability of ML instance types in the region."""
         result = {"passed": False, "details": {}}
 
@@ -1093,9 +1093,9 @@ class AWSEnvironmentChecker:
                     "Consider using a different region with ML instance availability"
                 )
             else:
-                result[
-                    "message"
-                ] = f"{len(available_ml_types)} ML instance types available"
+                result["message"] = (
+                    f"{len(available_ml_types)} ML instance types available"
+                )
 
         except Exception as e:
             result["error"] = str(e)
@@ -1111,7 +1111,7 @@ class AWSEnvironmentChecker:
         response = input(f"\\n⚠️  {message} (y/N): ").strip().lower()
         return response in ["y", "yes"]
 
-    def _generate_summary_report(self, results: Dict):
+    def _generate_summary_report(self, results: dict):
         """Generate a comprehensive summary report."""
         print("\\n" + "=" * 60)
         print("📋 AWS ENVIRONMENT VALIDATION SUMMARY")
@@ -1163,7 +1163,7 @@ class AWSEnvironmentChecker:
             "\\n📄 Save this report with: python aws_environment_checker.py > environment_report.txt"
         )
 
-    def _print_cost_estimates(self, results: Dict):
+    def _print_cost_estimates(self, results: dict):
         """Print cost estimates for available ML instances."""
         instance_results = results["individual_results"].get(
             "Instance Availability", {}
@@ -1173,7 +1173,7 @@ class AWSEnvironmentChecker:
         )
 
         if available_types:
-            print(f"\\n💰 Cost Estimates for Available ML Instances:")
+            print("\\n💰 Cost Estimates for Available ML Instances:")
             print(
                 "  Instance Type    | vCPUs | Memory | Neuron Cores | Cost/Hour | Cost/Day"
             )

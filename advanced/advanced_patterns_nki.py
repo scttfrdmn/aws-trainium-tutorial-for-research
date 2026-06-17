@@ -1,5 +1,17 @@
-# advanced/nki_patterns.py
+# advanced/advanced_patterns_nki.py
 """Advanced Neuron Kernel Interface (NKI) Optimization Patterns.
+
+⚠️ ILLUSTRATIVE CODE — READ FIRST
+    The kernels in this module are teaching sketches that convey NKI concepts and the NeuronCore
+    memory hierarchy. They use a simplified, pseudo-API (e.g. chained ``nl.softmax`` /
+    ``.transpose()``) and are NOT guaranteed to compile or run as written. The real
+    ``neuronxcc.nki.language`` API operates on tiles with explicit partition/free-axis reductions,
+    masking, and accumulation. For runnable kernels, start from the official NKI guide and samples:
+        https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/nki/index.html
+    To develop/validate kernels without burning Trainium time, use NKI's simulation mode
+    (``nki.simulate_kernel`` / ``baremetal``-style simulation) on CPU first — see the NKI docs.
+
+
 
 This module demonstrates advanced optimization techniques using the Neuron Kernel
 Interface (NKI) for maximum performance on AWS Trainium and Inferentia chips.
@@ -69,6 +81,7 @@ Warning:
     Start with provided examples and gradually build complexity.
     Always profile and validate optimizations against standard implementations.
 """
+
 import neuronxcc.nki as nki
 import neuronxcc.nki.language as nl
 import numpy as np
@@ -110,8 +123,7 @@ class NeuronCoreOptimizer:
 
 @nki.jit
 def flash_attention_kernel(q_tensor, k_tensor, v_tensor, scale):
-    """
-    Custom Flash Attention implementation optimized for NeuronCore v2
+    """Custom Flash Attention implementation optimized for NeuronCore v2
 
     Key optimizations:
     - Tiles fit in 24MB SBUF
@@ -154,8 +166,7 @@ def flash_attention_kernel(q_tensor, k_tensor, v_tensor, scale):
 
 @nki.jit
 def optimized_layernorm_kernel(input_tensor, weight, bias, eps=1e-5):
-    """
-    Optimized LayerNorm kernel for transformer models
+    """Optimized LayerNorm kernel for transformer models
 
     Optimizations:
     - Single pass through data
@@ -191,8 +202,7 @@ def optimized_layernorm_kernel(input_tensor, weight, bias, eps=1e-5):
 
 @nki.jit
 def fused_gelu_kernel(input_tensor):
-    """
-    Fused GELU activation optimized for NeuronCore
+    """Fused GELU activation optimized for NeuronCore
 
     GELU(x) = x * Φ(x) where Φ is the CDF of standard normal distribution
     Approximation: GELU(x) ≈ 0.5 * x * (1 + tanh(√(2/π) * (x + 0.044715 * x³)))
@@ -225,8 +235,7 @@ def fused_gelu_kernel(input_tensor):
 
 @nki.jit
 def sparse_attention_kernel(q_tensor, k_tensor, v_tensor, attention_mask, scale):
-    """
-    Sparse attention kernel that skips computation for masked positions
+    """Sparse attention kernel that skips computation for masked positions
 
     Uses Trainium2's 4x sparsity support (16:4 structured sparsity)
     """
@@ -328,7 +337,6 @@ class NeuronCompilerOptimizations:
     @staticmethod
     def get_compiler_args(model_type, use_case, instance_type):
         """Get optimal compiler arguments for different scenarios"""
-
         base_args = [
             f"--model-type={model_type}",
             "--enable-fast-loading-neuron-binaries",
@@ -457,7 +465,6 @@ class AdvancedDistributedPatterns:
     @staticmethod
     def zero_redundancy_optimizer_pattern():
         """ZeRO-style optimizer state sharding"""
-
         return """
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.xla_multiprocessing as xmp
@@ -492,7 +499,6 @@ def zero_training_function(rank, flags):
     @staticmethod
     def pipeline_parallel_pattern():
         """Pipeline parallelism for very large models"""
-
         return """
 def pipeline_parallel_training():
     # Split model into pipeline stages
@@ -545,7 +551,6 @@ class NeuronPerformanceProfiler:
 
     def profile_kernel_performance(self, kernel_func, input_tensors, num_runs=100):
         """Profile NKI kernel performance"""
-
         import time
 
         # Warmup runs
@@ -556,7 +561,7 @@ class NeuronPerformanceProfiler:
         times = []
         for _ in range(num_runs):
             start = time.time()
-            output = kernel_func(*input_tensors)
+            kernel_func(*input_tensors)
             torch.neuron.synchronize()  # Wait for completion
             end = time.time()
             times.append(end - start)
@@ -573,7 +578,6 @@ class NeuronPerformanceProfiler:
 
     def analyze_memory_usage(self, model, input_shape):
         """Analyze memory usage patterns"""
-
         # This would integrate with Neuron's memory profiling tools
         memory_report = {
             "sbuf_utilization": "85%",  # Example values
@@ -591,7 +595,6 @@ class NeuronPerformanceProfiler:
 # Example usage and benchmarking
 def benchmark_nki_kernels():
     """Benchmark custom NKI kernels against standard implementations"""
-
     print("🧪 Benchmarking NKI Kernels")
     print("=" * 40)
 

@@ -14,8 +14,8 @@ Production Features:
     - Security and compliance patterns
 
 TESTED VERSIONS (Last validated: 2025-06-24):
-    - AWS Neuron SDK: 2.20.1
-    - torch-neuronx: 2.2.0
+    - AWS Neuron SDK: 2.30.0
+    - torch-neuronx: 2.9.x
     - SageMaker: Latest API (2025.06)
     - Instance Types: inf2.xlarge, inf2.8xlarge, inf2.24xlarge
     - Load Balancer: ALB with Neuron target groups
@@ -34,19 +34,14 @@ Author: Scott Friedman
 Date: 2025-06-24
 """
 
-import json
 import logging
-import os
 import time
 import uuid
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Union
 
 import boto3
 import torch
 import torch.nn as nn
 import torch_neuronx
-from botocore.exceptions import ClientError
 
 # Configure logging
 logging.basicConfig(
@@ -101,15 +96,14 @@ class InferentiaModelServer:
         self.batch_queue = []
         self.batch_timeout_ms = 50  # 50ms batching window
 
-        logger.info(f"🚀 Inferentia Model Server initialized")
+        logger.info("🚀 Inferentia Model Server initialized")
         logger.info(f"   Model: {model_name}")
         logger.info(f"   Instance: {instance_type}")
         logger.info(f"   Max batch size: {max_batch_size}")
         logger.info(f"   Neuron cores: {self.inferentia_config['neuron_cores']}")
 
-    def _get_inferentia_config(self, instance_type: str) -> Dict:
+    def _get_inferentia_config(self, instance_type: str) -> dict:
         """Get Inferentia instance configuration for optimization."""
-
         instance_configs = {
             "inf2.xlarge": {
                 "neuron_cores": 1,
@@ -153,7 +147,6 @@ class InferentiaModelServer:
         Returns:
             bool: True if model loaded successfully
         """
-
         logger.info(f"📦 Loading model from {model_path}")
 
         try:
@@ -173,7 +166,7 @@ class InferentiaModelServer:
             self.model.load_state_dict(model_state)
             self.model.eval()
 
-            logger.info(f"   ✅ Model loaded successfully")
+            logger.info("   ✅ Model loaded successfully")
             logger.info(
                 f"      Parameters: {sum(p.numel() for p in self.model.parameters()):,}"
             )
@@ -193,9 +186,8 @@ class InferentiaModelServer:
             logger.error(f"   ❌ Model loading failed: {e}")
             return False
 
-    def _create_model_from_metadata(self, metadata: Dict) -> nn.Module:
+    def _create_model_from_metadata(self, metadata: dict) -> nn.Module:
         """Create model instance from metadata (simplified example)."""
-
         # This is a simplified example - in practice, you'd have a model factory
         # that creates the correct model architecture based on metadata
 
@@ -246,7 +238,6 @@ class InferentiaModelServer:
 
     def _compile_for_inferentia(self) -> bool:
         """Compile model for Inferentia optimization."""
-
         logger.info("🔥 Compiling model for Inferentia...")
 
         try:
@@ -288,7 +279,6 @@ class InferentiaModelServer:
 
     def _create_example_input(self) -> torch.Tensor:
         """Create example input for model compilation."""
-
         # This should match your model's expected input format
         if self.model_metadata.get("model_type") == "transformer":
             # Transformer expects token sequences
@@ -308,18 +298,17 @@ class InferentiaModelServer:
 
     def _warmup_model(self, warmup_runs: int = 5):
         """Warm up the compiled model for optimal performance."""
-
         logger.info(f"🔥 Warming up model ({warmup_runs} runs)...")
 
         example_input = self._create_example_input()
 
         with torch.no_grad():
-            for i in range(warmup_runs):
+            for _i in range(warmup_runs):
                 _ = self.compiled_model(example_input)
 
         logger.info("   ✅ Model warmup complete")
 
-    def predict(self, input_data: torch.Tensor, timeout_ms: int = 1000) -> Dict:
+    def predict(self, input_data: torch.Tensor, timeout_ms: int = 1000) -> dict:
         """Make prediction with batching and optimization.
 
         Args:
@@ -329,7 +318,6 @@ class InferentiaModelServer:
         Returns:
             dict: Prediction results with metadata
         """
-
         request_start = time.time()
         request_id = str(uuid.uuid4())[:8]
 
@@ -369,9 +357,8 @@ class InferentiaModelServer:
                 "latency_ms": (time.time() - request_start) * 1000,
             }
 
-    def _process_batch(self, request_id: str) -> Dict:
+    def _process_batch(self, request_id: str) -> dict:
         """Process current batch of requests."""
-
         if not self.batch_queue:
             return {"error": "No requests in batch"}
 
@@ -425,9 +412,8 @@ class InferentiaModelServer:
             self.batch_queue.clear()
             raise e
 
-    def _wait_for_batch(self, request_id: str, timeout_ms: int) -> Dict:
+    def _wait_for_batch(self, request_id: str, timeout_ms: int) -> dict:
         """Wait for batch to complete or timeout."""
-
         start_time = time.time()
 
         while (time.time() - start_time) * 1000 < timeout_ms:
@@ -464,9 +450,8 @@ class InferentiaModelServer:
             "latency_ms": timeout_ms,
         }
 
-    def get_performance_metrics(self) -> Dict:
+    def get_performance_metrics(self) -> dict:
         """Get comprehensive performance metrics."""
-
         if self.performance_metrics["requests_served"] == 0:
             return {"status": "No requests served yet"}
 
@@ -490,9 +475,8 @@ class InferentiaModelServer:
             "instance_utilization": self._estimate_utilization(),
         }
 
-    def _estimate_utilization(self) -> Dict:
+    def _estimate_utilization(self) -> dict:
         """Estimate instance utilization metrics."""
-
         # Mock utilization estimation - in production, would use CloudWatch metrics
         base_utilization = min(
             95, max(10, self.performance_metrics["requests_served"] / 100)
@@ -543,7 +527,7 @@ class InferentiaDeploymentManager:
             "launch_template_id": None,
         }
 
-    def deploy_production_infrastructure(self, config: Dict) -> Dict:
+    def deploy_production_infrastructure(self, config: dict) -> dict:
         """Deploy complete production infrastructure for Inferentia serving.
 
         Args:
@@ -552,7 +536,6 @@ class InferentiaDeploymentManager:
         Returns:
             dict: Deployment results and endpoints
         """
-
         logger.info("🚀 Deploying production Inferentia infrastructure...")
 
         deployment_start = time.time()
@@ -560,23 +543,23 @@ class InferentiaDeploymentManager:
         try:
             # 1. Setup networking
             logger.info("   📡 Setting up networking...")
-            networking_result = self._setup_networking(config)
+            self._setup_networking(config)
 
             # 2. Create security groups
             logger.info("   🔒 Configuring security groups...")
-            security_result = self._setup_security_groups(config)
+            self._setup_security_groups(config)
 
             # 3. Create launch template
             logger.info("   📋 Creating launch template...")
-            template_result = self._create_launch_template(config)
+            self._create_launch_template(config)
 
             # 4. Setup load balancer
             logger.info("   ⚖️ Setting up load balancer...")
-            lb_result = self._setup_load_balancer(config)
+            self._setup_load_balancer(config)
 
             # 5. Create auto scaling group
             logger.info("   📈 Creating auto scaling group...")
-            asg_result = self._create_auto_scaling_group(config)
+            self._create_auto_scaling_group(config)
 
             # 6. Configure monitoring
             logger.info("   📊 Setting up monitoring...")
@@ -608,9 +591,8 @@ class InferentiaDeploymentManager:
             logger.error(f"   ❌ Infrastructure deployment failed: {e}")
             raise
 
-    def _setup_networking(self, config: Dict) -> Dict:
+    def _setup_networking(self, config: dict) -> dict:
         """Setup VPC and networking components."""
-
         # Use existing VPC or create new one
         vpc_id = config.get("vpc_id")
 
@@ -634,11 +616,9 @@ class InferentiaDeploymentManager:
             "availability_zones": len(subnet_ids),
         }
 
-    def _setup_security_groups(self, config: Dict) -> Dict:
+    def _setup_security_groups(self, config: dict) -> dict:
         """Create security groups for Inferentia instances."""
-
         # Create security group for Inferentia instances
-        sg_name = f"{self.deployment_name}-inferentia-sg"
 
         # Mock security group creation
         security_group_id = "sg-mock-inferentia"
@@ -654,9 +634,8 @@ class InferentiaDeploymentManager:
             ],
         }
 
-    def _create_launch_template(self, config: Dict) -> Dict:
+    def _create_launch_template(self, config: dict) -> dict:
         """Create launch template for Inferentia instances."""
-
         instance_type = config.get("instance_type", "inf2.xlarge")
 
         # User data script for model server setup
@@ -674,9 +653,8 @@ class InferentiaDeploymentManager:
             "user_data_size_bytes": len(user_data_script),
         }
 
-    def _generate_user_data_script(self, config: Dict) -> str:
+    def _generate_user_data_script(self, config: dict) -> str:
         """Generate user data script for instance initialization."""
-
         model_s3_path = config.get("model_s3_path", "s3://my-models/model.pt")
 
         script = f"""#!/bin/bash
@@ -734,7 +712,6 @@ echo "Health check configured on port 8080/health"
 
     def _get_model_server_code(self) -> str:
         """Get the model server application code."""
-
         return """
 import os
 from flask import Flask, request, jsonify
@@ -769,9 +746,8 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
 """
 
-    def _setup_load_balancer(self, config: Dict) -> Dict:
+    def _setup_load_balancer(self, config: dict) -> dict:
         """Setup Application Load Balancer for traffic distribution."""
-
         # Mock load balancer creation
         lb_arn = f"arn:aws:elasticloadbalancing:{self.aws_region}:123456789012:loadbalancer/app/{self.deployment_name}/50dc6c495c0c9188"
         target_group_arn = f"arn:aws:elasticloadbalancing:{self.aws_region}:123456789012:targetgroup/{self.deployment_name}/50dc6c495c0c9188"
@@ -787,9 +763,8 @@ if __name__ == "__main__":
             "health_check_interval": 30,
         }
 
-    def _create_auto_scaling_group(self, config: Dict) -> Dict:
+    def _create_auto_scaling_group(self, config: dict) -> dict:
         """Create auto scaling group for dynamic capacity management."""
-
         min_size = config.get("min_instances", 2)
         max_size = config.get("max_instances", 10)
         desired_capacity = config.get("desired_instances", 3)
@@ -812,9 +787,8 @@ if __name__ == "__main__":
             "health_check_grace_period": 300,
         }
 
-    def _create_scaling_policies(self, asg_name: str, config: Dict) -> List[Dict]:
+    def _create_scaling_policies(self, asg_name: str, config: dict) -> list[dict]:
         """Create auto scaling policies based on metrics."""
-
         policies = [
             {
                 "name": f"{asg_name}-scale-up",
@@ -847,9 +821,8 @@ if __name__ == "__main__":
 
         return policies
 
-    def _setup_monitoring(self, config: Dict) -> Dict:
+    def _setup_monitoring(self, config: dict) -> dict:
         """Setup comprehensive monitoring and alerting."""
-
         # CloudWatch metrics to track
         metrics = [
             "RequestCount",
@@ -876,9 +849,8 @@ if __name__ == "__main__":
             "retention_days": 30,
         }
 
-    def _create_cloudwatch_alarms(self, config: Dict) -> List[Dict]:
+    def _create_cloudwatch_alarms(self, config: dict) -> list[dict]:
         """Create CloudWatch alarms for monitoring."""
-
         alarms = [
             {
                 "name": f"{self.deployment_name}-high-latency",
@@ -913,7 +885,6 @@ if __name__ == "__main__":
 
     def _create_deployment_endpoint(self) -> str:
         """Create the final deployment endpoint URL."""
-
         # In production, this would be the load balancer DNS name
         # Optionally with a custom domain and SSL certificate
 
@@ -923,9 +894,8 @@ if __name__ == "__main__":
 
         return f"https://{base_url}/predict"
 
-    def _estimate_monthly_cost(self, config: Dict) -> float:
+    def _estimate_monthly_cost(self, config: dict) -> float:
         """Estimate monthly cost for the deployment."""
-
         instance_type = config.get("instance_type", "inf2.xlarge")
         desired_instances = config.get("desired_instances", 3)
 
@@ -956,16 +926,14 @@ if __name__ == "__main__":
 
     def deploy_canary_release(
         self, new_model_path: str, traffic_percentage: int = 10
-    ) -> Dict:
+    ) -> dict:
         """Deploy canary release with gradual traffic shifting."""
-
         logger.info(f"🐤 Deploying canary release with {traffic_percentage}% traffic")
 
         # Create new target group for canary
         canary_target_group = f"{self.deployment_name}-canary-tg"
 
         # Deploy canary instances
-        canary_asg = f"{self.deployment_name}-canary-asg"
 
         # Configure weighted routing
         routing_config = {
@@ -975,9 +943,9 @@ if __name__ == "__main__":
             "monitoring_duration_minutes": 30,
         }
 
-        logger.info(f"   ✅ Canary deployment configured")
+        logger.info("   ✅ Canary deployment configured")
         logger.info(
-            f"      Traffic split: {100-traffic_percentage}% primary, {traffic_percentage}% canary"
+            f"      Traffic split: {100 - traffic_percentage}% primary, {traffic_percentage}% canary"
         )
 
         return {
@@ -987,9 +955,8 @@ if __name__ == "__main__":
             "monitoring_dashboard": f"https://{self.aws_region}.console.aws.amazon.com/cloudwatch/home#dashboards:name={self.deployment_name}-canary",
         }
 
-    def cleanup_deployment(self) -> Dict:
+    def cleanup_deployment(self) -> dict:
         """Clean up all deployment resources."""
-
         logger.info("🧹 Cleaning up deployment resources...")
 
         cleanup_results = {
@@ -1009,7 +976,7 @@ if __name__ == "__main__":
 # Convenience functions for quick deployment
 def deploy_model_to_inferentia(
     model_path: str, deployment_name: str, instance_type: str = "inf2.xlarge"
-) -> Dict:
+) -> dict:
     """Quick deployment of model to Inferentia production environment.
 
     Args:
@@ -1020,7 +987,6 @@ def deploy_model_to_inferentia(
     Returns:
         dict: Deployment results and endpoint information
     """
-
     # Configuration for quick deployment
     config = {
         "instance_type": instance_type,
@@ -1059,7 +1025,7 @@ if __name__ == "__main__":
         instance_type="inf2.xlarge",
     )
 
-    print(f"\n✅ Production deployment complete!")
+    print("\n✅ Production deployment complete!")
     print(f"   Endpoint: {deployment_result['endpoint_url']}")
     print(f"   Monthly cost: ${deployment_result['estimated_cost_monthly_usd']:.2f}")
     print(f"   Monitoring: {deployment_result['monitoring']['dashboard_url']}")

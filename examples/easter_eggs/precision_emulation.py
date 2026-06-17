@@ -22,11 +22,9 @@ Mathematical Foundation:
 
 import math
 import time
-from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch_neuronx
 
 
@@ -52,8 +50,8 @@ class PrecisionEmulationEngine:
         self.compiler_args = compiler_args
 
     def emulate_fp64_precision(
-        self, test_values: List[float] = None, operations: int = 1000
-    ) -> Dict:
+        self, test_values: list[float] = None, operations: int = 1000
+    ) -> dict:
         """Emulate double precision (fp64) using pairs of single precision (fp32) values.
 
         This demonstrates a critical technique used in scientific computing when
@@ -112,7 +110,7 @@ class PrecisionEmulationEngine:
 
             def dekker_split(
                 self, a: torch.Tensor
-            ) -> Tuple[torch.Tensor, torch.Tensor]:
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 """Split fp32 into high and low precision components."""
                 temp = self.splitter * a
                 high = temp - (temp - a)
@@ -121,7 +119,7 @@ class PrecisionEmulationEngine:
 
             def two_sum(
                 self, a: torch.Tensor, b: torch.Tensor
-            ) -> Tuple[torch.Tensor, torch.Tensor]:
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 """Add two fp32 values with error compensation."""
                 s = a + b
                 temp = s - a
@@ -130,7 +128,7 @@ class PrecisionEmulationEngine:
 
             def two_product(
                 self, a: torch.Tensor, b: torch.Tensor
-            ) -> Tuple[torch.Tensor, torch.Tensor]:
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 """Multiply two fp32 values with error compensation."""
                 p = a * b
                 a_hi, a_lo = self.dekker_split(a)
@@ -144,7 +142,7 @@ class PrecisionEmulationEngine:
                 a_lo: torch.Tensor,
                 b_hi: torch.Tensor,
                 b_lo: torch.Tensor,
-            ) -> Tuple[torch.Tensor, torch.Tensor]:
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 """Add two double-single precision numbers."""
                 s, e = self.two_sum(a_hi, b_hi)
                 e = e + (a_lo + b_lo)
@@ -157,14 +155,14 @@ class PrecisionEmulationEngine:
                 a_lo: torch.Tensor,
                 b_hi: torch.Tensor,
                 b_lo: torch.Tensor,
-            ) -> Tuple[torch.Tensor, torch.Tensor]:
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 """Multiply two double-single precision numbers."""
                 p, e = self.two_product(a_hi, b_hi)
                 e = e + (a_hi * b_lo + a_lo * b_hi)
                 hi, lo = self.two_sum(p, e)
                 return hi, lo
 
-            def forward(self, values_tensor: torch.Tensor) -> Dict[str, torch.Tensor]:
+            def forward(self, values_tensor: torch.Tensor) -> dict[str, torch.Tensor]:
                 """Perform high-precision operations on batch of values."""
                 batch_size = values_tensor.shape[0]
 
@@ -274,7 +272,7 @@ class PrecisionEmulationEngine:
                 ops_completed = (batch + 1) * len(test_values) * 2
                 ops_per_sec = ops_completed / elapsed
                 print(
-                    f"   Progress: {batch+1}/{num_batches} batches, {ops_per_sec:.1f} precision ops/sec"
+                    f"   Progress: {batch + 1}/{num_batches} batches, {ops_per_sec:.1f} precision ops/sec"
                 )
 
         total_time = time.time() - start_time

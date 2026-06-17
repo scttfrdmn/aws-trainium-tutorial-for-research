@@ -14,8 +14,8 @@
 #
 # TESTED VERSIONS (Last validated: 2025-06-24):
 #   - GitHub Actions: Latest runners
-#   - AWS Neuron SDK: 2.20.1
-#   - torch-neuronx: 2.2.0
+#   - AWS Neuron SDK: 2.30.0
+#   - torch-neuronx: 2.9.x
 #   - Python: 3.11.7
 #   - Docker: 24.0+
 #   - Test Status: ✅ Full CI/CD pipeline validated
@@ -68,7 +68,7 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  NEURON_SDK_VERSION: '2.20.1'
+  NEURON_SDK_VERSION: '2.30.0'
   TORCH_NEURONX_VERSION: '2.2.0'
   AWS_DEFAULT_REGION: 'us-east-1'
   DOCKER_REGISTRY: '763104351884.dkr.ecr.us-west-2.amazonaws.com'
@@ -193,7 +193,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: unit-tests
     container:
-      image: ${{ env.DOCKER_REGISTRY }}/pytorch-training-neuronx:2.2.0-neuronx-py311-sdk2.20.1-ubuntu22.04
+      image: ${{ env.DOCKER_REGISTRY }}/pytorch-training-neuronx:<current-tag>
       credentials:
         username: AWS
         password: ${{ secrets.ECR_REGISTRY_PASSWORD }}

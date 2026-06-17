@@ -14,8 +14,8 @@ Validation Categories:
     - Cross-instance performance scaling
 
 TESTED VERSIONS (Last validated: 2025-06-27):
-    - AWS Neuron SDK: 2.20.1
-    - torch-neuronx: 2.2.0
+    - AWS Neuron SDK: 2.30.0
+    - torch-neuronx: 2.9.x
     - Instance Types: trn1.2xlarge, trn1.32xlarge, inf2.xlarge, inf2.8xlarge
     - Test Status: ✅ Comprehensive validation framework ready
 
@@ -36,19 +36,13 @@ Date: 2025-06-27
 import argparse
 import json
 import logging
-import os
-import platform
 import subprocess
 import sys
 import time
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
-import boto3
 import requests
 import torch
-import torch.nn as nn
 
 # Neuron imports
 try:
@@ -121,7 +115,7 @@ class HardwareValidator:
             },
         }
 
-        logger.info(f"🔍 Hardware Validator initialized")
+        logger.info("🔍 Hardware Validator initialized")
         logger.info(
             f"   Instance: {self.instance_metadata.get('instance-type', 'unknown')}"
         )
@@ -129,7 +123,7 @@ class HardwareValidator:
             f"   Region: {self.instance_metadata.get('placement', {}).get('region', 'unknown')}"
         )
 
-    def _get_instance_metadata(self) -> Dict:
+    def _get_instance_metadata(self) -> dict:
         """Get EC2 instance metadata."""
         try:
             # Get instance metadata
@@ -142,7 +136,7 @@ class HardwareValidator:
                     f"{metadata_url}placement/availability-zone", timeout=2
                 ).text
                 region = az[:-1]  # Remove AZ letter to get region
-            except:
+            except Exception:
                 az = "unknown"
                 region = "unknown"
 
@@ -154,7 +148,7 @@ class HardwareValidator:
             logger.warning(f"Could not get instance metadata: {e}")
             return {"instance-type": "unknown", "placement": {"region": "unknown"}}
 
-    def validate_neuron_environment(self) -> Dict:
+    def validate_neuron_environment(self) -> dict:
         """Validate Neuron runtime environment."""
         logger.info("🧠 Validating Neuron environment...")
 
@@ -203,7 +197,7 @@ class HardwareValidator:
             # Check if we can create tensors on Neuron
             try:
                 device = xm.xla_device()
-                test_tensor = torch.randn(10, 10, device=device)
+                torch.randn(10, 10, device=device)
                 test_results["tensor_creation"] = "success"
                 test_results["device_name"] = str(device)
             except Exception as e:
@@ -218,7 +212,7 @@ class HardwareValidator:
 
         return test_results
 
-    def validate_performance_baselines(self) -> Dict:
+    def validate_performance_baselines(self) -> dict:
         """Validate performance against expected baselines."""
         logger.info("⚡ Validating performance baselines...")
 
@@ -394,7 +388,7 @@ class HardwareValidator:
 
         return throughput
 
-    def _validate_memory_usage(self) -> Dict:
+    def _validate_memory_usage(self) -> dict:
         """Validate memory usage patterns."""
         memory_info = {
             "system_memory_gb": 0,
@@ -406,16 +400,14 @@ class HardwareValidator:
             # Get system memory
             import psutil
 
-            memory_info["system_memory_gb"] = psutil.virtual_memory().total / (
-                1024**3
-            )
+            memory_info["system_memory_gb"] = psutil.virtual_memory().total / (1024**3)
 
             # Check Neuron memory usage if available
             if NEURON_AVAILABLE:
                 try:
                     # Create a large tensor to test memory allocation
                     device = xm.xla_device()
-                    test_tensor = torch.randn(1000, 1000, device=device)
+                    torch.randn(1000, 1000, device=device)
                     xm.wait_device_ops()
 
                     memory_info["neuron_memory_usage"]["test_allocation"] = "success"
@@ -435,7 +427,7 @@ class HardwareValidator:
 
         return memory_info
 
-    def validate_cost_calculations(self) -> Dict:
+    def validate_cost_calculations(self) -> dict:
         """Validate cost calculation accuracy."""
         logger.info("💰 Validating cost calculations...")
 
@@ -464,16 +456,16 @@ class HardwareValidator:
                     cost_per_sample = expected_cost / (
                         throughput * 3600
                     )  # Convert to per-second cost
-                    test_results["calculated_costs"][
-                        "training_cost_per_sample"
-                    ] = cost_per_sample
+                    test_results["calculated_costs"]["training_cost_per_sample"] = (
+                        cost_per_sample
+                    )
 
                 if "bert_inference" in perf_data:
                     throughput = perf_data["bert_inference"]
                     cost_per_request = expected_cost / (throughput * 3600)
-                    test_results["calculated_costs"][
-                        "inference_cost_per_request"
-                    ] = cost_per_request
+                    test_results["calculated_costs"]["inference_cost_per_request"] = (
+                        cost_per_request
+                    )
 
             test_results["status"] = "passed"
         else:
@@ -482,27 +474,27 @@ class HardwareValidator:
 
         return test_results
 
-    def run_full_validation(self) -> Dict:
+    def run_full_validation(self) -> dict:
         """Run complete validation suite."""
         logger.info("🚀 Starting full hardware validation suite...")
 
         # Test 1: Neuron environment
         logger.info("Running Test 1: Neuron Environment")
-        self.validation_results["tests"][
-            "neuron_environment"
-        ] = self.validate_neuron_environment()
+        self.validation_results["tests"]["neuron_environment"] = (
+            self.validate_neuron_environment()
+        )
 
         # Test 2: Performance baselines
         logger.info("Running Test 2: Performance Baselines")
-        self.validation_results["tests"][
-            "performance"
-        ] = self.validate_performance_baselines()
+        self.validation_results["tests"]["performance"] = (
+            self.validate_performance_baselines()
+        )
 
         # Test 3: Cost calculations
         logger.info("Running Test 3: Cost Calculations")
-        self.validation_results["tests"][
-            "cost_calculations"
-        ] = self.validate_cost_calculations()
+        self.validation_results["tests"]["cost_calculations"] = (
+            self.validate_cost_calculations()
+        )
 
         # Determine overall status
         test_statuses = [
@@ -520,14 +512,14 @@ class HardwareValidator:
         )
         return self.validation_results
 
-    def run_quick_validation(self) -> Dict:
+    def run_quick_validation(self) -> dict:
         """Run quick validation for basic functionality."""
         logger.info("⚡ Running quick validation...")
 
         # Quick environment check
-        self.validation_results["tests"][
-            "neuron_environment"
-        ] = self.validate_neuron_environment()
+        self.validation_results["tests"]["neuron_environment"] = (
+            self.validate_neuron_environment()
+        )
 
         # Quick memory test
         memory_test = self._validate_memory_usage()

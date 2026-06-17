@@ -2,7 +2,7 @@
 
 import os
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -24,7 +24,7 @@ def test_create_research_budget_success(mock_aws_credentials, mock_boto3_client)
     with patch("boto3.client") as mock_client:
         mock_client.return_value = mock_boto3_client
 
-        result = create_research_budget(monthly_limit=500, email="test@example.com")
+        create_research_budget(monthly_limit=500, email="test@example.com")
 
         # Verify budget creation was called
         mock_boto3_client.create_budget.assert_called_once()
@@ -68,7 +68,7 @@ def test_create_research_budget_default_values(mock_aws_credentials, mock_boto3_
     with patch("boto3.client") as mock_client:
         mock_client.return_value = mock_boto3_client
 
-        result = create_research_budget()
+        create_research_budget()
 
         call_args = mock_boto3_client.create_budget.call_args[1]
         assert call_args["Budget"]["BudgetLimit"]["Amount"] == "100"

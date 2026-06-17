@@ -77,10 +77,10 @@ Note:
     for research environments with strict budget controls. Each domain
     can be customized for specific research questions and datasets.
 """
-import time
-from datetime import datetime, timedelta
 
-import boto3
+import time
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
 import torch
@@ -145,8 +145,7 @@ class ClimateDataset(Dataset):
         target_data = (
             self.data["temperature"]
             .iloc[
-                idx
-                + self.sequence_length : idx
+                idx + self.sequence_length : idx
                 + self.sequence_length
                 + self.prediction_horizon
             ]
@@ -257,7 +256,6 @@ class ClimateTransformer(nn.Module):
 
 def train_climate_model(config):
     """Train climate prediction model on Trainium with cost tracking"""
-
     print("🌍 Starting Climate Prediction Model Training")
     print("=" * 50)
 
@@ -275,7 +273,7 @@ def train_climate_model(config):
 
     # Split data temporally (important for time series)
     train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
+    len(dataset) - train_size
 
     train_indices = list(range(train_size))
     val_indices = list(range(train_size, len(dataset)))
@@ -341,7 +339,6 @@ def train_climate_model(config):
     # Custom loss function for climate prediction
     def climate_loss(predictions, targets):
         """Multi-objective loss for climate prediction"""
-
         mean_pred = predictions["mean"]
         var_pred = predictions["variance"]
         trend_pred = predictions["trend"]
@@ -556,7 +553,6 @@ class ClimateInferenceService:
 
     def predict(self, input_data, return_uncertainty=True):
         """Make climate predictions with uncertainty quantification"""
-
         start_time = time.time()
 
         # Normalize input data
@@ -608,7 +604,6 @@ class ClimateInferenceService:
 
     def _normalize_input(self, input_data):
         """Normalize input data using training statistics"""
-
         normalized = []
         for i, feature in enumerate(self.feature_stats["features"]):
             if feature in self.feature_stats["means"]:
@@ -625,7 +620,6 @@ class ClimateInferenceService:
 # Example usage and configuration
 def main():
     """Run climate prediction training and deployment example"""
-
     config = {
         "data_path": "climate_data.csv",  # Your climate dataset
         "sequence_length": 365,  # 1 year of historical data
@@ -662,8 +656,8 @@ def main():
     # Make prediction
     prediction = service.predict(sample_input)
 
-    print(f"📊 Prediction Results:")
-    print(f"  30-day temperature forecast generated")
+    print("📊 Prediction Results:")
+    print("  30-day temperature forecast generated")
     print(
         f"  Average temperature: {np.mean(prediction['temperature_prediction']):.1f}°C"
     )
@@ -673,7 +667,7 @@ def main():
     print(
         f"  Inference latency: {prediction['metadata']['inference_latency_ms']:.1f}ms"
     )
-    print(f"  Cost per 1M predictions: ~$2.27 (inf2.xlarge)")
+    print("  Cost per 1M predictions: ~$2.27 (inf2.xlarge)")
 
     print("\\n✅ Climate prediction pipeline demo complete!")
 
@@ -687,15 +681,10 @@ if __name__ == "__main__":
 Biomedical Research: Protein Structure and Drug Discovery
 Molecular property prediction and protein folding analysis
 """
-import esm  # Evolutionary Scale Modeling for proteins
-import numpy as np
-import torch
 import torch.nn as nn
-import torch_neuronx
-import torch_xla.core.xla_model as xm
 from rdkit import Chem
-from rdkit.Chem import Crippen, Descriptors
-from torch.utils.data import DataLoader, Dataset
+from rdkit.Chem import Descriptors
+from torch.utils.data import Dataset
 
 
 class MolecularDataset(Dataset):
@@ -958,10 +947,7 @@ class ProteinStructureTransformer(nn.Module):
         x = x + self.positional_encoding[:, :seq_len, :]
 
         # Apply mask for padding
-        if mask is not None:
-            key_padding_mask = ~mask
-        else:
-            key_padding_mask = None
+        key_padding_mask = ~mask if mask is not None else None
 
         # Transform
         encoded = self.transformer(x, src_key_padding_mask=key_padding_mask)
@@ -988,7 +974,6 @@ class ProteinStructureTransformer(nn.Module):
 
 def train_biomedical_model(model_type="molecular", config=None):
     """Train biomedical models on Trainium"""
-
     print(f"🧬 Starting {model_type.title()} Model Training")
     print("=" * 50)
 
@@ -1169,15 +1154,10 @@ Sentiment analysis, discourse analysis, and social trend detection
 """
 import json
 
-import numpy as np
-import pandas as pd
-import torch
 import torch.nn as nn
-import torch_neuronx
-import torch_xla.core.xla_model as xm
-from sklearn.metrics import classification_report, f1_score
+from sklearn.metrics import f1_score
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 from transformers import AutoModel, AutoTokenizer
 
 
@@ -1315,7 +1295,6 @@ class MultiTaskSocialAnalyzer(nn.Module):
 
     def _attention_pooling(self, hidden_states, attention_mask):
         """Attention-weighted pooling of token representations"""
-
         # Compute attention weights
         attention_weights = torch.tanh(torch.sum(hidden_states, dim=-1))
         attention_weights = attention_weights.masked_fill(~attention_mask.bool(), -1e9)
@@ -1329,7 +1308,6 @@ class MultiTaskSocialAnalyzer(nn.Module):
 
 def train_social_analysis_model(config):
     """Train comprehensive social media analysis model"""
-
     print("🌐 Starting Social Media Analysis Training")
     print("=" * 50)
 
@@ -1405,7 +1383,6 @@ def train_social_analysis_model(config):
     # Multi-task loss function
     def multi_task_loss(predictions, targets):
         """Compute weighted multi-task loss"""
-
         losses = {}
         total_loss = 0
 
@@ -1539,7 +1516,7 @@ def train_social_analysis_model(config):
         print(f"\\nEpoch {epoch} Summary:")
         print(f"  Train Loss: {avg_train_loss:.4f}")
         print(f"  Val Loss: {avg_val_loss:.4f}")
-        print(f"  F1 Scores:")
+        print("  F1 Scores:")
         for task, f1 in f1_scores.items():
             print(f"    {task}: {f1:.4f}")
         print(f"  Average F1: {avg_f1:.4f}")
@@ -1597,7 +1574,6 @@ def train_social_analysis_model(config):
 
 def generate_social_analysis_report(model, dataset, training_history, config):
     """Generate comprehensive social media analysis report"""
-
     print("\\n📊 Generating Social Media Analysis Report...")
 
     # Analyze training trends
@@ -1662,7 +1638,7 @@ def generate_social_analysis_report(model, dataset, training_history, config):
     with open("social_analysis_report.json", "w") as f:
         json.dump(report, f, indent=2)
 
-    print(f"✅ Report saved to social_analysis_report.json")
+    print("✅ Report saved to social_analysis_report.json")
     print(f"📈 Best performance: {best_epoch['avg_f1']:.4f} average F1 score")
 
     return report
@@ -1671,7 +1647,6 @@ def generate_social_analysis_report(model, dataset, training_history, config):
 # Example usage configuration
 def main():
     """Run social sciences research pipeline"""
-
     config = {
         "data_path": "social_media_dataset.csv",
         "base_model": "roberta-large",

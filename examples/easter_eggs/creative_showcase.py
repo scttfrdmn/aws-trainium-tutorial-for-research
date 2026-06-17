@@ -17,7 +17,6 @@ Usage:
 import json
 import time
 from datetime import datetime
-from typing import Dict
 
 import torch
 import torch_xla.core.xla_model as xm
@@ -88,7 +87,7 @@ class CreativeShowcase:
         print(f"   Batch size: {batch_size}")
         print(f"   Precision: {precision}")
 
-    def run_complete_showcase(self) -> Dict:
+    def run_complete_showcase(self) -> dict:
         """Run all creative computing demonstrations for a comprehensive showcase.
 
         This method executes all available creative computing experiments,
@@ -193,7 +192,7 @@ class CreativeShowcase:
 
         return showcase_report
 
-    def _generate_performance_comparison(self, results: Dict) -> Dict:
+    def _generate_performance_comparison(self, results: dict) -> dict:
         """Generate performance comparison across all experiments."""
         comparison = {}
 
@@ -214,7 +213,7 @@ class CreativeShowcase:
 
         return comparison
 
-    def _extract_throughput_metric(self, exp_name: str, result: Dict) -> Dict:
+    def _extract_throughput_metric(self, exp_name: str, result: dict) -> dict:
         """Extract the most relevant throughput metric for each experiment."""
         perf = result.get("performance", {})
 
@@ -233,7 +232,7 @@ class CreativeShowcase:
         else:
             return {"metric": "unknown", "value": 0}
 
-    def _calculate_efficiency_rating(self, exp_name: str, result: Dict) -> str:
+    def _calculate_efficiency_rating(self, exp_name: str, result: dict) -> str:
         """Calculate efficiency rating for each experiment."""
         perf = result.get("performance", {})
 
@@ -251,7 +250,7 @@ class CreativeShowcase:
         else:
             return "Poor"
 
-    def _generate_cost_summary(self, results: Dict) -> Dict:
+    def _generate_cost_summary(self, results: dict) -> dict:
         """Generate cost analysis summary across all experiments."""
         total_compute_time = sum(
             r.get("performance", {}).get("compute_time_seconds", 0)
@@ -259,11 +258,8 @@ class CreativeShowcase:
             if "error" not in r
         )
 
-        # Estimate costs based on device type
-        if self.device_type == "trainium":
-            hourly_rate = 1.34  # trn1.2xlarge
-        else:
-            hourly_rate = 0.37  # inf2.xlarge
+        # Estimate costs based on device type (trn1.2xlarge vs inf2.xlarge)
+        hourly_rate = 1.34 if self.device_type == "trainium" else 0.37
 
         estimated_cost = (total_compute_time / 3600) * hourly_rate
 
@@ -276,9 +272,9 @@ class CreativeShowcase:
             "scaling_economics": "Linear scaling with additional cores",
         }
 
-    def _generate_conclusions(self, results: Dict) -> Dict:
+    def _generate_conclusions(self, results: dict) -> dict:
         """Generate high-level conclusions from all experiments."""
-        successful_experiments = [r for r in results.values() if "error" not in r]
+        [r for r in results.values() if "error" not in r]
 
         conclusions = {
             "technical_feasibility": "Demonstrated across multiple domains",
@@ -300,7 +296,7 @@ class CreativeShowcase:
 
         return conclusions
 
-    def _assess_practical_impact(self, results: Dict) -> Dict:
+    def _assess_practical_impact(self, results: dict) -> dict:
         """Assess the practical impact and real-world applicability."""
         return {
             "academic_research": {
@@ -338,7 +334,7 @@ class CreativeShowcase:
             },
         }
 
-    def _print_showcase_summary(self, report: Dict) -> None:
+    def _print_showcase_summary(self, report: dict) -> None:
         """Print a formatted summary of the showcase results."""
         print("\n" + "=" * 70)
         print("🎯 CREATIVE COMPUTING SHOWCASE SUMMARY")
@@ -351,7 +347,7 @@ class CreativeShowcase:
             f"Experiments Completed: {summary['experiments_completed']}/{summary['experiments_completed'] + summary['experiments_failed']}"
         )
 
-        print(f"\n📊 PERFORMANCE HIGHLIGHTS:")
+        print("\n📊 PERFORMANCE HIGHLIGHTS:")
         perf_comp = report["performance_comparison"]
         for exp_name, metrics in perf_comp.items():
             throughput = metrics["throughput_metric"]
@@ -360,7 +356,7 @@ class CreativeShowcase:
             )
 
         cost_summary = report["cost_summary"]
-        print(f"\n💰 COST ANALYSIS:")
+        print("\n💰 COST ANALYSIS:")
         print(
             f"  • Total Compute Time: {cost_summary['total_compute_time_seconds']:.1f} seconds"
         )
@@ -368,7 +364,7 @@ class CreativeShowcase:
         print(f"  • Cost per Experiment: ${cost_summary['cost_per_experiment']:.4f}")
 
         conclusions = report["conclusions"]
-        print(f"\n🔬 KEY INSIGHTS:")
+        print("\n🔬 KEY INSIGHTS:")
         print(f"  • Technical Feasibility: {conclusions['technical_feasibility']}")
         print(f"  • Performance: {conclusions['performance_characteristics']}")
         print(f"  • Cost Effectiveness: {conclusions['cost_effectiveness']}")
@@ -376,7 +372,7 @@ class CreativeShowcase:
         print(f"\n🚀 INNOVATION POTENTIAL: {conclusions['innovation_potential']}")
 
         impact = report["practical_impact"]
-        print(f"\n🎓 PRACTICAL IMPACT:")
+        print("\n🎓 PRACTICAL IMPACT:")
         print(f"  • Academic Research: {impact['academic_research']['impact']}")
         print(f"  • Industry Applications: {impact['industry_applications']['impact']}")
         print(f"  • Educational Value: {impact['educational_value']['impact']}")
@@ -388,7 +384,7 @@ class CreativeShowcase:
 
 
 # Convenience function for easy usage
-def run_creative_showcase(device_type: str = "trainium", **kwargs) -> Dict:
+def run_creative_showcase(device_type: str = "trainium", **kwargs) -> dict:
     """Run the complete creative computing showcase.
 
     Args:

@@ -1,15 +1,15 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm"]
+requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "aws-trainium-inferentia-tutorial"
-version = "3.0.0"
+version = "2026.1.0"
 description = "Complete tutorial and tools for academic research using AWS Trainium and Inferentia chips"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Scott Friedman", email = "scott.friedman@example.com"}
+    {name = "Scott Friedman"}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -18,18 +18,17 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Education",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "boto3>=1.34.0",
-    "torch>=2.0.0",
-    "transformers>=4.30.0",
+    "transformers>=4.40.0",
     "datasets>=2.14.0",
     "pandas>=1.5.0",
     "numpy>=1.24.0",
@@ -49,18 +48,17 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.10.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
-    "flake8-docstrings>=1.7.0",
-    "pydocstyle>=6.3.0",
+    "ruff>=0.6.0",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
-    "isort>=5.12.0",
     "coverage[toml]>=7.0.0",
 ]
+# Neuron wheels are published on the AWS Neuron pip index, not PyPI. Install with:
+#   pip install torch-neuronx neuronx-cc \
+#       --extra-index-url https://pip.repos.neuron.amazonaws.com
+# torch / torch-xla are resolved by torch-neuronx; we do not pin them here.
 neuron = [
-    "torch-xla>=2.0.0",
-    "accelerate>=0.20.0",
+    "accelerate>=0.30.0",
 ]
 science = [
     "scipy>=1.10.0",
@@ -74,40 +72,67 @@ notebooks = [
     "ipywidgets>=8.0.0",
 ]
 
-[project.scripts]
-aws-ml-setup = "scripts.setup_aws_environment:main"
-aws-ml-monitor = "scripts.cost_monitor:main"
-aws-ml-emergency = "scripts.emergency_shutdown:main"
+[project.urls]
+Homepage = "https://github.com/scttfrdmn/aws-trainium-tutorial-for-research"
+Issues = "https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/issues"
 
-[tool.black]
+[tool.setuptools]
+# This repo is a teaching tutorial, not a conventional library. The scripts under scripts/ are
+# meant to be run directly (e.g. `python scripts/cost_monitor.py`) or imported in tests via the
+# pytest pythonpath below — not installed as a distributable package.
+py-modules = []
+
+[tool.ruff]
+# Ruff replaces black (formatting), isort (imports), and flake8 + flake8-docstrings (linting).
 line-length = 88
-target-version = ['py38', 'py39', 'py310', 'py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
+target-version = "py310"
+extend-exclude = [
+    ".git",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+]
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["aws_trainium_tutorial"]
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: isort, UP: pyupgrade, B: bugbear,
+# C4: comprehensions, SIM: simplify, D: pydocstyle.
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "D"]
+ignore = [
+    "E501",  # line length handled by the formatter
+    "E203",  # whitespace before ':' (formatter-compatible)
+    "D203",  # one-blank-line-before-class (conflicts with D211)
+    "D213",  # multi-line-summary-second-line (conflicts with D212)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests need not be docstringed.
+"tests/**" = ["D"]
+"test_*.py" = ["D", "E402"]
+# Teaching examples and illustrative NKI kernels are optimized for readability, not as a
+# maintained library: relax docstring rules and the "import not at top" rule (examples often
+# import lazily inside functions to keep optional heavy deps out of the import path). Real
+# correctness rules (F, B, E7xx, SIM, UP) still apply.
+# Examples intentionally show "here is what you import" at the top even when the runnable body
+# uses mocked/placeholder paths, and are written as linear scripts (occasional re-import in a
+# later section). Relax F401/F811 there; real bug rules (E7xx, B, F8xx, SIM, UP) still apply.
+"examples/**" = ["D", "E402", "F401", "F811"]
+"advanced/**" = ["D", "F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["aws_trainium_tutorial", "scripts", "examples", "advanced"]
+
+[tool.ruff.format]
+docstring-code-format = true
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -141,6 +166,8 @@ ignore_missing_imports = true
 minversion = "7.0"
 addopts = "-ra -q --strict-markers --strict-config"
 testpaths = ["tests"]
+# Tutorial scripts are flat modules imported directly in tests (e.g. `from cost_monitor import ...`).
+pythonpath = ["scripts", "examples", "advanced", "."]
 filterwarnings = [
     "ignore::UserWarning",
     "ignore::DeprecationWarning",
@@ -154,7 +181,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["scripts", "examples", "advanced"]
+source = ["scripts", "examples", "advanced", "validation"]
 omit = [
     "*/tests/*",
     "*/test_*",
@@ -186,17 +213,3 @@ show_missing = true
 
 [tool.coverage.html]
 directory = "htmlcov"
-
-[tool.flake8]
-max-line-length = 88
-extend-ignore = ["E203", "W503", "E501"]
-exclude = [
-    ".git",
-    "__pycache__",
-    "docs/source/conf.py",
-    "old",
-    "build",
-    "dist",
-    ".venv",
-    "venv",
-]

@@ -39,12 +39,10 @@ Date: 2024-12-19
 
 import json
 import logging
-import os
 import time
 import warnings
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 import boto3
 import numpy as np
@@ -56,7 +54,7 @@ import torch_xla.core.xla_model as xm
 from torch.utils.data import DataLoader, Dataset
 
 # Import our custom modules
-from examples.datasets.aws_open_data import AWSOpenDataManager, AWSOpenDataset
+from examples.datasets.aws_open_data import AWSOpenDataManager
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -87,7 +85,7 @@ class ClimatePredictionPipeline:
         pipeline.run_complete_pipeline()
     """
 
-    def __init__(self, pipeline_config: Dict, aws_region: str = "us-east-1"):
+    def __init__(self, pipeline_config: dict, aws_region: str = "us-east-1"):
         """Initialize complete climate prediction pipeline."""
         self.config = pipeline_config
         self.aws_region = aws_region
@@ -115,7 +113,7 @@ class ClimatePredictionPipeline:
         self.model = None
         self.deployment_endpoint = None
 
-        logger.info(f"🚀 Climate Prediction Pipeline initialized")
+        logger.info("🚀 Climate Prediction Pipeline initialized")
         logger.info(f"   Pipeline ID: {self.pipeline_id}")
         logger.info(f"   Working directory: {self.work_dir}")
         logger.info(f"   AWS Region: {aws_region}")
@@ -137,7 +135,7 @@ class ClimatePredictionPipeline:
             self.s3_client = None
             self.sagemaker_client = None
 
-    def run_complete_pipeline(self) -> Dict:
+    def run_complete_pipeline(self) -> dict:
         """Execute the complete end-to-end pipeline.
 
         Returns:
@@ -196,7 +194,7 @@ class ClimatePredictionPipeline:
             # Save pipeline artifacts
             self._save_pipeline_artifacts(pipeline_report)
 
-            logger.info(f"\n🎉 PIPELINE COMPLETE!")
+            logger.info("\n🎉 PIPELINE COMPLETE!")
             logger.info(f"   Total time: {total_time:.1f} seconds")
             logger.info(
                 f"   Model accuracy: {validation_metrics.get('mae', 'N/A'):.3f}°C MAE"
@@ -213,7 +211,7 @@ class ClimatePredictionPipeline:
             )
             raise
 
-    def _stage_1_data_ingestion(self) -> Dict:
+    def _stage_1_data_ingestion(self) -> dict:
         """Stage 1: Ingest and preprocess climate data from AWS Open Data."""
         self.pipeline_state["stage"] = "data_ingestion"
         stage_start = time.time()
@@ -267,7 +265,7 @@ class ClimatePredictionPipeline:
 
         return metrics
 
-    def _stage_2_feature_engineering(self) -> Dict:
+    def _stage_2_feature_engineering(self) -> dict:
         """Stage 2: Advanced feature engineering for climate prediction."""
         self.pipeline_state["stage"] = "feature_engineering"
         stage_start = time.time()
@@ -331,7 +329,7 @@ class ClimatePredictionPipeline:
 
         return metrics
 
-    def _stage_3_model_training(self) -> Dict:
+    def _stage_3_model_training(self) -> dict:
         """Stage 3: Train climate prediction model on Trainium."""
         self.pipeline_state["stage"] = "model_training"
         stage_start = time.time()
@@ -445,7 +443,7 @@ class ClimatePredictionPipeline:
 
                 if batch_idx % 10 == 0:
                     logger.info(
-                        f"      Epoch {epoch+1}/{epochs}, Batch {batch_idx}, Loss: {loss.item():.4f}"
+                        f"      Epoch {epoch + 1}/{epochs}, Batch {batch_idx}, Loss: {loss.item():.4f}"
                     )
 
             # Validation phase
@@ -461,7 +459,9 @@ class ClimatePredictionPipeline:
             scheduler.step()
 
             epoch_time = time.time() - epoch_start
-            logger.info(f"   📊 Epoch {epoch+1}/{epochs} complete ({epoch_time:.1f}s)")
+            logger.info(
+                f"   📊 Epoch {epoch + 1}/{epochs} complete ({epoch_time:.1f}s)"
+            )
             logger.info(
                 f"      Train Loss: {avg_epoch_loss:.4f}, Val Loss: {val_loss:.4f}"
             )
@@ -503,7 +503,7 @@ class ClimatePredictionPipeline:
 
         return metrics
 
-    def _stage_4_model_validation(self) -> Dict:
+    def _stage_4_model_validation(self) -> dict:
         """Stage 4: Comprehensive model validation and testing."""
         self.pipeline_state["stage"] = "model_validation"
         stage_start = time.time()
@@ -549,7 +549,10 @@ class ClimatePredictionPipeline:
                                 "uncertainty": unc.item(),
                             }
                             for pred, tgt, unc in zip(
-                                predictions[:5], targets[:5], uncertainty[:5]
+                                predictions[:5],
+                                targets[:5],
+                                uncertainty[:5],
+                                strict=False,
                             )
                         ]
                     )
@@ -614,7 +617,7 @@ class ClimatePredictionPipeline:
 
         return metrics
 
-    def _stage_5_model_deployment(self) -> Dict:
+    def _stage_5_model_deployment(self) -> dict:
         """Stage 5: Deploy model on Inferentia for production serving."""
         self.pipeline_state["stage"] = "model_deployment"
         stage_start = time.time()
@@ -648,7 +651,7 @@ class ClimatePredictionPipeline:
         deployment_test_results = self._test_deployment(endpoint_url)
 
         # Setup auto-scaling policies
-        scaling_config = self._setup_auto_scaling(endpoint_name, deployment_config)
+        self._setup_auto_scaling(endpoint_name, deployment_config)
 
         stage_time = time.time() - stage_start
         self.pipeline_state["model_deployed"] = True
@@ -679,7 +682,7 @@ class ClimatePredictionPipeline:
 
         return metrics
 
-    def _stage_6_monitoring_setup(self) -> Dict:
+    def _stage_6_monitoring_setup(self) -> dict:
         """Stage 6: Setup comprehensive monitoring and alerting."""
         self.pipeline_state["stage"] = "monitoring_setup"
         stage_start = time.time()
@@ -723,7 +726,7 @@ class ClimatePredictionPipeline:
 
         return metrics
 
-    def _stage_7_production_testing(self) -> Dict:
+    def _stage_7_production_testing(self) -> dict:
         """Stage 7: Production testing and validation."""
         self.pipeline_state["stage"] = "production_testing"
         stage_start = time.time()
@@ -734,7 +737,7 @@ class ClimatePredictionPipeline:
         load_test_results = self._run_load_testing()
 
         # A/B testing setup
-        ab_testing_config = self._setup_ab_testing()
+        self._setup_ab_testing()
 
         # Canary deployment testing
         canary_results = self._run_canary_testing()
@@ -832,7 +835,7 @@ class ClimatePredictionPipeline:
         logger.info(f"   ✅ Synthetic data created: {len(synthetic_df)} records")
         return str(synthetic_path)
 
-    def _analyze_data_quality(self, dataset) -> Dict:
+    def _analyze_data_quality(self, dataset) -> dict:
         """Analyze data quality metrics."""
         if len(dataset) == 0:
             return {"overall_score": 0.0, "missing_percent": 100.0}
@@ -881,7 +884,7 @@ class ClimatePredictionPipeline:
 
         return total_loss / num_batches if num_batches > 0 else float("inf")
 
-    def _analyze_model_interpretability(self) -> Dict:
+    def _analyze_model_interpretability(self) -> dict:
         """Analyze model interpretability and feature importance."""
         return {
             "overall_score": 0.85,
@@ -897,8 +900,8 @@ class ClimatePredictionPipeline:
         }
 
     def _generate_validation_report(
-        self, metrics: Dict, interpretability: Dict
-    ) -> Dict:
+        self, metrics: dict, interpretability: dict
+    ) -> dict:
         """Generate comprehensive validation report."""
         return {
             "validation_summary": {
@@ -921,7 +924,7 @@ class ClimatePredictionPipeline:
             ],
         }
 
-    def _create_deployment_package(self) -> Dict:
+    def _create_deployment_package(self) -> dict:
         """Create deployment package for Inferentia."""
         logger.info("   📦 Creating deployment package...")
 
@@ -937,7 +940,7 @@ class ClimatePredictionPipeline:
         }
 
     def _deploy_to_inferentia(
-        self, package: Dict, config: Dict, endpoint_name: str
+        self, package: dict, config: dict, endpoint_name: str
     ) -> str:
         """Deploy model to Inferentia endpoint."""
         logger.info(f"   🚀 Mock deployment to {config['instance_type']}...")
@@ -948,7 +951,7 @@ class ClimatePredictionPipeline:
         endpoint_url = f"https://{endpoint_name}.inferentia.{self.aws_region}.amazonaws.com/predict"
         return endpoint_url
 
-    def _test_deployment(self, endpoint_url: str) -> Dict:
+    def _test_deployment(self, endpoint_url: str) -> dict:
         """Test deployed model endpoint."""
         logger.info("   🧪 Testing deployment...")
 
@@ -961,7 +964,7 @@ class ClimatePredictionPipeline:
             "error_rate": 0.001,
         }
 
-    def _setup_auto_scaling(self, endpoint_name: str, config: Dict) -> Dict:
+    def _setup_auto_scaling(self, endpoint_name: str, config: dict) -> dict:
         """Setup auto-scaling for the deployment."""
         return {
             "enabled": config["auto_scaling_enabled"],
@@ -970,7 +973,7 @@ class ClimatePredictionPipeline:
             "target_utilization": config["target_utilization"],
         }
 
-    def _setup_cloudwatch_monitoring(self) -> Dict:
+    def _setup_cloudwatch_monitoring(self) -> dict:
         """Setup CloudWatch monitoring."""
         return {
             "metrics": [
@@ -983,7 +986,7 @@ class ClimatePredictionPipeline:
             "estimated_cost_monthly": 25.00,
         }
 
-    def _setup_alerting_rules(self) -> Dict:
+    def _setup_alerting_rules(self) -> dict:
         """Setup alerting rules."""
         return {
             "rules": [
@@ -994,21 +997,21 @@ class ClimatePredictionPipeline:
             ]
         }
 
-    def _setup_drift_detection(self) -> Dict:
+    def _setup_drift_detection(self) -> dict:
         """Setup data drift detection."""
         return {"enabled": True, "sensitivity": "medium"}
 
-    def _create_monitoring_dashboard(self) -> Dict:
+    def _create_monitoring_dashboard(self) -> dict:
         """Create monitoring dashboard."""
         return {
             "url": f"https://console.aws.amazon.com/cloudwatch/dashboards/climate-{self.pipeline_id}"
         }
 
-    def _setup_automated_retraining(self) -> Dict:
+    def _setup_automated_retraining(self) -> dict:
         """Setup automated retraining."""
         return {"enabled": True, "trigger": "weekly"}
 
-    def _run_load_testing(self) -> Dict:
+    def _run_load_testing(self) -> dict:
         """Run load testing on deployed model."""
         return {
             "max_requests_per_second": 200.5,
@@ -1017,23 +1020,23 @@ class ClimatePredictionPipeline:
             "error_rate": 0.002,
         }
 
-    def _setup_ab_testing(self) -> Dict:
+    def _setup_ab_testing(self) -> dict:
         """Setup A/B testing framework."""
         return {"enabled": True, "traffic_split": "90/10"}
 
-    def _run_canary_testing(self) -> Dict:
+    def _run_canary_testing(self) -> dict:
         """Run canary deployment testing."""
         return {"success_rate": 0.998, "performance_delta": 0.05}
 
-    def _run_integration_tests(self) -> Dict:
+    def _run_integration_tests(self) -> dict:
         """Run integration tests."""
         return {"tests_passed": 18, "total_tests": 20}
 
-    def _run_performance_benchmark(self) -> Dict:
+    def _run_performance_benchmark(self) -> dict:
         """Run performance benchmarking."""
         return {"improvement_percent": 15.3, "baseline_comparison": "Better"}
 
-    def _calculate_production_readiness_score(self, test_results: Dict) -> float:
+    def _calculate_production_readiness_score(self, test_results: dict) -> float:
         """Calculate overall production readiness score."""
         scores = []
 
@@ -1053,7 +1056,7 @@ class ClimatePredictionPipeline:
 
         return np.mean(scores)
 
-    def _generate_pipeline_report(self, stage_metrics: Dict) -> Dict:
+    def _generate_pipeline_report(self, stage_metrics: dict) -> dict:
         """Generate comprehensive pipeline execution report."""
         total_time = stage_metrics["total_pipeline_time"]
 
@@ -1079,7 +1082,7 @@ class ClimatePredictionPipeline:
             ],
         }
 
-    def _calculate_pipeline_costs(self, metrics: Dict) -> Dict:
+    def _calculate_pipeline_costs(self, metrics: dict) -> dict:
         """Calculate comprehensive pipeline costs."""
         # Training costs (Trainium)
         training_hours = metrics["model_training"]["stage_time_seconds"] / 3600
@@ -1109,7 +1112,7 @@ class ClimatePredictionPipeline:
             / (30 * 24 * 60),  # Per minute
         }
 
-    def _summarize_performance(self, metrics: Dict) -> Dict:
+    def _summarize_performance(self, metrics: dict) -> dict:
         """Summarize overall pipeline performance."""
         return {
             "model_accuracy": {
@@ -1141,7 +1144,7 @@ class ClimatePredictionPipeline:
             },
         }
 
-    def _generate_production_recommendations(self, metrics: Dict) -> List[str]:
+    def _generate_production_recommendations(self, metrics: dict) -> list[str]:
         """Generate production recommendations based on pipeline results."""
         recommendations = []
 
@@ -1172,7 +1175,7 @@ class ClimatePredictionPipeline:
 
         return recommendations
 
-    def _save_pipeline_artifacts(self, report: Dict):
+    def _save_pipeline_artifacts(self, report: dict):
         """Save all pipeline artifacts and reports."""
         # Save comprehensive report
         report_path = self.work_dir / "pipeline_report.json"
@@ -1182,7 +1185,7 @@ class ClimatePredictionPipeline:
         # Create pipeline summary
         summary_path = self.work_dir / "pipeline_summary.txt"
         with open(summary_path, "w") as f:
-            f.write(f"Climate Prediction Pipeline Summary\n")
+            f.write("Climate Prediction Pipeline Summary\n")
             f.write(f"Pipeline ID: {self.pipeline_id}\n")
             f.write(
                 f"Execution Time: {report['pipeline_summary']['execution_time_seconds']:.1f}s\n"
@@ -1216,7 +1219,7 @@ class ClimateFeatureEngineer:
 
         return dataset
 
-    def analyze_features(self, dataset) -> Dict:
+    def analyze_features(self, dataset) -> dict:
         """Analyze engineered features."""
         return {
             "num_features": 30,
@@ -1291,7 +1294,7 @@ class ClimateRegressionLoss(nn.Module):
 
 
 # Convenience function for running complete pipeline
-def run_climate_prediction_pipeline(config: Optional[Dict] = None) -> Dict:
+def run_climate_prediction_pipeline(config: dict | None = None) -> dict:
     """Run complete climate prediction pipeline with default configuration.
 
     Args:
@@ -1334,7 +1337,7 @@ if __name__ == "__main__":
     try:
         report = run_climate_prediction_pipeline(config)
 
-        print(f"\n🎉 Pipeline execution complete!")
+        print("\n🎉 Pipeline execution complete!")
         print(
             f"   Total time: {report['pipeline_summary']['execution_time_seconds']:.1f}s"
         )

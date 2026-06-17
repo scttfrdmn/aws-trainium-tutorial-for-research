@@ -16,11 +16,9 @@ Applications:
 
 import math
 import time
-from typing import Dict, List
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch_neuronx
 
 
@@ -49,7 +47,7 @@ class MonteCarloEngine:
 
     def monte_carlo_simulation_engine(
         self, simulations: int = 1000000, dimensions: int = 10
-    ) -> Dict:
+    ) -> dict:
         """Run massively parallel Monte Carlo simulations for various applications.
 
         This demonstrates how ML chips can accelerate stochastic simulations
@@ -109,8 +107,7 @@ class MonteCarloEngine:
 
                 try:
                     cholesky = torch.linalg.cholesky(correlation)
-                except:
-                    # Fallback to identity if decomposition fails
+                except Exception:  # Fallback to identity if decomposition fails
                     cholesky = torch.eye(self.dimensions, device=correlation.device)
 
                 # Generate independent normal variables
@@ -189,7 +186,7 @@ class MonteCarloEngine:
                     "return_volatility": torch.std(portfolio_returns),
                 }
 
-            def forward(self, initial_values: torch.Tensor) -> Dict[str, torch.Tensor]:
+            def forward(self, initial_values: torch.Tensor) -> dict[str, torch.Tensor]:
                 """Run complete Monte Carlo simulation suite."""
                 batch_size = initial_values.shape[0]
 
@@ -316,7 +313,7 @@ class MonteCarloEngine:
                 elapsed = time.time() - compute_start
                 sims_per_sec = total_simulations_run / elapsed
                 print(
-                    f"   Progress: {batch+1}/{num_batches} batches, {sims_per_sec:.0f} simulations/sec"
+                    f"   Progress: {batch + 1}/{num_batches} batches, {sims_per_sec:.0f} simulations/sec"
                 )
 
         total_time = time.time() - start_time

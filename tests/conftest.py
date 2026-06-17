@@ -3,7 +3,7 @@
 import os
 import shutil
 import tempfile
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -43,7 +43,7 @@ def temp_dir():
 
 
 @pytest.fixture
-def sample_config() -> Dict[str, Any]:
+def sample_config() -> dict[str, Any]:
     """Sample configuration for testing"""
     return {
         "instance_type": "trn1.2xlarge",

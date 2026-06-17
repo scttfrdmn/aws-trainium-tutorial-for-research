@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
+"""Emergency shutdown script for all ML instances.
+
+Use when you need to immediately stop all running experiments.
 """
-Emergency shutdown script for all ML instances
-Use when you need to immediately stop all running experiments
-"""
+
 import boto3
 
 
 def emergency_shutdown_all():
-    """EMERGENCY: Stop all running ML instances"""
+    """EMERGENCY: Stop all running ML instances."""
     ec2 = boto3.client("ec2")
 
     # Get all running instances

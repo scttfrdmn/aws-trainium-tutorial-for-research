@@ -15,11 +15,9 @@ Applications:
 """
 
 import time
-from typing import Dict, Tuple
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch_neuronx
 
 
@@ -46,7 +44,7 @@ class MatrixOperationEngine:
 
     def massive_parallel_matrix_ops(
         self, size: int = 1000, iterations: int = 100
-    ) -> Dict:
+    ) -> dict:
         """Demonstrate massively parallel matrix operations beyond typical ML.
 
         This showcases how ML chips can accelerate linear algebra operations
@@ -88,7 +86,7 @@ class MatrixOperationEngine:
 
             def forward(self, input_matrices):
                 """Perform complex matrix operations using tensor operations."""
-                batch_size = input_matrices.shape[0]
+                input_matrices.shape[0]
 
                 # Matrix multiplication chains (common in physics simulations)
                 result1 = torch.matmul(input_matrices, self.transform_matrix)
@@ -163,9 +161,7 @@ class MatrixOperationEngine:
 
                 # Estimate FLOPS (floating point operations per second)
                 # Matrix multiplication: O(n³), other ops: O(n²)
-                batch_flops = batch_size * (
-                    3 * size**3 + 5 * size**2
-                )  # Approximate
+                batch_flops = batch_size * (3 * size**3 + 5 * size**2)  # Approximate
                 total_flops += batch_flops
 
             if batch % max(1, num_batches // 10) == 0:
@@ -173,7 +169,7 @@ class MatrixOperationEngine:
                 matrices_per_sec = total_matrices_processed / elapsed
                 current_tflops = (total_flops / elapsed) / 1e12
                 print(
-                    f"   Progress: {batch+1}/{num_batches} batches, {matrices_per_sec:.1f} matrices/sec, {current_tflops:.2f} TFLOPS"
+                    f"   Progress: {batch + 1}/{num_batches} batches, {matrices_per_sec:.1f} matrices/sec, {current_tflops:.2f} TFLOPS"
                 )
 
         total_time = time.time() - start_time
@@ -245,13 +241,15 @@ class MatrixOperationEngine:
             },
         }
 
-        print(f"✅ Processed {total_matrices_processed:,} matrices ({size}x{size} each)")
+        print(
+            f"✅ Processed {total_matrices_processed:,} matrices ({size}x{size} each)"
+        )
         print(
             f"   Performance: {matrices_per_second:.1f} matrices/sec, {estimated_tflops:.2f} TFLOPS"
         )
         print(
             f"   Numerical stability: {result['mathematical_analysis']['numerical_stability']}"
         )
-        print(f"   💡 Ready for scientific computing at scale!")
+        print("   💡 Ready for scientific computing at scale!")
 
         return result

@@ -40,11 +40,11 @@ Note:
     The Cost Explorer API has a small charge (~$0.01 per request) but
     this is negligible compared to the cost savings from monitoring.
 """
+
 from datetime import datetime, timedelta
 
 import boto3
 import matplotlib.pyplot as plt
-import pandas as pd
 
 
 def generate_cost_report(
@@ -185,7 +185,7 @@ def generate_cost_report(
     print(f"📈 Daily average: ${daily_average:.2f}")
 
     if instance_totals:
-        print(f"\n🔧 Instance Type Breakdown:")
+        print("\n🔧 Instance Type Breakdown:")
         for instance_type, cost in sorted(
             instance_totals.items(), key=lambda x: x[1], reverse=True
         ):
@@ -193,7 +193,7 @@ def generate_cost_report(
             print(f"  {instance_type}: ${cost:.2f} ({percentage:.1f}%)")
 
     if recommendations:
-        print(f"\n💡 Cost Optimization Recommendations:")
+        print("\n💡 Cost Optimization Recommendations:")
         for rec in recommendations:
             print(f"  • {rec}")
 
@@ -241,11 +241,11 @@ if __name__ == "__main__":
     try:
         report_data = generate_cost_report()
         print("\n✅ Cost monitoring report generated successfully!")
-        print(f"📊 Check ml_costs.png for visual analysis")
+        print("📊 Check ml_costs.png for visual analysis")
 
         if report_data:
-            print(f"💡 Use this data for budget planning and cost optimization")
-            print(f"🔄 Run weekly for proactive cost management")
+            print("💡 Use this data for budget planning and cost optimization")
+            print("🔄 Run weekly for proactive cost management")
 
     except Exception as e:
         print(f"❌ Error generating cost report: {e}")

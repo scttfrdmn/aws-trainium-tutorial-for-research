@@ -43,10 +43,9 @@ Safety Features:
     - Automatic shutdown even if experiment hangs
     - Clear instance tagging for cost tracking
 """
+
 import argparse
-import time
 from datetime import datetime
-from typing import Dict, Optional
 
 import boto3
 
@@ -119,11 +118,11 @@ class EphemeralMLInstance:
         try:
             self.ec2 = boto3.client("ec2")
         except Exception as e:
-            raise RuntimeError(f"Failed to create EC2 client: {e}")
+            raise RuntimeError(f"Failed to create EC2 client: {e}") from e
 
         self.instance_type = instance_type
         self.max_hours = max_hours
-        self.instance_id: Optional[str] = None
+        self.instance_id: str | None = None
 
     def launch(self, experiment_name: str) -> str:
         """Launch ephemeral ML instance with automatic termination.
@@ -180,7 +179,7 @@ class EphemeralMLInstance:
 
         user_data = f"""#!/bin/bash
 # Set up termination timer
-echo "sudo shutdown -h +{self.max_hours*60}" | at now + {self.max_hours} hours
+echo "sudo shutdown -h +{self.max_hours * 60}" | at now + {self.max_hours} hours
 
 # Log experiment details
 echo "Experiment: {experiment_name}" > /home/ubuntu/experiment.log

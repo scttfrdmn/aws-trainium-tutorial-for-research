@@ -14,8 +14,8 @@ Validation Categories:
 TESTED VERSIONS (Last validated: 2025-06-27):
     - Python: 3.11.7
     - PyTorch: 2.4.0
-    - torch-neuronx: 2.2.0
-    - AWS Neuron SDK: 2.20.1
+    - torch-neuronx: 2.9.x
+    - AWS Neuron SDK: 2.30.0
     - Test Status: ✅ Comprehensive end-to-end validation ready
 
 Usage:
@@ -38,11 +38,9 @@ import logging
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 # Configure logging
 logging.basicConfig(
@@ -54,7 +52,7 @@ logger = logging.getLogger(__name__)
 class EndToEndValidator:
     """Comprehensive end-to-end validation for the tutorial."""
 
-    def __init__(self, tutorial_root: Optional[str] = None):
+    def __init__(self, tutorial_root: str | None = None):
         """Initialize end-to-end validator."""
         self.tutorial_root = (
             Path(tutorial_root) if tutorial_root else Path(__file__).parent.parent
@@ -120,11 +118,11 @@ class EndToEndValidator:
             },
         }
 
-        logger.info(f"🔍 End-to-End Validator initialized")
+        logger.info("🔍 End-to-End Validator initialized")
         logger.info(f"   Tutorial root: {self.tutorial_root}")
         logger.info(f"   Categories: {len(self.test_categories)}")
 
-    def validate_environment(self) -> Dict:
+    def validate_environment(self) -> dict:
         """Validate the tutorial environment setup."""
         logger.info("🌍 Validating environment setup...")
 
@@ -180,7 +178,7 @@ class EndToEndValidator:
 
         return env_results
 
-    def validate_example(self, example_path: str, timeout: int = 120) -> Dict:
+    def validate_example(self, example_path: str, timeout: int = 120) -> dict:
         """Validate a single tutorial example."""
         full_path = self.tutorial_root / example_path
 
@@ -238,7 +236,7 @@ class EndToEndValidator:
 
         return result
 
-    def validate_category(self, category: str) -> Dict:
+    def validate_category(self, category: str) -> dict:
         """Validate all examples in a category."""
         if category not in self.test_categories:
             return {"status": "failed", "error": f"Unknown category: {category}"}
@@ -287,7 +285,7 @@ class EndToEndValidator:
         logger.info(f"   Category {category}: {passed}/{total} examples passed")
         return category_results
 
-    def run_smoke_test(self) -> Dict:
+    def run_smoke_test(self) -> dict:
         """Run quick smoke test of essential examples."""
         logger.info("💨 Running smoke test...")
 
@@ -312,7 +310,7 @@ class EndToEndValidator:
         smoke_results["status"] = "passed" if all_passed else "failed"
         return smoke_results
 
-    def run_full_validation(self) -> Dict:
+    def run_full_validation(self) -> dict:
         """Run complete end-to-end validation."""
         logger.info("🚀 Starting full end-to-end validation...")
 
@@ -338,7 +336,7 @@ class EndToEndValidator:
         )
         return self.validation_results
 
-    def run_category_validation(self, category: str) -> Dict:
+    def run_category_validation(self, category: str) -> dict:
         """Run validation for a specific category."""
         logger.info(f"🎯 Running validation for category: {category}")
 
@@ -371,24 +369,20 @@ class EndToEndValidator:
         required_total = len(required_categories)
 
         for category in required_categories:
-            if category in self.validation_results["categories"]:
-                if (
-                    self.validation_results["categories"][category]["status"]
-                    == "passed"
-                ):
-                    required_passed += 1
+            if category in self.validation_results["categories"] and (
+                self.validation_results["categories"][category]["status"] == "passed"
+            ):
+                required_passed += 1
 
         # Check optional categories
         optional_passed = 0
         optional_total = len(optional_categories)
 
         for category in optional_categories:
-            if category in self.validation_results["categories"]:
-                if (
-                    self.validation_results["categories"][category]["status"]
-                    == "passed"
-                ):
-                    optional_passed += 1
+            if category in self.validation_results["categories"] and (
+                self.validation_results["categories"][category]["status"] == "passed"
+            ):
+                optional_passed += 1
 
         # Determine overall status
         if required_passed == required_total:

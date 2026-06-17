@@ -24,10 +24,8 @@ Author: Scott Friedman
 Date: 2024-12-19
 """
 
-import os
 import time
 import warnings
-from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -75,80 +73,40 @@ class NeuronFrameworkManager:
         # Setup device configuration
         self._setup_device_config()
 
-        print(f"🧠 Neuron Framework Manager (June 2025)")
+        print("🧠 Neuron Framework Manager (June 2025)")
         print(f"   Device: {device_type}")
         print(f"   Precision: {precision}")
         print(f"   Available frameworks: {list(self.available_frameworks.keys())}")
 
-    def _check_framework_availability(self) -> Dict[str, bool]:
+    def _check_framework_availability(self) -> dict[str, bool]:
         """Check which frameworks are available in the environment."""
         frameworks = {}
 
-        # PyTorch + Neuron
-        try:
-            import torch_neuronx
-            import torch_xla.core.xla_model as xm
+        # Each framework needs its base package AND its Neuron integration package present.
+        # Use importlib.util.find_spec to probe availability without importing (no unused
+        # imports, no import side effects).
+        from importlib.util import find_spec
 
-            frameworks["pytorch"] = True
-            print("✅ PyTorch + Neuron available")
-        except ImportError:
-            frameworks["pytorch"] = False
-            print("❌ PyTorch + Neuron not available")
+        def _available(*modules: str) -> bool:
+            return all(find_spec(m) is not None for m in modules)
 
-        # TensorFlow + Neuron
-        try:
-            import tensorflow as tf
-            import tensorflow_neuronx as tfnx
-
-            frameworks["tensorflow"] = True
-            print("✅ TensorFlow + Neuron available")
-        except ImportError:
-            frameworks["tensorflow"] = False
-            print("❌ TensorFlow + Neuron not available")
-
-        # JAX + Neuron
-        try:
-            import jax
-            import jax_neuronx
-
-            frameworks["jax"] = True
-            print("✅ JAX + Neuron available")
-        except ImportError:
-            frameworks["jax"] = False
-            print("❌ JAX + Neuron not available")
-
-        # Transformers + Optimum
-        try:
-            import optimum.neuron
-            import transformers
-
-            frameworks["transformers"] = True
-            print("✅ Transformers + Optimum available")
-        except ImportError:
-            frameworks["transformers"] = False
-            print("❌ Transformers + Optimum not available")
-
-        # PyTorch Lightning + Neuron
-        try:
-            import lightning as L
-            import pytorch_lightning_neuronx
-
-            frameworks["lightning"] = True
-            print("✅ Lightning + Neuron available")
-        except ImportError:
-            frameworks["lightning"] = False
-            print("❌ Lightning + Neuron not available")
-
-        # XGBoost + Neuron (experimental)
-        try:
-            import xgboost as xgb
-            import xgboost_neuronx
-
-            frameworks["xgboost"] = True
-            print("✅ XGBoost + Neuron available (experimental)")
-        except ImportError:
-            frameworks["xgboost"] = False
-            print("❌ XGBoost + Neuron not available")
+        probes = {
+            "pytorch": ("torch_neuronx", "torch_xla"),
+            "tensorflow": ("tensorflow", "tensorflow_neuronx"),
+            "jax": ("jax", "jax_neuronx"),
+            "transformers": ("transformers", "optimum.neuron"),
+            "lightning": ("lightning", "pytorch_lightning_neuronx"),
+            "xgboost": ("xgboost", "xgboost_neuronx"),
+        }
+        for name, modules in probes.items():
+            try:
+                frameworks[name] = _available(*modules)
+            except (ImportError, ValueError):
+                frameworks[name] = False
+            status = "✅" if frameworks[name] else "❌"
+            print(
+                f"{status} {name} + Neuron {'available' if frameworks[name] else 'not available'}"
+            )
 
         return frameworks
 
@@ -190,7 +148,7 @@ class NeuronFrameworkManager:
         import torch_neuronx
         import torch_xla.core.xla_model as xm
 
-        print(f"🔥 Creating PyTorch model with Neuron 2.1 features")
+        print("🔥 Creating PyTorch model with Neuron 2.1 features")
 
         class AdvancedNeuronTransformer(torch.nn.Module):
             """Transformer optimized for Neuron 2.1 with latest features."""
@@ -291,18 +249,21 @@ class NeuronFrameworkManager:
             tensor_parallel_size=2 if self.device_type == "trainium" else 1,
         )
 
-        print(f"✅ PyTorch model created with Neuron 2.1 optimizations")
+        print("✅ PyTorch model created with Neuron 2.1 optimizations")
         return model
 
-    def create_tensorflow_model_latest(self) -> "tf.keras.Model":
-        """Create TensorFlow model with latest Neuron features."""
+    def create_tensorflow_model_latest(self):
+        """Create TensorFlow model with latest Neuron features.
+
+        Note: TensorFlow Neuron is archived as of 2026; prefer the PyTorch path. Kept here for
+        historical reference. Returns a ``tf.keras.Model`` when TensorFlow Neuron is installed.
+        """
         if not self.available_frameworks["tensorflow"]:
             raise RuntimeError("TensorFlow + Neuron not available")
 
         import tensorflow as tf
-        import tensorflow_neuronx as tfnx
 
-        print(f"🔥 Creating TensorFlow model with Neuron 2.1 features")
+        print("🔥 Creating TensorFlow model with Neuron 2.1 features")
 
         # Enable Neuron-optimized operations
         tf.config.experimental.enable_neuron_ops()
@@ -387,8 +348,13 @@ class NeuronFrameworkManager:
                     x = tf.nn.dropout(x, rate=0.1)
 
                 # Transformer layers
-                for i, (attention, ffn, (norm1, norm2)) in enumerate(
-                    zip(self.attention_layers, self.ffn_layers, self.norm_layers)
+                for _i, (attention, ffn, (norm1, norm2)) in enumerate(
+                    zip(
+                        self.attention_layers,
+                        self.ffn_layers,
+                        self.norm_layers,
+                        strict=False,
+                    )
                 ):
                     # Multi-head attention with residual
                     attn_output = attention(
@@ -419,7 +385,7 @@ class NeuronFrameworkManager:
             metrics=["accuracy"],
         )
 
-        print(f"✅ TensorFlow model created with Neuron 2.1 optimizations")
+        print("✅ TensorFlow model created with Neuron 2.1 optimizations")
         return model
 
     def create_jax_model_latest(self):
@@ -432,7 +398,7 @@ class NeuronFrameworkManager:
         import jax.numpy as jnp
         import jax_neuronx
 
-        print(f"🔥 Creating JAX model with Neuron 0.5 features")
+        print("🔥 Creating JAX model with Neuron 0.5 features")
 
         def create_transformer_params(
             vocab_size=32000, d_model=1024, num_heads=16, num_layers=12
@@ -455,7 +421,7 @@ class NeuronFrameworkManager:
 
                 # Multi-head attention
                 key, *subkeys = jax.random.split(key, 4)
-                head_dim = d_model // num_heads
+                d_model // num_heads
 
                 params[layer_key]["attn_q"] = (
                     jax.random.normal(subkeys[0], (d_model, d_model)) * 0.02
@@ -499,7 +465,7 @@ class NeuronFrameworkManager:
             x = params["embedding"][input_ids]
 
             # Transformer layers
-            num_layers = len([k for k in params.keys() if k.startswith("layer_")])
+            num_layers = len([k for k in params if k.startswith("layer_")])
 
             for i in range(num_layers):
                 layer_params = params[f"layer_{i}"]
@@ -554,7 +520,7 @@ class NeuronFrameworkManager:
             donate_argnums=(0,),  # Donate params for memory efficiency
         )
 
-        print(f"✅ JAX model created with Neuron 0.5 optimizations")
+        print("✅ JAX model created with Neuron 0.5 optimizations")
         return compiled_model, params
 
     def create_transformers_model_latest(self, model_name: str = "gpt2"):
@@ -564,12 +530,12 @@ class NeuronFrameworkManager:
             return self._create_mock_transformers_model()
 
         from optimum.neuron import NeuronModelForCausalLM
-        from transformers import AutoConfig, AutoModel
+        from transformers import AutoConfig
 
-        print(f"🔥 Creating Transformers model with Optimum Neuron 0.9")
+        print("🔥 Creating Transformers model with Optimum Neuron 0.9")
 
         # Load pre-trained model with Neuron optimizations
-        config = AutoConfig.from_pretrained(model_name)
+        AutoConfig.from_pretrained(model_name)
 
         # Enable latest Neuron features
         neuron_config = {
@@ -593,7 +559,7 @@ class NeuronFrameworkManager:
             cache_dir="./neuron_cache",
         )
 
-        print(f"✅ Transformers model created with Optimum Neuron 0.9")
+        print("✅ Transformers model created with Optimum Neuron 0.9")
         return model
 
     def create_lightning_model_latest(self):
@@ -605,7 +571,7 @@ class NeuronFrameworkManager:
         import lightning as L
         import pytorch_lightning_neuronx as pln
 
-        print(f"🔥 Creating Lightning model with Neuron 1.0 features")
+        print("🔥 Creating Lightning model with Neuron 1.0 features")
 
         class NeuronLightningTransformer(L.LightningModule):
             """PyTorch Lightning model optimized for Neuron."""
@@ -667,7 +633,7 @@ class NeuronFrameworkManager:
             enable_mixed_precision=True,
         )
 
-        print(f"✅ Lightning model created with Neuron 1.0 strategy")
+        print("✅ Lightning model created with Neuron 1.0 strategy")
         return model, strategy
 
     def create_xgboost_model_experimental(self):
@@ -677,9 +643,8 @@ class NeuronFrameworkManager:
             return self._create_mock_xgboost_model()
 
         import xgboost as xgb
-        import xgboost_neuronx as xgbn
 
-        print(f"🔥 Creating XGBoost model with experimental Neuron support")
+        print("🔥 Creating XGBoost model with experimental Neuron support")
 
         # XGBoost with Neuron acceleration (experimental)
         model = xgb.XGBClassifier(
@@ -694,7 +659,7 @@ class NeuronFrameworkManager:
             device=f"neuron:{self.device_type}",
         )
 
-        print(f"✅ XGBoost model created with experimental Neuron support")
+        print("✅ XGBoost model created with experimental Neuron support")
         return model
 
     # Mock implementations for unavailable frameworks
@@ -759,7 +724,7 @@ class NeuronFrameworkManager:
 
         return MockXGBoostModel()
 
-    def benchmark_all_frameworks(self) -> Dict:
+    def benchmark_all_frameworks(self) -> dict:
         """Benchmark all available frameworks with identical workloads."""
         print("🏁 Benchmarking all available frameworks")
         print("=" * 60)
@@ -772,7 +737,7 @@ class NeuronFrameworkManager:
         vocab_size = 32000
 
         # Mock input data
-        input_data = torch.randint(0, vocab_size, (batch_size, sequence_length))
+        torch.randint(0, vocab_size, (batch_size, sequence_length))
 
         # Benchmark each framework
         for framework_name, available in self.available_frameworks.items():
@@ -836,7 +801,7 @@ class NeuronFrameworkManager:
                 results[framework_name] = {"status": "failed", "error": str(e)}
 
         # Print summary
-        print(f"\n📊 FRAMEWORK BENCHMARK SUMMARY")
+        print("\n📊 FRAMEWORK BENCHMARK SUMMARY")
         print("=" * 60)
 
         successful_results = {
@@ -869,7 +834,7 @@ def get_latest_pytorch_model(device_type: str = "trainium") -> torch.nn.Module:
     return manager.create_pytorch_model_latest()
 
 
-def benchmark_frameworks(device_type: str = "trainium") -> Dict:
+def benchmark_frameworks(device_type: str = "trainium") -> dict:
     """Quick benchmark of all available frameworks."""
     manager = NeuronFrameworkManager(device_type=device_type)
     return manager.benchmark_all_frameworks()
@@ -886,10 +851,14 @@ if __name__ == "__main__":
     # Benchmark all frameworks
     results = manager.benchmark_all_frameworks()
 
-    print(f"\n✅ Framework demonstration complete!")
-    print(
-        f"   Available frameworks: {len([r for r in results.values() if r.get('status') == 'success'])}"
-    )
-    print(
-        f"   Best performing: {max(results.items(), key=lambda x: x[1].get('throughput_samples_per_second', 0))[0] if results else 'None'}"
-    )
+    print("\n✅ Framework demonstration complete!")
+    successful = [r for r in results.values() if r.get("status") == "success"]
+    print(f"   Available frameworks: {len(successful)}")
+    if results:
+        best = max(
+            results.items(),
+            key=lambda x: x[1].get("throughput_samples_per_second", 0),
+        )[0]
+    else:
+        best = "None"
+    print(f"   Best performing: {best}")

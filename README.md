@@ -2,12 +2,19 @@
 
 [![Open Source](https://img.shields.io/badge/Open%20Source-MIT-blue)](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research)
 [![GitHub Stars](https://img.shields.io/github/stars/scttfrdmn/aws-trainium-tutorial-for-research)](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/stargazers)
-[![Version](https://img.shields.io/badge/Version-2025.1.0-green)](VERSION_MATRIX.md)
-[![Neuron SDK](https://img.shields.io/badge/Neuron%20SDK-2.20.1-orange)](https://awsdocs-neuron.readthedocs-hosted.com/)
+[![Version](https://img.shields.io/badge/Version-2026.1.0-green)](VERSION_MATRIX.md)
+[![Neuron SDK](https://img.shields.io/badge/Neuron%20SDK-2.30.0-orange)](https://awsdocs-neuron.readthedocs-hosted.com/)
 
 ## 🎯 Overview
 
-The world's most comprehensive, production-ready tutorial for AWS Trainium and Inferentia. This tutorial provides everything researchers and organizations need to leverage AWS Neuron hardware for cost-effective ML research and production deployment.
+A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This tutorial provides what researchers and organizations need to leverage AWS Neuron hardware for cost-effective ML research and production deployment.
+
+> ### 📅 Status as of June 2026
+>
+> This tutorial targets **Neuron SDK 2.30.0** (released May 21, 2026) and **PyTorch 2.9**. Two platform shifts shape how you should read it:
+>
+> - **PyTorch backend transition.** AWS has announced **TorchNeuron**, a native (non-XLA) PyTorch backend that registers Trainium as a native device via PyTorch's `PrivateUse1` mechanism, with eager mode and `torch.compile` support. It is in **private preview** and targets **PyTorch 2.10**. **PyTorch 2.9 is the last version using PyTorch/XLA.** Most code here uses the XLA path (`torch_xla`, `xm.xla_device()`, `xm.mark_step()`) — the *outgoing* model. See [VERSION_MATRIX.md](VERSION_MATRIX.md#-the-pytorchxla--torchneuron-transition) for the migration outlook.
+> - **Trainium is now the path for both training and inference.** AWS has not announced an Inferentia3, and the modern serving library (NxD Inference) **dropped Inf2/Trn1 support in Neuron 2.29** (pin to 2.28 if you need it on Inf2). Inferentia2 remains GA and useful for cost-optimized, latency-sensitive, smaller-model inference, but new work should generally target **Trainium2 (Trn2)**. See the [Inferentia decision guide](VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference).
 
 ## Key Features
 
@@ -21,9 +28,15 @@ The world's most comprehensive, production-ready tutorial for AWS Trainium and I
 
 ## Cost Savings
 
-- **Training**: 30-75% savings vs traditional GPUs
-- **Inference**: Up to 88% savings with spot instances
-- **Example**: Llama 2 7B training - $144 (Trainium2) vs $295 (H100)
+- **Training**: 30-75% savings vs comparable NVIDIA GPU instances
+- **Inference**: substantial savings with spot instances on Inf2/Trn2
+- **Example**: Llama 2 7B training - ~$144 (Trainium2) vs ~$295 (H100)
+
+> ⚠️ **On the numbers in this tutorial:** cost figures are illustrative estimates based on
+> published on-demand/spot pricing and public benchmarks, not measured results from a single
+> controlled run unless explicitly stated. Spot prices vary by region and time. Always confirm
+> current pricing in the [AWS pricing pages](https://aws.amazon.com/ec2/pricing/) before
+> planning a budget, and treat throughput/cost tables as planning aids rather than guarantees.
 
 ## Table of Contents
 
@@ -120,8 +133,14 @@ print(f"Cost: ${result['inference_cost']:.4f}")
 
 ### Advanced NKI Development
 
+> **Note:** The snippet below is **illustrative pseudocode** to convey the shape of an NKI
+> kernel and the NeuronCore memory hierarchy — it is not a drop-in, runnable kernel. The real
+> `neuronxcc.nki.language` API operates on tiles with explicit partition/free-axis reductions and
+> masking. For working kernels, start from the
+> [official NKI documentation and samples](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/nki/index.html).
+
 ```python
-# Custom Flash Attention kernel for Trainium
+# Custom Flash Attention kernel for Trainium (ILLUSTRATIVE — not runnable as-is)
 @nki.jit
 def flash_attention_kernel(q_tensor, k_tensor, v_tensor, scale):
     # Optimized for NeuronCore v2 memory hierarchy
@@ -144,24 +163,37 @@ def flash_attention_kernel(q_tensor, k_tensor, v_tensor, scale):
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/aws-trainium-inferentia-tutorial
-   cd aws-trainium-inferentia-tutorial
+   git clone https://github.com/scttfrdmn/aws-trainium-tutorial-for-research
+   cd aws-trainium-tutorial-for-research
    ```
 
-2. **Set up environment**:
+2. **Set up the environment with [uv](https://docs.astral.sh/uv/)** (recommended):
    ```bash
-   pip install -r requirements.txt
-   python setup.py install
+   # Install uv if you don't have it: https://docs.astral.sh/uv/getting-started/installation/
+   uv python install 3.12        # uses the version pinned in .python-version
+   uv venv
+   uv pip install -e ".[dev]"    # dev tooling (ruff, mypy, pytest)
+
+   # Neuron wheels come from the AWS Neuron index (run on a Neuron instance/DLAMI):
+   uv pip install torch-neuronx neuronx-cc \
+       --extra-index-url https://pip.repos.neuron.amazonaws.com
    ```
+   <details><summary>Prefer plain pip?</summary>
+
+   ```bash
+   python -m venv .venv && source .venv/bin/activate
+   pip install -e ".[dev]"
+   ```
+   </details>
 
 3. **Configure AWS**:
    ```bash
-   python scripts/setup_aws_environment.py
+   python scripts/aws_environment_checker.py
    ```
 
-4. **Run your first experiment**:
+4. **Run the tests** to confirm your setup:
    ```bash
-   python examples/quickstart/bert_training.py
+   uv run pytest -m "not aws and not neuron"
    ```
 
 ## Contributing
@@ -174,8 +206,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- **AWS Neuron Community**: [Slack](https://join.slack.com/t/aws-neuron/shared_invite/)
-- **GitHub Issues**: [Report bugs or request features](https://github.com/yourusername/aws-trainium-inferentia-tutorial/issues)
+- **AWS Neuron Community**: [AWS Neuron SDK GitHub](https://github.com/aws-neuron/aws-neuron-sdk)
+- **GitHub Issues**: [Report bugs or request features](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/issues)
 - **Documentation**: [Full tutorial documentation](docs/README.md)
 
 ## Citation
@@ -183,11 +215,11 @@ MIT License - see [LICENSE](LICENSE) for details.
 If you use this tutorial in your research, please cite:
 
 ```bibtex
-@misc{aws_trainium_tutorial2025,
+@misc{aws_trainium_tutorial2026,
   title={AWS Trainium \& Inferentia: Complete Tutorial for Academic Researchers},
-  author={[Your Name]},
-  year={2025},
+  author={Friedman, Scott},
+  year={2026},
   publisher={GitHub},
-  url={https://github.com/yourusername/aws-trainium-inferentia-tutorial}
+  url={https://github.com/scttfrdmn/aws-trainium-tutorial-for-research}
 }
 ```

@@ -59,6 +59,7 @@ Research Applications:
     - Grant proposal generation assistants
     - Literature review automation tools
 """
+
 import json
 import time
 from datetime import datetime
@@ -202,7 +203,6 @@ class NeuronRAGPipeline:
             load pre-compiled binaries instantly. Save compiled models to S3
             for faster deployment in production environments.
         """
-
         print("📥 Loading embedding model for Inferentia2...")
 
         # Load base model and tokenizer
@@ -236,7 +236,7 @@ class NeuronRAGPipeline:
 
         print("✅ Embedding model loaded and compiled for Inferentia2")
         print(f"   Expected throughput: ~680 embeddings/sec on {instance_type}")
-        print(f"   Cost: $0.227/hour vs $0.10/1M tokens (OpenAI)")
+        print("   Cost: $0.227/hour vs $0.10/1M tokens (OpenAI)")
 
     def setup_llm(self, instance_type="trn2.48xlarge"):
         """Setup and load language model optimized for Trainium2 inference.
@@ -280,7 +280,6 @@ class NeuronRAGPipeline:
             for model compilation instructions. The model path should point
             to a compiled .pt file optimized for the target instance type.
         """
-
         print("📥 Loading LLM for Trainium2...")
 
         # Load quantized Llama 2 7B with Neuron optimizations
@@ -296,11 +295,10 @@ class NeuronRAGPipeline:
 
         print("✅ LLM loaded and optimized for Trainium2")
         print(f"   Expected throughput: ~64 tokens/sec on {instance_type}")
-        print(f"   Cost: $12/hour vs $29.50/hour (H100)")
+        print("   Cost: $12/hour vs $29.50/hour (H100)")
 
     def index_documents(self, documents, batch_size=32, save_to_s3=True):
         """Create FAISS index from documents with cost tracking"""
-
         print(f"📚 Indexing {len(documents)} documents...")
         start_time = time.time()
 
@@ -377,7 +375,6 @@ class NeuronRAGPipeline:
 
     def retrieve(self, query, k=5):
         """Retrieve relevant documents with cost tracking"""
-
         start_time = time.time()
 
         # Encode query
@@ -473,7 +470,6 @@ class NeuronRAGPipeline:
             query complexity. Monitor usage patterns and optimize batch sizes
             for production deployments.
         """
-
         pipeline_start = time.time()
 
         # Step 1: Retrieve relevant documents
@@ -482,7 +478,7 @@ class NeuronRAGPipeline:
 
         # Step 2: Build context
         context = "\\n\\n".join(
-            [f"Document {i+1}: {doc}" for i, doc in enumerate(docs)]
+            [f"Document {i + 1}: {doc}" for i, doc in enumerate(docs)]
         )
 
         # Step 3: Create prompt
@@ -539,27 +535,25 @@ class NeuronRAGPipeline:
 
     def batch_generate(self, queries, max_length=512):
         """Process multiple queries efficiently"""
-
         results = []
         total_cost = 0
 
         print(f"🔄 Processing {len(queries)} queries in batch...")
 
         for i, query in enumerate(queries):
-            print(f"   Query {i+1}/{len(queries)}: {query[:50]}...")
+            print(f"   Query {i + 1}/{len(queries)}: {query[:50]}...")
             result = self.generate(query, max_length)
             results.append(result)
             total_cost += result["costs"]["total_cost_usd"]
 
-        print(f"✅ Batch processing complete!")
+        print("✅ Batch processing complete!")
         print(f"💰 Total cost: ${total_cost:.4f}")
-        print(f"💰 Average cost per query: ${total_cost/len(queries):.4f}")
+        print(f"💰 Average cost per query: ${total_cost / len(queries):.4f}")
 
         return results, total_cost
 
     def _save_index_to_s3(self, bucket="rag-indexes"):
         """Save FAISS index and documents to S3"""
-
         try:
             # Save FAISS index
             faiss.write_index(self.index, "/tmp/faiss_index.bin")
@@ -577,7 +571,6 @@ class NeuronRAGPipeline:
 
     def load_index_from_s3(self, bucket="rag-indexes"):
         """Load FAISS index and documents from S3"""
-
         try:
             # Load FAISS index
             self.s3.download_file(bucket, "faiss_index.bin", "/tmp/faiss_index.bin")
@@ -585,7 +578,7 @@ class NeuronRAGPipeline:
 
             # Load documents
             self.s3.download_file(bucket, "documents.json", "/tmp/documents.json")
-            with open("/tmp/documents.json", "r") as f:
+            with open("/tmp/documents.json") as f:
                 self.documents = json.load(f)
 
             print(f"✅ Index loaded from S3: s3://{bucket}/")
@@ -662,7 +655,6 @@ class RAGCostTracker:
 
     def log_interaction(self, query, result):
         """Log an interaction for cost analysis"""
-
         interaction = {
             "timestamp": datetime.now().isoformat(),
             "query": query,
@@ -675,7 +667,6 @@ class RAGCostTracker:
 
     def generate_cost_report(self):
         """Generate comprehensive cost report"""
-
         if not self.interactions:
             return "No interactions logged yet."
 
@@ -693,24 +684,24 @@ class RAGCostTracker:
 
         report = (
             f"📊 RAG Pipeline Cost Report\n"
-            f"{'='*40}\n"
+            f"{'=' * 40}\n"
             f"Runtime: {runtime_hours:.2f} hours\n"
             f"Total Queries: {total_queries}\n"
             f"Total Cost: ${total_cost:.4f}\n\n"
             f"💰 Cost Breakdown:\n"
             f"  Average per query: ${avg_cost_per_query:.4f}\n"
-            f"  Cost per hour: ${total_cost/runtime_hours:.4f}\n\n"
+            f"  Cost per hour: ${total_cost / runtime_hours:.4f}\n\n"
             f"⚡ Performance:\n"
             f"  Avg retrieval time: {avg_retrieval_time:.2f}s\n"
             f"  Avg generation time: {avg_generation_time:.2f}s\n\n"
             f"🔄 Throughput:\n"
-            f"  Queries per hour: {total_queries/runtime_hours:.1f}\n"
-            f"  Queries per dollar: {total_queries/total_cost:.0f}\n\n"
+            f"  Queries per hour: {total_queries / runtime_hours:.1f}\n"
+            f"  Queries per dollar: {total_queries / total_cost:.0f}\n\n"
             f"💡 Cost Comparison:\n"
             f"  OpenAI GPT-4: ~$0.06/query (estimated)\n"
             f"  AWS RAG Pipeline: ${avg_cost_per_query:.4f}/query\n"
-            f"  Savings: {((0.06-avg_cost_per_query)/0.06*100):.1f}%\n"
-            f"{'='*40}"
+            f"  Savings: {((0.06 - avg_cost_per_query) / 0.06 * 100):.1f}%\n"
+            f"{'=' * 40}"
         )
 
         return report
@@ -753,7 +744,6 @@ def main():
         Subsequent runs use cached models for faster startup.
         Results saved to /tmp/rag_demo_results.json for analysis.
     """
-
     print("🚀 Starting Modern RAG Pipeline Demo on AWS ML Chips")
     print("=" * 60)
 
@@ -798,8 +788,8 @@ def main():
     print("\\n📋 Results:")
     print("=" * 40)
 
-    for i, (query, result) in enumerate(zip(queries, results)):
-        print(f"\\nQuery {i+1}: {query}")
+    for i, (query, result) in enumerate(zip(queries, results, strict=False)):
+        print(f"\\nQuery {i + 1}: {query}")
         print(f"Answer: {result['answer']}")
         print(f"Cost: ${result['costs']['total_cost_usd']:.4f}")
         print(f"Sources: {len(result['sources'])} documents")
@@ -876,12 +866,7 @@ Monitoring Integration:
 - Research productivity analytics
 """
 
-import json
-import time
-from datetime import datetime
 
-import boto3
-import torch_neuronx
 from flask import Flask, jsonify, request
 from neuron_rag_pipeline import NeuronRAGPipeline
 
@@ -1001,8 +986,9 @@ def chat():
 
     Examples:
         >>> import requests
-        >>> response = requests.post('http://localhost:8080/chat',
-        ...     json={'query': 'Explain machine learning'})
+        >>> response = requests.post(
+        ...     "http://localhost:8080/chat", json={"query": "Explain machine learning"}
+        ... )
         >>> result = response.json()
         >>> print(f"Answer: {result['answer']}")
 
@@ -1096,8 +1082,8 @@ def health():
 
     Examples:
         >>> import requests
-        >>> health = requests.get('http://localhost:8080/health')
-        >>> if health.json()['status'] == 'healthy':
+        >>> health = requests.get("http://localhost:8080/health")
+        >>> if health.json()["status"] == "healthy":
         ...     print("Service ready for traffic")
 
     Automated Monitoring:
@@ -1174,9 +1160,11 @@ def stats():
 
     Examples:
         >>> import requests
-        >>> stats = requests.get('http://localhost:8080/stats').json()
+        >>> stats = requests.get("http://localhost:8080/stats").json()
         >>> print(f"Cost per query: ${stats['cost_per_request']:.4f}")
-        >>> print(f"vs OpenAI: ${0.06:.4f} (savings: {((0.06-stats['cost_per_request'])/0.06*100):.1f}%)")
+        >>> print(
+        ...     f"vs OpenAI: ${0.06:.4f} (savings: {((0.06 - stats['cost_per_request']) / 0.06 * 100):.1f}%)"
+        ... )
 
     Optimization Insights:
         - Batch similar queries for better efficiency

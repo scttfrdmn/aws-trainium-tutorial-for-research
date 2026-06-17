@@ -77,7 +77,6 @@ import json
 import time
 from datetime import datetime, timedelta
 
-import boto3
 import numpy as np
 import pandas as pd
 import torch
@@ -191,8 +190,7 @@ class ClimateDataset(Dataset):
         target_data = (
             self.data["temperature"]
             .iloc[
-                idx
-                + self.sequence_length : idx
+                idx + self.sequence_length : idx
                 + self.sequence_length
                 + self.prediction_horizon
             ]
@@ -415,7 +413,7 @@ def train_climate_model(config):
     # Setup Trainium device
     device = xm.xla_device()
     print(f"Using device: {device}")
-    print(f"Expected training cost: ~$645 (vs $2,000 on GPU - 68% savings)")
+    print("Expected training cost: ~$645 (vs $2,000 on GPU - 68% savings)")
 
     # Load and prepare climate dataset
     print("📊 Loading climate dataset...")
@@ -574,7 +572,7 @@ def train_climate_model(config):
                 estimated_cost = elapsed_hours * 6.45  # trn1.32xlarge spot price
 
                 print(
-                    f"\\nEpoch {epoch+1}/{config['epochs']}, Batch {batch_idx}/{len(train_loader)}"
+                    f"\\nEpoch {epoch + 1}/{config['epochs']}, Batch {batch_idx}/{len(train_loader)}"
                 )
                 print(f"  Loss: {loss.item():.4f} | Cost: ${estimated_cost:.2f}")
                 print(
@@ -635,7 +633,7 @@ def train_climate_model(config):
         estimated_cost = total_runtime * 6.45
         projected_final_cost = (estimated_cost / (epoch + 1)) * config["epochs"]
 
-        print(f"\\n📊 Epoch {epoch+1} Summary:")
+        print(f"\\n📊 Epoch {epoch + 1} Summary:")
         print(f"  Train Loss: {avg_train_loss:.4f}")
         print(f"  Val Loss: {avg_val_loss:.4f}")
         print(f"  MAE: {mae_celsius:.2f}°C | RMSE: {rmse_celsius:.2f}°C")
@@ -707,7 +705,9 @@ def train_climate_model(config):
     print("\\n🎉 Training Complete!")
     print("=" * 50)
     print(f"Final Cost: ${final_cost:.2f} (vs ~$2,000 on GPU)")
-    print(f"Savings: ${2000 - final_cost:.2f} ({((2000-final_cost)/2000*100):.1f}%)")
+    print(
+        f"Savings: ${2000 - final_cost:.2f} ({((2000 - final_cost) / 2000 * 100):.1f}%)"
+    )
     print(f"Best Validation Loss: {best_metrics['val_loss']:.4f}")
     print(f"Best MAE: {best_metrics['mae_celsius']:.2f}°C")
     print(f"Best RMSE: {best_metrics['rmse_celsius']:.2f}°C")
@@ -753,9 +753,9 @@ def train_climate_model(config):
     with open("climate_training_report.json", "w") as f:
         json.dump(report, f, indent=2, default=str)
 
-    print(f"\\n📄 Detailed report saved to climate_training_report.json")
-    print(f"🔧 Inferentia model saved to climate_model_inferentia.pt")
-    print(f"💾 Training checkpoint saved to climate_model_checkpoint.pt")
+    print("\\n📄 Detailed report saved to climate_training_report.json")
+    print("🔧 Inferentia model saved to climate_model_inferentia.pt")
+    print("💾 Training checkpoint saved to climate_model_checkpoint.pt")
 
     return compiled_model, report
 
@@ -815,10 +815,10 @@ class ClimateInferenceService:
         self.total_latency = 0
         self.start_time = datetime.now()
 
-        print(f"✅ Climate service ready!")
+        print("✅ Climate service ready!")
         print(f"   Features: {len(feature_stats['features'])}")
-        print(f"   Expected latency: <100ms")
-        print(f"   Expected cost: $0.227/hour (inf2.xlarge)")
+        print("   Expected latency: <100ms")
+        print("   Expected cost: $0.227/hour (inf2.xlarge)")
 
     def predict(self, input_data, return_uncertainty=True):
         """Generate climate predictions with comprehensive uncertainty analysis.
@@ -999,7 +999,6 @@ class ClimateInferenceService:
 # Example usage and demonstration
 def main():
     """Demonstrate the complete climate prediction workflow on AWS Trainium and Inferentia."""
-
     print("🌍 Climate Science: AWS Trainium & Inferentia Tutorial")
     print("=" * 60)
     print(

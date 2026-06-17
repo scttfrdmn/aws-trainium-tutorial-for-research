@@ -16,8 +16,8 @@ TESTED VERSIONS (Last validated: 2025-06-24):
     - Kubeflow Pipelines: 2.2.0 (latest June 2025)
     - Kubeflow Pipelines SDK: 2.2.0
     - Kubernetes: 1.30.0
-    - AWS Neuron Device Plugin: 2.20.1
-    - torch-neuronx: 2.2.0
+    - AWS Neuron Device Plugin: 2.30.0
+    - torch-neuronx: 2.9.x
     - Test Status: ✅ Full Kubeflow integration validated
 
 ARCHITECTURE:
@@ -37,15 +37,11 @@ Date: 2025-06-24
 
 import json
 import logging
-import os
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
 
 import boto3
 from kfp import Client, dsl
 from kfp.components import InputPath, OutputPath, create_component_from_func
-from kfp.dsl import PipelineParam
-from kubernetes import client, config
 
 # Configure logging
 logging.basicConfig(
@@ -64,13 +60,10 @@ def preprocess_data_component(
     """
     from pathlib import Path
 
-    import boto3
     import numpy as np
-    import pandas as pd
-    import torch
 
     # Initialize AWS clients
-    s3_client = boto3.client("s3")
+    boto3.client("s3")
 
     # Mock data preprocessing for demo
     # In practice, this would download and process real datasets
@@ -107,7 +100,7 @@ def train_on_trainium_component(
     learning_rate: float = 1e-4,
     batch_size: int = 32,
     epochs: int = 10,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Kubeflow component for training on Trainium.
 
     This component performs distributed training on AWS Trainium instances
@@ -139,7 +132,7 @@ def train_on_trainium_component(
     features = np.load(data_dir / "features.npy")
     labels = np.load(data_dir / "labels.npy")
 
-    with open(data_dir / "data_info.json", "r") as f:
+    with open(data_dir / "data_info.json") as f:
         data_info = json.load(f)
 
     # Convert to tensors
@@ -237,7 +230,7 @@ def train_on_trainium_component(
 
 def compile_for_inferentia_component(
     model_path: InputPath(str), compiled_model_path: OutputPath(str)
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Kubeflow component for compiling models for Inferentia.
 
     This component compiles trained models for optimal performance
@@ -255,10 +248,8 @@ def compile_for_inferentia_component(
         import torch_neuronx
         import torch_xla.core.xla_model as xm
 
-        NEURON_AVAILABLE = True
         print("✅ Neuron compilation available")
     except ImportError:
-        NEURON_AVAILABLE = False
         print("⚠️ Neuron not available, skipping compilation")
 
         # Copy model without compilation
@@ -269,7 +260,7 @@ def compile_for_inferentia_component(
 
     # Load model info
     model_dir = Path(model_path)
-    with open(model_dir / "model_info.json", "r") as f:
+    with open(model_dir / "model_info.json") as f:
         model_info = json.load(f)
 
     # Recreate model architecture
@@ -343,7 +334,7 @@ def compile_for_inferentia_component(
 
 
 def deploy_to_inferentia_component(
-    compiled_model_path: InputPath(str), deployment_config: Dict[str, str]
+    compiled_model_path: InputPath(str), deployment_config: dict[str, str]
 ) -> str:
     """Kubeflow component for deploying to Inferentia serving cluster.
 
@@ -353,11 +344,9 @@ def deploy_to_inferentia_component(
     import json
     from pathlib import Path
 
-    import yaml
-
     # Load model info
     model_dir = Path(compiled_model_path)
-    with open(model_dir / "model_info.json", "r") as f:
+    with open(model_dir / "model_info.json") as f:
         model_info = json.load(f)
 
     # Generate Kubernetes deployment configuration
@@ -383,7 +372,7 @@ def deploy_to_inferentia_component(
                     "containers": [
                         {
                             "name": "neuron-serving",
-                            "image": "763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference-neuronx:2.2.0-neuronx-py311-sdk2.20.1-ubuntu22.04",
+                            "image": "763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference-neuronx:<current-tag>",
                             "ports": [{"containerPort": 8000, "name": "http"}],
                             "resources": {
                                 "requests": {
@@ -469,9 +458,96 @@ def deploy_to_inferentia_component(
     print(f"✅ Deployment configuration generated for {deployment_name}")
     print(f"   Namespace: {namespace}")
     print(f"   Replicas: {replicas}")
-    print(f"   Instance type: inf2.xlarge")
+    print("   Instance type: inf2.xlarge")
 
     return json.dumps(deployment_info, indent=2)
+
+
+# --- Module-level Kubeflow components and pipeline ----------------------------------------------
+# Components and the @dsl.pipeline function must live at module scope: the pipeline decorator runs
+# at import time and the ops it references must already exist (it cannot close over instance
+# attributes via `self`). Container image tags are placeholders -- resolve the current Neuron DLC
+# from https://github.com/aws/deep-learning-containers/blob/master/available_images.md
+_NEURON_TRAIN_IMAGE = "763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training-neuronx:<current-tag>"
+_NEURON_INFER_IMAGE = "763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference-neuronx:<current-tag>"
+
+preprocess_component = create_component_from_func(
+    preprocess_data_component,
+    base_image="python:3.12-slim",
+    packages_to_install=["boto3", "pandas", "numpy"],
+)
+train_component = create_component_from_func(
+    train_on_trainium_component,
+    base_image=_NEURON_TRAIN_IMAGE,
+    packages_to_install=[],
+)
+compile_component = create_component_from_func(
+    compile_for_inferentia_component,
+    base_image=_NEURON_INFER_IMAGE,
+    packages_to_install=[],
+)
+deploy_component = create_component_from_func(
+    deploy_to_inferentia_component,
+    base_image="python:3.12-slim",
+    packages_to_install=["pyyaml", "kubernetes"],
+)
+
+
+@dsl.pipeline(
+    name="neuron-ml-pipeline",
+    description="Complete ML pipeline with AWS Neuron support",
+)
+def _neuron_ml_pipeline(
+    data_source: str = "aws-open-data",
+    sample_size: str = "medium",
+    learning_rate: float = 1e-4,
+    batch_size: int = 32,
+    epochs: int = 10,
+    deployment_name: str = "neuron-model",
+):
+    """Complete Neuron ML pipeline definition (module-level for KFP)."""
+    # Step 1: Data preprocessing
+    preprocess_task = preprocess_component(
+        data_path=data_source, sample_size=sample_size
+    )
+    preprocess_task.set_display_name("Data Preprocessing")
+
+    # Step 2: Training on Trainium
+    train_task = train_component(
+        data_path=preprocess_task.outputs["output_path"],
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        epochs=epochs,
+    )
+    train_task.set_display_name("Training on Trainium")
+    train_task.add_node_selector_constraint(
+        "node.kubernetes.io/instance-type", "trn1.2xlarge"
+    )
+
+    # Step 3: Model compilation for Inferentia
+    compile_task = compile_component(model_path=train_task.outputs["model_output_path"])
+    compile_task.set_display_name("Compile for Inferentia")
+    compile_task.add_node_selector_constraint(
+        "node.kubernetes.io/instance-type", "trn1.2xlarge"
+    )
+
+    # Step 4: Deployment to Inferentia
+    deploy_task = deploy_component(
+        compiled_model_path=compile_task.outputs["compiled_model_path"],
+        deployment_config={
+            "name": deployment_name,
+            "namespace": "default",
+            "replicas": "2",
+        },
+    )
+    deploy_task.set_display_name("Deploy to Inferentia")
+
+    return {
+        "preprocessing_result": preprocess_task.outputs["output"],
+        "training_metrics": train_task.outputs["Output"],
+        "compilation_metrics": compile_task.outputs["Output"],
+        "deployment_config": deploy_task.outputs["Output"],
+    }
 
 
 class NeuronKubeflowPipelines:
@@ -500,7 +576,7 @@ class NeuronKubeflowPipelines:
 
     def __init__(
         self,
-        kubeflow_endpoint: Optional[str] = None,
+        kubeflow_endpoint: str | None = None,
         namespace: str = "kubeflow",
         aws_region: str = "us-east-1",
     ):
@@ -519,100 +595,28 @@ class NeuronKubeflowPipelines:
                 logger.warning(f"Could not connect to Kubeflow: {e}")
                 self.kfp_client = None
 
-        # Create Kubeflow components
-        self.preprocess_component = create_component_from_func(
-            preprocess_data_component,
-            base_image="python:3.11-slim",
-            packages_to_install=["boto3", "pandas", "torch", "numpy"],
-        )
+        # Components are created once at module import (see below) and referenced by the
+        # pipeline. We expose them on the instance for convenience/back-compat.
+        self.preprocess_component = preprocess_component
+        self.train_component = train_component
+        self.compile_component = compile_component
+        self.deploy_component = deploy_component
 
-        self.train_component = create_component_from_func(
-            train_on_trainium_component,
-            base_image="763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training-neuronx:2.2.0-neuronx-py311-sdk2.20.1-ubuntu22.04",
-            packages_to_install=[],
-        )
-
-        self.compile_component = create_component_from_func(
-            compile_for_inferentia_component,
-            base_image="763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference-neuronx:2.2.0-neuronx-py311-sdk2.20.1-ubuntu22.04",
-            packages_to_install=[],
-        )
-
-        self.deploy_component = create_component_from_func(
-            deploy_to_inferentia_component,
-            base_image="python:3.11-slim",
-            packages_to_install=["pyyaml", "kubernetes"],
-        )
-
-        logger.info(f"🔧 Kubeflow Neuron Pipelines initialized")
+        logger.info("🔧 Kubeflow Neuron Pipelines initialized")
         logger.info(f"   Namespace: {namespace}")
         logger.info(f"   Client available: {self.kfp_client is not None}")
 
-    @dsl.pipeline(
-        name="neuron-ml-pipeline",
-        description="Complete ML pipeline with AWS Neuron support",
-    )
-    def neuron_ml_pipeline(
-        data_source: str = "aws-open-data",
-        sample_size: str = "medium",
-        learning_rate: float = 1e-4,
-        batch_size: int = 32,
-        epochs: int = 10,
-        deployment_name: str = "neuron-model",
-    ):
-        """Complete Neuron ML pipeline definition."""
-
-        # Step 1: Data preprocessing
-        preprocess_task = self.preprocess_component(
-            data_path=data_source, sample_size=sample_size
-        )
-        preprocess_task.set_display_name("Data Preprocessing")
-
-        # Step 2: Training on Trainium
-        train_task = self.train_component(
-            data_path=preprocess_task.outputs["output_path"],
-            learning_rate=learning_rate,
-            batch_size=batch_size,
-            epochs=epochs,
-        )
-        train_task.set_display_name("Training on Trainium")
-        train_task.add_node_selector_constraint(
-            "node.kubernetes.io/instance-type", "trn1.2xlarge"
-        )
-
-        # Step 3: Model compilation for Inferentia
-        compile_task = self.compile_component(
-            model_path=train_task.outputs["model_output_path"]
-        )
-        compile_task.set_display_name("Compile for Inferentia")
-        compile_task.add_node_selector_constraint(
-            "node.kubernetes.io/instance-type", "trn1.2xlarge"
-        )
-
-        # Step 4: Deployment to Inferentia
-        deploy_task = self.deploy_component(
-            compiled_model_path=compile_task.outputs["compiled_model_path"],
-            deployment_config={
-                "name": deployment_name,
-                "namespace": "default",
-                "replicas": "2",
-            },
-        )
-        deploy_task.set_display_name("Deploy to Inferentia")
-
-        return {
-            "preprocessing_result": preprocess_task.outputs["output"],
-            "training_metrics": train_task.outputs["Output"],
-            "compilation_metrics": compile_task.outputs["Output"],
-            "deployment_config": deploy_task.outputs["Output"],
-        }
+    # NOTE: a @dsl.pipeline-decorated function is evaluated at class-definition time and CANNOT
+    # take `self` -- it must reference module-level component ops. It is therefore a staticmethod
+    # that delegates to the module-level pipeline definition below.
+    neuron_ml_pipeline = staticmethod(lambda **kwargs: _neuron_ml_pipeline(**kwargs))
 
     def run_neuron_pipeline(
         self,
         pipeline_name: str,
-        parameters: Optional[Dict] = None,
+        parameters: dict | None = None,
         experiment_name: str = "neuron-experiments",
-    ) -> Optional[str]:
+    ) -> str | None:
         """Run the Neuron ML pipeline."""
         if not self.kfp_client:
             logger.error("Kubeflow client not available")
@@ -639,7 +643,7 @@ class NeuronKubeflowPipelines:
                 experiment = self.kfp_client.get_experiment(
                     experiment_name=experiment_name
                 )
-            except:
+            except Exception:
                 experiment = self.kfp_client.create_experiment(experiment_name)
 
             # Submit pipeline run
@@ -660,7 +664,7 @@ class NeuronKubeflowPipelines:
             logger.error(f"Pipeline submission failed: {e}")
             return None
 
-    def get_pipeline_status(self, run_id: str) -> Optional[Dict]:
+    def get_pipeline_status(self, run_id: str) -> dict | None:
         """Get status of a pipeline run."""
         if not self.kfp_client:
             return None
@@ -688,7 +692,7 @@ class NeuronKubeflowPipelines:
             logger.error(f"Failed to get pipeline status: {e}")
             return None
 
-    def list_experiments(self) -> List[Dict]:
+    def list_experiments(self) -> list[dict]:
         """List all Kubeflow experiments."""
         if not self.kfp_client:
             return []
@@ -741,7 +745,7 @@ def main():
         "sample_size": "large",
     }
 
-    print(f"\n🚀 Example pipeline configuration:")
+    print("\n🚀 Example pipeline configuration:")
     print(f"   Parameters: {pipeline_params}")
 
     # Note: Actual pipeline submission would require a running Kubeflow cluster

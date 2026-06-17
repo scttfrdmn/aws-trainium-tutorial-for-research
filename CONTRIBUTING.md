@@ -17,37 +17,54 @@ We welcome several types of contributions:
 
 ### Prerequisites
 
-- Python 3.8+ 
-- AWS Account with Trainium/Inferentia access
+- Python 3.10–3.13 (the repo pins 3.12 via `.python-version`)
+- [uv](https://docs.astral.sh/uv/) (recommended) for environment management
+- AWS Account with Trainium/Inferentia access (only for hardware-dependent work)
 - Basic familiarity with PyTorch and transformers
 
 ### Setup Development Environment
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/aws-trainium-inferentia-tutorial
-   cd aws-trainium-inferentia-tutorial
+   git clone https://github.com/scttfrdmn/aws-trainium-tutorial-for-research
+   cd aws-trainium-tutorial-for-research
    ```
 
-2. **Install in development mode**:
+2. **Install in development mode** (uv recommended):
    ```bash
-   make install-dev
-   make install-neuron
+   make install-dev      # uv venv + uv pip install -e ".[dev,...]" + pre-commit install
+   make install-neuron   # only on a Neuron instance/DLAMI
    ```
 
-3. **Run tests to verify setup**:
+3. **Run the checks**:
    ```bash
-   make test
+   make lint   # ruff check + ruff format --check + mypy
+   make test   # pytest (use `-m "not aws and not neuron"` off-hardware)
    ```
+
+## 📋 Project tracking, versioning & changelog
+
+**All project work lives on GitHub — not in local files.** Do not add `PROJECT_STATUS.md`,
+`ROADMAP.md`, `NEXT_ACTIONS.md`, or similar planning docs to the repo; they go stale and clutter
+the tree.
+
+- **Plan/track** with [GitHub milestones, issues, and labels](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/milestones).
+  Labels follow a `type:` / `area:` / `status:` taxonomy. Each release is a milestone.
+- **Versioning:** [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). Pre-1.0, the
+  tutorial is evolving; `0.MINOR.PATCH`. `1.0.0` = every example hardware-validated.
+- **Changelog:** keep [`CHANGELOG.md`](CHANGELOG.md) in [Keep a Changelog](https://keepachangelog.com/)
+  format. Add an entry under `## [Unreleased]` in the same PR as your change; releases move the
+  Unreleased section under a version heading and tag `vMAJOR.MINOR.PATCH`.
+- **Commits/PRs:** reference the issue (`#123`) and use clear, conventional summaries.
 
 ## 📝 Development Guidelines
 
 ### Code Style
 
-- Use [Black](https://black.readthedocs.io/) for code formatting: `make format`
-- Follow [PEP 8](https://pep8.org/) guidelines
-- Use type hints where possible
-- Write docstrings for all public functions and classes
+- Use [Ruff](https://docs.astral.sh/ruff/) for formatting **and** linting: `make format` (auto-fix) / `make lint` (check). Ruff replaces black, isort, flake8, and pydocstyle.
+- Follow [PEP 8](https://pep8.org/); modern syntax (PEP 585/604 type hints, f-strings) is enforced by ruff's `UP` rules.
+- Use type hints where possible; `mypy` runs in CI.
+- Write docstrings for public functions/classes in `scripts/` (the maintained tooling). Docstring rules are relaxed for teaching examples under `examples/`.
 
 ### Testing
 
@@ -78,11 +95,11 @@ When adding new optimizations, include benchmarks in the `benchmarks/` directory
 
 ### Before Submitting
 
-- [ ] Code follows style guidelines (`make lint`)
+- [ ] Code passes `make lint` (ruff + mypy) and `make format` leaves no changes
 - [ ] Tests pass (`make test`)
 - [ ] Documentation updated
-- [ ] Cost estimates included
-- [ ] Examples tested on actual AWS instances
+- [ ] Cost estimates included **and labeled as estimates** (don't claim "verified" without a cited run)
+- [ ] Any new performance numbers state the instance type and Neuron SDK version used
 
 ### PR Description Template
 

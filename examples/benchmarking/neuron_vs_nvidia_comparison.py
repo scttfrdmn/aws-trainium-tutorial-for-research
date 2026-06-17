@@ -13,8 +13,8 @@ Comparison Categories:
     - Developer Experience: Setup time, debugging tools, documentation
 
 TESTED VERSIONS (Last validated: 2025-06-24):
-    - AWS Neuron SDK: 2.20.1
-    - torch-neuronx: 2.2.0
+    - AWS Neuron SDK: 2.30.0
+    - torch-neuronx: 2.9.x
     - PyTorch: 2.4.0 with full Neuron support
     - Benchmark Models: BERT, GPT-2, ResNet-50, Custom Transformer
     - Instance Types: trn1.2xlarge, inf2.xlarge vs p4d.24xlarge, g5.xlarge
@@ -37,13 +37,11 @@ Date: 2025-06-24
 
 import json
 import logging
-import os
 import statistics
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -84,8 +82,8 @@ class BenchmarkConfig:
     device_count: int = 1
 
     # Benchmark parameters
-    batch_sizes: List[int] = None
-    sequence_lengths: List[int] = None
+    batch_sizes: list[int] = None
+    sequence_lengths: list[int] = None
     num_runs: int = 5
     warmup_runs: int = 2
 
@@ -114,20 +112,20 @@ class BenchmarkResult:
     throughput: float  # samples/second or tokens/second
     latency_ms: float  # milliseconds
     memory_usage_gb: float  # peak memory in GB
-    compilation_time_s: Optional[float] = None  # seconds
+    compilation_time_s: float | None = None  # seconds
 
     # Statistical data
     throughput_std: float = 0.0
     latency_std: float = 0.0
-    raw_measurements: List[Dict] = None
+    raw_measurements: list[dict] = None
 
     # Cost analysis
-    cost_per_sample: Optional[float] = None  # USD
-    cost_per_hour: Optional[float] = None  # USD
+    cost_per_sample: float | None = None  # USD
+    cost_per_hour: float | None = None  # USD
 
     # Additional metadata
     notes: str = ""
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     def __post_init__(self):
         """Initialize lists."""
@@ -268,7 +266,7 @@ class NeuronVsNvidiaBenchmarker:
         # Model registry
         self.models = StandardModelSuite()
 
-        logger.info(f"🔬 Neuron vs Nvidia Benchmarker initialized")
+        logger.info("🔬 Neuron vs Nvidia Benchmarker initialized")
         logger.info(f"   Platform detected: {self.current_platform}")
         logger.info(f"   Results directory: {self.results_dir}")
 
@@ -289,7 +287,7 @@ class NeuronVsNvidiaBenchmarker:
 
     def run_comprehensive_benchmark(
         self, config: BenchmarkConfig
-    ) -> List[BenchmarkResult]:
+    ) -> list[BenchmarkResult]:
         """Run comprehensive benchmark suite."""
         logger.info(f"🚀 Starting comprehensive benchmark: {config.model_name}")
         logger.info(f"   Platform: {config.platform}")
@@ -343,7 +341,7 @@ class NeuronVsNvidiaBenchmarker:
         logger.info(f"✅ Benchmark completed: {len(results)} results")
         return results
 
-    def _get_model(self, model_name: str) -> Optional[nn.Module]:
+    def _get_model(self, model_name: str) -> nn.Module | None:
         """Get standardized model by name."""
         model_registry = {
             "bert-base": lambda: self.models.get_bert_base(),
@@ -364,7 +362,7 @@ class NeuronVsNvidiaBenchmarker:
         config: BenchmarkConfig,
         batch_size: int,
         sequence_length: int,
-    ) -> Optional[BenchmarkResult]:
+    ) -> BenchmarkResult | None:
         """Benchmark training performance."""
         logger.info(
             f"🏃 Training benchmark: batch={batch_size}, seq_len={sequence_length}"
@@ -420,7 +418,7 @@ class NeuronVsNvidiaBenchmarker:
             latencies = []
             memory_usages = []
 
-            for run in range(config.num_runs):
+            for _run in range(config.num_runs):
                 # Memory baseline
                 if config.platform == "neuron":
                     torch.cuda.synchronize() if torch.cuda.is_available() else None
@@ -523,7 +521,7 @@ class NeuronVsNvidiaBenchmarker:
         config: BenchmarkConfig,
         batch_size: int,
         sequence_length: int,
-    ) -> Optional[BenchmarkResult]:
+    ) -> BenchmarkResult | None:
         """Benchmark inference performance."""
         logger.info(
             f"🔍 Inference benchmark: batch={batch_size}, seq_len={sequence_length}"
@@ -583,20 +581,18 @@ class NeuronVsNvidiaBenchmarker:
             memory_usages = []
 
             with torch.no_grad():
-                for run in range(config.num_runs):
+                for _run in range(config.num_runs):
                     # Memory baseline
                     if config.platform == "neuron":
                         memory_before = psutil.virtual_memory().used / (1024**3)
                     else:
                         torch.cuda.synchronize()
-                        memory_before = torch.cuda.memory_allocated(device) / (
-                            1024**3
-                        )
+                        memory_before = torch.cuda.memory_allocated(device) / (1024**3)
 
                     # Timing
                     start_time = time.time()
 
-                    outputs = model(input_data)
+                    model(input_data)
 
                     if config.platform == "neuron":
                         xm.wait_device_ops()
@@ -678,7 +674,7 @@ class NeuronVsNvidiaBenchmarker:
         config: BenchmarkConfig,
         batch_size: int,
         sequence_length: int,
-    ) -> Optional[BenchmarkResult]:
+    ) -> BenchmarkResult | None:
         """Benchmark model compilation time."""
         logger.info(
             f"⚙️ Compilation benchmark: batch={batch_size}, seq_len={sequence_length}"
@@ -711,7 +707,7 @@ class NeuronVsNvidiaBenchmarker:
                 start_time = time.time()
 
                 # Trace/compile the model
-                compiled_model = torch_neuronx.trace(model, sample_input)
+                torch_neuronx.trace(model, sample_input)
 
                 end_time = time.time()
                 compilation_time = end_time - start_time
@@ -720,11 +716,7 @@ class NeuronVsNvidiaBenchmarker:
                 logger.info(f"   Compilation run {run + 1}: {compilation_time:.2f}s")
 
             avg_compilation_time = statistics.mean(compilation_times)
-            compilation_std = (
-                statistics.stdev(compilation_times)
-                if len(compilation_times) > 1
-                else 0.0
-            )
+            (statistics.stdev(compilation_times) if len(compilation_times) > 1 else 0.0)
 
             return BenchmarkResult(
                 benchmark_id=f"{config.model_name}-compilation-{batch_size}-{sequence_length}",
@@ -749,7 +741,7 @@ class NeuronVsNvidiaBenchmarker:
                 error_message=str(e),
             )
 
-    def _save_results(self, results: List[BenchmarkResult], config: BenchmarkConfig):
+    def _save_results(self, results: list[BenchmarkResult], config: BenchmarkConfig):
         """Save benchmark results to file."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = (
@@ -791,8 +783,8 @@ class NeuronVsNvidiaBenchmarker:
 
     def generate_comparison_report(
         self,
-        neuron_results: List[BenchmarkResult],
-        nvidia_results: List[BenchmarkResult],
+        neuron_results: list[BenchmarkResult],
+        nvidia_results: list[BenchmarkResult],
     ) -> str:
         """Generate comprehensive comparison report."""
         logger.info("📊 Generating Neuron vs Nvidia comparison report")
@@ -839,9 +831,9 @@ class NeuronVsNvidiaBenchmarker:
             df = pd.DataFrame(comparison_data)
 
             report.append("\n## Performance Summary")
-            report.append(f"```")
+            report.append("```")
             report.append(df.to_string(index=False))
-            report.append(f"```")
+            report.append("```")
 
             # Calculate relative performance
             report.append("\n## Relative Performance (Neuron vs Nvidia)")
@@ -856,7 +848,7 @@ class NeuronVsNvidiaBenchmarker:
                     throughput_comparison = (
                         f"{throughput_ratio:.2f}x"
                         if throughput_ratio >= 1
-                        else f"{1/throughput_ratio:.2f}x slower"
+                        else f"{1 / throughput_ratio:.2f}x slower"
                     )
                 else:
                     throughput_comparison = "N/A"
@@ -866,7 +858,7 @@ class NeuronVsNvidiaBenchmarker:
                     latency_comparison = (
                         f"{latency_ratio:.2f}x"
                         if latency_ratio >= 1
-                        else f"{1/latency_ratio:.2f}x faster"
+                        else f"{1 / latency_ratio:.2f}x faster"
                     )
                 else:
                     latency_comparison = "N/A"
@@ -876,7 +868,7 @@ class NeuronVsNvidiaBenchmarker:
                     cost_comparison = (
                         f"{cost_ratio:.2f}x"
                         if cost_ratio >= 1
-                        else f"{1/cost_ratio:.2f}x cheaper"
+                        else f"{1 / cost_ratio:.2f}x cheaper"
                     )
                 else:
                     cost_comparison = "N/A"
@@ -904,7 +896,7 @@ class NeuronVsNvidiaBenchmarker:
 
             if avg_cost_savings > 0:
                 report.append(
-                    f"- Average cost savings with Neuron: {avg_cost_savings*100:.1f}%"
+                    f"- Average cost savings with Neuron: {avg_cost_savings * 100:.1f}%"
                 )
 
             report.append("- Use Neuron for cost-sensitive workloads")
@@ -922,7 +914,7 @@ class NeuronVsNvidiaBenchmarker:
         logger.info(f"📋 Comparison report saved to {report_path}")
         return report_text
 
-    def run_standardized_benchmark_suite(self) -> Dict[str, List[BenchmarkResult]]:
+    def run_standardized_benchmark_suite(self) -> dict[str, list[BenchmarkResult]]:
         """Run complete standardized benchmark suite for sister tutorial."""
         logger.info(
             "🎯 Running standardized benchmark suite for sister tutorial comparison"
@@ -1023,7 +1015,7 @@ class NeuronVsNvidiaBenchmarker:
         with open(summary_path, "w") as f:
             json.dump(summary_data, f, indent=2)
 
-        logger.info(f"✅ Standardized benchmark suite completed")
+        logger.info("✅ Standardized benchmark suite completed")
         logger.info(f"   Total benchmarks: {summary_data['total_benchmarks']}")
         logger.info(f"   Summary saved: {summary_path}")
 
@@ -1056,7 +1048,7 @@ def main():
     results = benchmarker.run_comprehensive_benchmark(config)
 
     if results:
-        print(f"\n📊 Benchmark Results:")
+        print("\n📊 Benchmark Results:")
         for result in results:
             print(f"   {result.benchmark_id}")
             print(f"   Throughput: {result.throughput:.2f} samples/sec")
