@@ -2,8 +2,8 @@
 
 This guide provides systematic approaches to diagnosing, debugging, and resolving issues when working with AWS Trainium and Inferentia. It covers common problems, advanced debugging techniques, and production troubleshooting workflows.
 
-**Last Updated**: 2024-12-19
-**Tested Versions**: Neuron SDK 2.19.0, torch-neuronx 2.1.0, PyTorch 2.3.1
+**Last Updated**: 2026-06-17
+**Target Versions**: Neuron SDK 2.30.0, torch-neuronx 2.9.x, PyTorch 2.9 (PyTorch/XLA path)
 
 ## 🚨 Quick Emergency Troubleshooting
 

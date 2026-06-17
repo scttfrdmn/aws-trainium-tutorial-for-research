@@ -1071,7 +1071,7 @@ test_inference()
 - Analyzing performance and costs
 - Preparing models for deployment
 
-You now have the foundation for serious machine learning research on Trainium. In our next tutorial, we'll explore a real-world genomics research application.
+You now have the foundation for serious machine learning research on Trainium. In our next tutorial, we'll work through a real-world, hardware-validated biomedical NER fine-tune.
 
 All the code from today is available in the GitHub repository. Thanks for watching, and see you next time!"
 

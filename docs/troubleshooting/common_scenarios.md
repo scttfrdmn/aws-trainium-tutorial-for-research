@@ -152,7 +152,7 @@ pip install torch-neuronx==2.2.0 --extra-index-url https://pip.repos.neuron.amaz
 
 # Check PyTorch compatibility
 python -c "import torch; print(torch.__version__)"
-# Should be 2.4.0+ for torch-neuronx 2.2.0
+# Should be PyTorch 2.9 for torch-neuronx 2.9.x (Neuron SDK 2.30, the last XLA-based version)
 
 # Verify installation
 python -c "import torch_neuronx; print('Success')"

@@ -17,10 +17,10 @@ This directory contains comprehensive video tutorial resources for learning AWS 
    - Performance monitoring
    - Cost tracking
 
-3. **[Real-World Application](03_real_world_application.md)** (25 minutes)
-   - Complete genomics analysis example
-   - Data loading and preprocessing
-   - Results interpretation
+3. **[Real-World Application](03_real_world_application.md)** (~20 minutes)
+   - Hardware-validated biomedical NER fine-tune (real NCBI-disease corpus)
+   - Trainium-native concerns: eager attention (bf16), static shapes, mark_step
+   - Honest entity-level F1 + provenance capture
 
 4. **[Troubleshooting](04_troubleshooting.md)** (15 minutes)
    - Common issues and solutions
