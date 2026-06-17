@@ -82,6 +82,7 @@ def test_full_cost_tracking_workflow(mock_aws_credentials):
 
 
 @pytest.mark.integration
+@pytest.mark.aws  # instantiates a real boto3 EC2 client (EphemeralMLInstance); needs AWS region/creds
 def test_cost_estimation_accuracy():
     """Test cost estimation accuracy across different scenarios"""
     # Mock the dependencies

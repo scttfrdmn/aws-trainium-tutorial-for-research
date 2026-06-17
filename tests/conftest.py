@@ -9,6 +9,28 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_aws(request) -> None:
+    """Make the non-AWS test suite hermetic so it passes on a bare CI runner.
+
+    Two problems surfaced only in CI (the developer's shell had AWS env set, which masked them):
+      * `boto3.client(...)` with no region raises NoRegionError.
+      * Credential resolution can require the optional `botocore[crt]` dependency
+        (MissingDependencyException) on a runner with ambient SSO/login config.
+    Several *unit* tests construct objects that eagerly create a boto3 client (e.g.
+    EphemeralMLInstance) without their own mock. For tests NOT marked `aws`, we set a default
+    region and stub `boto3.client` with a MagicMock so no real client/credential resolution runs.
+    Tests that need real AWS are marked `@pytest.mark.aws` (deselected in CI) and are left alone;
+    tests that install their own `patch("boto3.client")` simply override this stub.
+    """
+    os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+    if request.node.get_closest_marker("aws"):
+        yield
+        return
+    with patch("boto3.client", return_value=MagicMock()):
+        yield
+
+
 @pytest.fixture
 def mock_aws_credentials() -> None:
     """Mock AWS credentials for testing"""
