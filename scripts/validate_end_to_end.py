@@ -65,43 +65,29 @@ class EndToEndValidator:
             "overall_status": "unknown",
         }
 
-        # Define test categories and their examples
+        # Define test categories and their examples. These are the real, kept examples; the
+        # hardware-validated ones are exercised by the validation harness (validation/), which is
+        # the authoritative path. Legacy/mock examples live in examples/_legacy/ and are not checked.
         self.test_categories = {
-            "basic": {
-                "description": "Basic tutorial examples",
+            "use_cases": {
+                "description": "Validated + real-data use cases",
                 "examples": [
-                    "examples/basic/hello_trainium.py",
-                    "examples/datasets/aws_open_data.py",
+                    "examples/use_cases/biomedical_ner.py",
+                    "examples/use_cases/financial_modeling.py",
                 ],
                 "required": True,
             },
-            "frameworks": {
-                "description": "ML framework integration",
-                "examples": ["examples/frameworks/neuron_library_support.py"],
-                "required": True,
-            },
-            "advanced": {
-                "description": "Advanced NKI and optimization",
-                "examples": ["examples/advanced/nki_optimization.py"],
+            "debugging": {
+                "description": "Debugging walkthrough",
+                "examples": ["examples/debugging/diagnose_common_failures.py"],
                 "required": False,
             },
-            "production": {
-                "description": "Production deployment patterns",
-                "examples": ["examples/deployment/inferentia_serving.py"],
-                "required": False,
-            },
-            "integration": {
-                "description": "MLOps and enterprise integration",
+            "workflow": {
+                "description": "Train -> Inferentia pipeline (AWS-orchestration template)",
                 "examples": [
-                    "examples/integration/mlflow_neuron_integration.py",
-                    "examples/integration/kubeflow_neuron_pipeline.py",
+                    "examples/complete_workflow/trainium_to_inferentia_pipeline.py"
                 ],
                 "required": False,
-            },
-            "benchmarking": {
-                "description": "Performance benchmarking",
-                "examples": ["examples/benchmarking/neuron_vs_nvidia_comparison.py"],
-                "required": True,
             },
             "enterprise": {
                 "description": "Enterprise security and compliance",
@@ -132,7 +118,7 @@ class EndToEndValidator:
             "requirements.txt",
             "pyproject.toml",
             "VERSION_MATRIX.md",
-            "examples/basic/hello_trainium.py",
+            "examples/use_cases/biomedical_ner.py",
         ]
 
         for file_path in required_files:
@@ -281,10 +267,10 @@ class EndToEndValidator:
         """Run quick smoke test of essential examples."""
         logger.info("💨 Running smoke test...")
 
-        # Essential examples for smoke test
+        # Essential examples for smoke test (the real, kept ones)
         smoke_examples = [
-            "examples/basic/hello_trainium.py",
-            "examples/datasets/aws_open_data.py",
+            "examples/use_cases/biomedical_ner.py",
+            "examples/debugging/diagnose_common_failures.py",
         ]
 
         smoke_results = {"test_type": "smoke_test", "examples": {}, "status": "unknown"}

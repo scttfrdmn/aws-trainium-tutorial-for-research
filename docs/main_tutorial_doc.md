@@ -318,7 +318,9 @@ Answer:"""
         }
 ```
 
-See `examples/rag_pipeline/` for the complete implementation.
+> A RAG pipeline example was moved to [`examples/_legacy/rag_pipeline/`](../examples/_legacy/) —
+> it relies on a pre-compiled model and legacy `transformers_neuronx` APIs and is **not validated**.
+> For a real, runnable starting point, use the [validated NER example](../examples/use_cases/biomedical_ner.py).
 
 ### Advanced Distributed Training Patterns
 

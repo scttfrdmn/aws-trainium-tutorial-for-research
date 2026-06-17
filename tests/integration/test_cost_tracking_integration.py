@@ -84,10 +84,6 @@ def test_full_cost_tracking_workflow(mock_aws_credentials):
 @pytest.mark.integration
 def test_cost_estimation_accuracy():
     """Test cost estimation accuracy across different scenarios"""
-    sys.path.insert(
-        0, os.path.join(os.path.dirname(__file__), "../../examples/domain_specific")
-    )
-
     # Mock the dependencies
     with patch.dict(
         sys.modules,

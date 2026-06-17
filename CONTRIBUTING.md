@@ -81,7 +81,7 @@ the tree.
 
 ## 🔬 Adding New Domain Examples
 
-We especially welcome examples from new research domains. Follow the existing examples in `examples/domain_specific/` as templates.
+We especially welcome examples from new research domains. Follow `examples/use_cases/biomedical_ner.py` as the template (real data, `run(config)` entrypoint, harness-validatable).
 
 ## 🧪 Testing Guidelines
 

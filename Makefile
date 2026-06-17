@@ -77,12 +77,12 @@ clean: ## Clean build artifacts
 build: clean ## Build package
 	$(PYTHON) -m build
 
-# Development shortcuts
-run-climate-example: ## Run climate science example
-	cd examples/domain_specific && $(PYTHON) domain_specific_examples.py
+# Development shortcuts (the validated / real examples)
+run-ner-smoke: ## Run the validated NER example on CPU (smoke test, free)
+	NER_SMOKE=1 $(PYTHON) examples/use_cases/biomedical_ner.py
 
-run-rag-example: ## Run RAG pipeline example
-	cd examples/rag_pipeline && $(PYTHON) modern_rag_example.py
+run-debug-walkthrough: ## Run the debugging walkthrough (CPU)
+	$(PYTHON) examples/debugging/diagnose_common_failures.py
 
-run-workflow-example: ## Run complete Trainium→Inferentia workflow
+run-workflow-example: ## Run complete Trainium→Inferentia workflow (requires AWS)
 	cd examples/complete_workflow && $(PYTHON) trainium_to_inferentia_pipeline.py

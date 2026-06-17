@@ -30,8 +30,7 @@ the intended arc. Until they exist, the linked written docs cover the same groun
 4. **Troubleshooting** *(planned)* — see [error handling & debugging](../error_handling_debugging.md)
    and [troubleshooting/](../troubleshooting/).
 5. **Production Deployment** *(planned)* — see
-   [`examples/complete_workflow/`](../../examples/complete_workflow/) and
-   [`examples/deployment/`](../../examples/deployment/).
+   [`examples/complete_workflow/`](../../examples/complete_workflow/) (train → Inferentia pipeline).
 6. **Multi-Instance / Distributed Training** *(planned)* — see
    [`examples/distributed/`](../../examples/distributed/).
 7. **Cost Optimization** *(planned)* — see the FinOps scripts in [`scripts/`](../../scripts/).
