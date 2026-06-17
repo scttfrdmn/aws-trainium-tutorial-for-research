@@ -16,6 +16,14 @@ It closely follows the public optimum-neuron Qwen3 example and tutorial:
 > Trainium-specific and import the Neuron runtime. On a non-Neuron box this script explains how to
 > launch and exits cleanly — it does not pretend to run.
 
+## Install (use the pinned [training] extra — this matters)
+
+    # On a Neuron DLAMI's NxD-training venv. The [training] extra pins the exact trl/peft that
+    # optimum-neuron's SFT trainer needs. Installing trl/peft UNPINNED breaks with
+    # `ImportError: cannot import name 'clone_chat_template' from 'trl.models'` — verified on
+    # hardware. optimum-neuron 0.4.3 wants trl==0.24.0, peft==0.17.0, transformers~=4.57.
+    pip install "optimum-neuron[training]"
+
 ## Launch (torchrun — one process per NeuronCore)
 
     # Recommended env (from the public example):

@@ -17,6 +17,19 @@ Unlike the [NER example](biomedical_ner.py), this **cannot run on CPU**: `Neuron
 the tensor-parallel `trn_config`, and `NeuronSFTTrainer` are Trainium-specific. Off a Neuron box the
 script prints launch instructions and exits.
 
+## Install (use the pinned `[training]` extra)
+
+```bash
+# In the DLAMI's NxD-training venv. The [training] extra pins the exact trl/peft the SFT
+# trainer needs:
+pip install "optimum-neuron[training]"
+```
+
+> **Gotcha (verified on hardware):** installing `trl`/`peft` *unpinned* gives newer versions and
+> breaks with `ImportError: cannot import name 'clone_chat_template' from 'trl.models'`.
+> `optimum-neuron 0.4.3` needs `trl==0.24.0`, `peft==0.17.0`, `transformers~=4.57` — which the
+> `[training]` extra enforces.
+
 ## Run it (on a Neuron instance, via torchrun)
 
 ```bash
