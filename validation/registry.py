@@ -67,6 +67,31 @@ EXAMPLES: tuple[Example, ...] = (
     ),
 )
 
+# Examples that are NOT in the single-process auto-registry above because they require a multi-process
+# torchrun launch (one process per NeuronCore), which `run_on_hardware.py` does not yet orchestrate.
+# They are built to the same standards and validated by launching torchrun manually. Listed here so
+# they're discoverable and so VALIDATED.md isn't polluted with misleading "failed" rows.
+TORCHRUN_EXAMPLES: tuple[Example, ...] = (
+    Example(
+        key="qwen3_lora",
+        module="examples.use_cases.qwen3_lora_finetune",
+        entrypoint="run",
+        instances=("trn1.2xlarge", "trn1.32xlarge"),
+        thresholds={},  # validated by inspecting train_loss from a manual torchrun launch
+        est_runtime_min=30.0,
+        description="Qwen3 LoRA SFT via optimum-neuron (torchrun; hardware-only).",
+    ),
+    Example(
+        key="ddp_ner",
+        module="examples.distributed.data_parallel_ner",
+        entrypoint="run",
+        instances=("trn1.2xlarge", "trn1.32xlarge"),
+        thresholds={"eval_f1": 0.75},
+        est_runtime_min=20.0,
+        description="Data-parallel NER across NeuronCores (torchrun XLA DDP).",
+    ),
+)
+
 
 def get(key: str) -> Example | None:
     """Return the registry entry for `key`, or None if absent."""

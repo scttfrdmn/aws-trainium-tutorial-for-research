@@ -57,7 +57,7 @@ Score your workload. The more "yes", the better the fit (details + the *why* in
 | If you're doing… | Start with | Then |
 |---|---|---|
 | **Any first run / NLP fine-tune** | [Biomedical NER](../examples/use_cases/biomedical_ner.py) (validated) | best-practices → tools & debugging |
-| **An LLM fine-tune (LoRA)** | best-practices + [validation harness](../validation/README.md) | the NxD/optimum-neuron path (forward-looking) |
+| **An LLM fine-tune (LoRA)** | [Qwen3 LoRA fine-tune](../examples/use_cases/qwen3_lora_finetune.py) (optimum-neuron) | best-practices + sizing for your instance |
 | **Train then serve** | [Trainium → Inferentia pipeline](../examples/complete_workflow/trainium_to_inferentia_pipeline.py) | [Inferentia vs Trn2 decision guide](../VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference) |
 | **Quant finance / time series** | [Financial modeling](../examples/use_cases/financial_modeling.py) | static-shape + bf16 review |
 | **A custom kernel / new operator** | [Novel kernels on Trainium](novel_kernels_on_trainium.md) | NKI simulation → hardware |

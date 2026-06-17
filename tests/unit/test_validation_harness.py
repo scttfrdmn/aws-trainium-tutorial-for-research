@@ -28,11 +28,15 @@ def test_registry_nonempty_and_unique_keys():
     assert len(keys) == len(set(keys)), f"duplicate registry keys: {keys}"
 
 
-@pytest.mark.parametrize("example", registry.EXAMPLES, ids=lambda e: e.key)
+@pytest.mark.parametrize(
+    "example",
+    [*registry.EXAMPLES, *registry.TORCHRUN_EXAMPLES],
+    ids=lambda e: e.key,
+)
 def test_registered_module_imports_and_has_entrypoint(example):
-    """Every registered example must import and expose its declared callable entrypoint.
+    """Every registered example (incl. torchrun-only) must import and expose its entrypoint.
 
-    Imports are lazy in the examples, so this works without torch/transformers installed.
+    Imports are lazy in the examples, so this works without torch/transformers/neuron installed.
     """
     module = importlib.import_module(example.module)
     entry = getattr(module, example.entrypoint, None)
