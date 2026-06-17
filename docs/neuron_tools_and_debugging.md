@@ -158,12 +158,55 @@ shapes; see best-practices §1).
 | Symptom | Reach for | What you're looking for |
 |---------|-----------|-------------------------|
 | **`nan`/`inf` loss** | print/inspect on CPU first; Neuron Explorer tensor view | Is it forward (step 0) or training divergence? (bf16 SDPA → see best-practices §4) |
-| **Training is slow** | recompile count (`grep`), `neuron-top`, Neuron Explorer timeline | Recompiling every step? Host-bound? Or genuinely compute-bound? |
+| **Training is slow** | recompile count (`grep`), **`metrics_report()` for `aten::`**, `neuron-top`, Neuron Explorer | Recompiling every step? Ops falling back to CPU? Host-bound? Or genuinely compute-bound? |
+| **Slow, no error, device underused** | `torch_xla.debug.metrics.metrics_report()` | **Any `aten::<op>` counter = that op ran on CPU (a fallback).** See §8. |
 | **"Stuck" with no progress** | `neuron-top`, recompile count | Almost always recompilation from changing shapes. |
 | **Device busy / won't launch** | `neuron-ls` | Which PID owns the core; kill the stale process. |
 | **Out of memory / SBUF pressure** | Neuron Explorer memory view | Batch/seq too large; tile/layout pressure. |
 | **Kernel won't compile** | `NEURONX_DUMP_TO`, compiler error | Capture artifacts; file an issue with the dump. |
 | **Correct but slow custom kernel** | NKI simulation (correctness) → Neuron Explorer (speed) | Validate math on CPU, then profile on hardware. |
+
+---
+
+## 8. The silent killer: ops that fall back to CPU
+
+This one deserves its own section because it produces **no error** — just unexplained slowness, and
+it's easy to chase the wrong thing (batch size, learning rate) for hours.
+
+**What happens.** When the Neuron compiler / PyTorch-XLA has no device lowering for an operator, it
+does **not** crash. It runs that op on the **CPU** (an "aten fallback"), copying tensors
+host↔device. A few of these per step quietly serialize your training and waste the NeuronCore.
+(PyTorch/XLA troubleshooting guide.)
+
+**Detect it — the canonical, documented way:**
+```python
+import torch_xla.debug.metrics as met
+# ... run one training step, then:
+print(met.metrics_report())
+```
+**Any counter named `aten::<op>` is an op that executed on CPU.** That's your list of fallbacks.
+A couple are *expected/inherent* — `aten::nonzero`, `aten::_local_scalar_dense` (they produce
+data-dependent sizes a static-shape device can't). Others usually mean a missing lowering.
+
+More signal when you need it:
+```bash
+PT_XLA_DEBUG_LEVEL=2     # auto-flags metrics anomalies + context switches
+NEURONX_DUMP_TO=./dir    # Neuron compiler logs/IR (ops that didn't lower)
+```
+
+**Fix it.** Rewrite the op to a **fixed-shape, lowered** form:
+- `x[x > 0]` / `.nonzero()` → `torch.where(cond, a, b)` or boolean-mask multiply (keeps shape static).
+- Drop `.item()` in the loop — it forces a host sync (it's a fallback trigger). Accumulate on device.
+- Pad dynamic shapes to a fixed size.
+
+**Or know when you can't.** If you genuinely need a data-dependent size (`nonzero` whose output
+length depends on the data), that fallback is **inherent** — there's no flag that makes a
+dynamic-size op fast on a static-shape accelerator. The decision rule: if it runs **once at setup**,
+accept it; if it runs **every step in the hot loop**, you must remove it or rethink the model.
+
+The [debugging walkthrough](../examples/debugging/diagnose_common_failures.py) demonstrates all
+three outcomes (`--only fallback`): discover the `aten::` counter, fix it with `torch.where`, and
+recognize the unavoidable case.
 
 ---
 
