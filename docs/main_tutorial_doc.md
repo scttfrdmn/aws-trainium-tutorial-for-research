@@ -18,6 +18,13 @@
 15. [The Neuron Simulator: What It Can & Can't Do](#simulator)
 16. [Troubleshooting & Resources](#troubleshooting)
 
+### Companion chapters (standalone)
+- [Choose Your Path — does Trainium fit your problem?](choose_your_path.md) — start here if you're unsure.
+- [Trainium Development Best Practices](trainium_development_best_practices.md) — the compile / bf16 / static-shape rules.
+- [Neuron Tools, Debugging, Tracing & the Simulator](neuron_tools_and_debugging.md) — the toolbox + symptom→tool map.
+- [Developing Novel Kernels on Trainium](novel_kernels_on_trainium.md) — the architecture and the accuracy-via-FP32-fusion angle.
+- Runnable: [validated NER example](../examples/use_cases/biomedical_ner.py) · [debugging walkthrough](../examples/debugging/diagnose_common_failures.py)
+
 ---
 
 ## 1. Introduction & Prerequisites {#introduction}
