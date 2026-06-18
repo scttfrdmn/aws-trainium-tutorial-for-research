@@ -81,4 +81,53 @@ compiles, and trains with a real decreasing-loss signal.
 **Honest caveat — throughput:** on **2 cores** a step took ~**7 min** (`step_time≈447s`); a full
 epoch over the dataset is impractical here. The public example uses **32 cores** (`trn1.32xlarge`)
 for a reason. This validates *correctness*; for real training, use more cores / a larger instance.
-A full `train_loss`/eval artifact is best captured on `trn1.32xlarge` — tracked as follow-up.
+
+## ✅ Full epoch validated on trn1.32xlarge (32 NeuronCores)
+
+`torchrun --nproc_per_node=32 ... --model_id Qwen/Qwen3-8B --tensor_parallel_size 8 --epochs 1` on a
+**trn1.32xlarge** (Neuron 2.30 / `neuronx-cc 2.25.3371`, torch 2.9.1, optimum-neuron 0.4.3), full
+epoch = 50 steps:
+
+| What | Observed |
+|---|---|
+| Loss | **1.93 → 1.43** over the epoch, monotone, never `nan` (the curve is clean) |
+| Steady-state throughput | **~5.0 s/step**, **~13,500 tokens/sec**, **MFU ~29%**, efficiency ~82% |
+| Result | exit 0, LoRA adapter saved |
+
+This is 32 cores vs the 2-core box's ~7 min/step — **the whole point of the bigger instance.**
+
+### 🔑 The slow first step is *per-step compilation* — and the cache makes the difference
+
+Two real lessons surfaced, worth teaching explicitly:
+
+1. **The first few steps are dominated by ahead-of-time compilation, not compute.** On a *cold*
+   box the per-step bar showed this directly:
+
+   | Step | Per-step time | What's happening |
+   |---|---:|---|
+   | 1 | ~119 s | compiling (cold) |
+   | 2 | ~203 s | compiling a new graph shape |
+   | 3 | ~218 s | compiling a new graph shape |
+   | **4+** | **~5–6 s** | **warm — steady state** |
+
+   So **step 2-and-on are ~20-40× faster than step 1** once the graphs are cached. Don't panic at a
+   crawling first step or two — that's the compiler, and it's a one-time cost *if you persist the cache*.
+
+2. **A warm `NEURON_COMPILE_CACHE_URL` removes the cold phase entirely.** Re-running the same job
+   with the cache already populated, training hit **~5 s/step by step ~10 with no multi-minute
+   compiles at all** — the whole epoch finished in ~4 min of compute instead of being front-loaded by
+   ~10 min of compilation. In the cloud, point the cache at **S3** so a fresh instance reuses these
+   graphs (see [best-practices §1b](../../docs/trainium_development_best_practices.md)).
+
+### Gotchas hit (and fixed) on the way — useful to know
+
+- **32 ranks racing the HF hub** corrupted the model download (`Qwen/Qwen3-8B does not appear to have
+  a file named model.safetensors`). **Fix:** pre-download once in a single process
+  (`huggingface_hub.snapshot_download`) before launching torchrun.
+- **`HF_HUB_OFFLINE=1` is not the fix for the race** — it blocks the post-training hub-cache *sync*
+  (`OfflineModeIsEnabled` from optimum-neuron's `synchronize_hub_cache`) and crashes *after* a
+  successful epoch. With the model already cached, leave the network on; the sync then skips
+  gracefully on no-write-access.
+- **`TrainOutput.training_loss` comes back `nan`** even on a healthy run: it averages over every step,
+  but on XLA the loss only materializes on `logging_steps`, so un-synced steps poison the mean. The
+  example now derives `train_loss` from `trainer.state.log_history` (the real logged losses) instead.

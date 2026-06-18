@@ -44,9 +44,11 @@ It closely follows the public optimum-neuron Qwen3 example and tutorial:
 
 ## Status
 
-⚠️ **Not yet hardware-validated** through this repo's harness (the harness doesn't yet orchestrate
-a torchrun multi-process launch). It's built to the public, supported API — treat it as a correct,
-runnable pattern until a provenance artifact exists. See the [best-practices chapter](../../docs/trainium_development_best_practices.md).
+✅ **Hardware-validated on trn1.32xlarge (32 NeuronCores)**: full Qwen3-8B LoRA epoch, loss 1.93->1.43,
+steady-state ~5 s/step / ~13.5k tok/s / MFU ~29% (Neuron 2.30, torch 2.9.1, optimum-neuron 0.4.3).
+The 2-core trn1.2xlarge path is correctness-validated (Qwen3-1.7B). The harness doesn't auto-orchestrate
+torchrun, so this is validated by manual launch; see the README for the full result + gotchas, and the
+[best-practices chapter](../../docs/trainium_development_best_practices.md) for the compile-cache lesson.
 """
 
 from __future__ import annotations
@@ -168,10 +170,32 @@ def train(args) -> dict[str, float]:
     result = trainer.train()
     trainer.save_model(args.output_dir)  # saves the LoRA adapter
 
-    # train() returns a TrainOutput with training_loss; expose it as the harness metric.
-    metrics = {"train_loss": float(getattr(result, "training_loss", float("nan")))}
+    # NOTE (verified on a trn1.32xlarge run): TrainOutput.training_loss is the average over EVERY
+    # step, but on the XLA/Neuron path the loss tensor is only materialized on logging_steps -- the
+    # un-synced intermediate steps come back nan and poison that average, so result.training_loss is
+    # reported as `nan` even when every *logged* loss is healthy. So we derive the metric from the
+    # trainer's log_history (the real, materialized losses) and fall back to the aggregate only if
+    # no per-step losses were logged. The last logged loss is the most useful single number.
+    logged = [
+        h["loss"]
+        for h in getattr(trainer.state, "log_history", [])
+        if isinstance(h.get("loss"), (int, float))
+        and h["loss"] == h["loss"]  # exclude nan
+    ]
+    final_loss = (
+        logged[-1] if logged else float(getattr(result, "training_loss", float("nan")))
+    )
+    metrics = {
+        "train_loss": float(final_loss),  # last materialized step loss (gated metric)
+        "mean_logged_loss": float(sum(logged) / len(logged))
+        if logged
+        else float("nan"),
+        "logged_steps": float(len(logged)),
+    }
     print(
-        f"✅ Qwen3 LoRA SFT done. train_loss={metrics['train_loss']:.4f}; adapter -> {args.output_dir}"
+        f"✅ Qwen3 LoRA SFT done. final_loss={metrics['train_loss']:.4f} "
+        f"(mean over {len(logged)} logged steps={metrics['mean_logged_loss']:.4f}); "
+        f"adapter -> {args.output_dir}"
     )
     return metrics
 

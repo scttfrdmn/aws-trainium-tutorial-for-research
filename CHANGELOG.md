@@ -49,6 +49,13 @@ Project work (milestones, issues, labels) is tracked on
   turns "build in the form the hardware wants" from advice into a number.
 
 ### Changed
+- **Qwen3-8B LoRA validated through a full epoch on trn1.32xlarge (32 NeuronCores).** Loss 1.93→1.43,
+  steady-state ~5 s/step / ~13.5k tok/s / MFU ~29%. Documented the measured **per-step compile decay**
+  (step 1 ~119 s → step 4+ ~5 s, a ~20-40× cliff) and that a warm S3 cache removes the cold phase on
+  re-run, plus three real gotchas (32-rank HF-hub download race → pre-fetch once; `HF_HUB_OFFLINE`
+  breaks the post-train hub-cache sync; `TrainOutput.training_loss` reports `nan` on XLA so the metric
+  is now derived from `trainer.state.log_history`). Best-practices §1c gained a "slow first step is
+  compilation" subsection.
 - **Compile-cache guidance promoted for the cloud workflow** (best-practices §1b): on a fresh
   instance a *local* cache is always cold, so an **S3** `NEURON_COMPILE_CACHE_URL` is what actually
   saves the recompile tax across reprovisions. Added compiler-version pinning + cache-key caveats, and

@@ -111,6 +111,21 @@ python train.py                           # real run hits a warm cache
 `neuron_parallel_compile` runs your script with execution stubbed, collects every graph, and
 compiles them in parallel — so epoch 1 isn't where you discover a 20-minute compile.
 
+**Expect a slow first step (or first few), then a cliff.** Because compilation happens lazily the
+first time each graph shape is seen, the opening steps are dominated by the *compiler*, not compute.
+Measured on a cold trn1.32xlarge (Qwen3-8B LoRA, 32 cores):
+
+| Step | Per-step time | |
+|---|---:|---|
+| 1 | ~119 s | compiling |
+| 2–3 | ~200 s | compiling new shapes |
+| **4+** | **~5 s** | **warm — steady state** |
+
+That's a **~20-40× drop** once graphs are cached. So don't read a crawling first step as "Trainium is
+slow" — it's the one-time compile, and with a **persistent (S3) cache** a *re-run* skips it entirely
+(the same job, cache warm, hit ~5 s/step almost immediately with no multi-minute compiles). When you
+benchmark, **always discard the compile-bound warmup steps** and measure steady state.
+
 ### Clever ways to keep compiles small and fast
 
 This is the heart of "big unrolls vs. small pieces":
