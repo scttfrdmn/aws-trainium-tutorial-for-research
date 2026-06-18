@@ -13,7 +13,7 @@
 - Know where to go next (the full tutorial, the best-practices chapter, the validation harness).
 
 **Versions:** this tutorial targets **Neuron SDK 2.30**, **PyTorch 2.9** on the **PyTorch/XLA** path,
-Python **3.10–3.13** (3.12 recommended).
+and **Python 3.12** via **uv** (the one supported version, pinned in `.python-version`).
 
 ## Installation
 
@@ -22,7 +22,7 @@ Python **3.10–3.13** (3.12 recommended).
 git clone https://github.com/scttfrdmn/aws-trainium-tutorial-for-research
 cd aws-trainium-tutorial-for-research
 
-# Install with uv (recommended — see README for the plain-pip alternative)
+# Install with uv (this repo standardizes on uv + Python 3.12)
 make install-dev
 
 # Neuron SDK (run this ON a Neuron instance / DLAMI, not your laptop)
@@ -90,7 +90,8 @@ make emergency-shutdown   # terminate all ML instances if something runs away
 
 ## Getting help
 
-- [Troubleshooting: common scenarios](troubleshooting/common_scenarios.md) and
-  [performance debugging](troubleshooting/performance_debugging.md).
-- [Error handling & debugging guide](error_handling_debugging.md).
+- [Neuron tools & debugging](neuron_tools_and_debugging.md) — the symptom→tool table for
+  "it nans / won't compile / is slow / lands ops on CPU".
+- The runnable [debugging walkthrough](../examples/debugging/) — reproduces the three classic
+  failures (bf16 `nan`, recompile storm, silent CPU fallback) with diagnosis + fix.
 - Open an issue on [GitHub](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/issues).

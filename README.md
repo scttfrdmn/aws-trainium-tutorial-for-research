@@ -40,21 +40,19 @@ A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This
 > current pricing in the [AWS pricing pages](https://aws.amazon.com/ec2/pricing/) before
 > planning a budget, and treat throughput/cost tables as planning aids rather than guarantees.
 
-## Table of Contents
+## Start here (reading order)
 
-1. [Introduction & Prerequisites](#introduction)
-2. [FinOps First: Cost Control](#finops-first)
-3. [AWS Fundamentals](#aws-fundamentals)
-4. [Chip Comparison](#chip-comparison)
-5. [CUDA to Neuron Migration](#cuda-migration)
-6. [Ephemeral Environments](#ephemeral-setup)
-7. [Container Workflows](#container-workflows)
-8. [Complete Trainium → Inferentia Workflow](#complete-workflow)
-9. [Cost Monitoring Dashboard](#monitoring-dashboard)
-10. [Domain-Specific Examples](#research-examples)
-11. [Advanced Optimization](#advanced-optimization)
-12. [Performance Benchmarks](#benchmarks)
-13. [Troubleshooting](#troubleshooting)
+New to this tutorial? Follow this path — each step builds on the last:
+
+1. **[Local setup guide](docs/local_setup_guide.md)** — get your machine ready (Python 3.12 + uv, AWS CLI).
+2. **[Quick start](docs/quick-start.md)** — your first success: run the NER smoke test, then a real
+   Trainium run.
+3. **[Choose your path](docs/choose_your_path.md)** — honest verdict on whether Trainium fits *your*
+   workload, and which example to start from.
+4. **[Full tutorial](docs/main_tutorial_doc.md)** — the in-depth chapters (FinOps, CUDA→Neuron
+   migration, the complete workflow) with its own table of contents.
+
+Hit an error? Jump to **[Neuron tools & debugging](docs/neuron_tools_and_debugging.md)** (symptom→tool table).
 
 ## Quick Start
 
@@ -62,8 +60,8 @@ A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This
 # 1. Set up AWS credentials
 aws configure
 
-# 2. Create budget alerts
-python scripts/setup_budget.py --limit 500
+# 2. Create budget alerts (--email is required — alerts are time-sensitive)
+python scripts/setup_budget.py --limit 500 --email your-email@university.edu
 
 # 3. Launch an ephemeral, auto-terminating instance
 python scripts/ephemeral_instance.py \
@@ -84,7 +82,7 @@ aws-trainium-tutorial-for-research/
 ├── scripts/                           # Utility scripts (budget, ephemeral instance, monitor)
 ├── validation/                        # Hardware-validation harness + provenance artifacts
 ├── examples/
-│   ├── use_cases/                    # biomedical_ner (validated), financial_modeling
+│   ├── use_cases/                    # biomedical_ner, satellite_landcover, cv_utilization_spike, qwen3_lora (all hardware-validated)
 │   ├── complete_workflow/            # Trainium → Inferentia pipeline
 │   ├── deployment/ · integration/    # serving + MLflow/Kubeflow/CI templates
 │   └── advanced/                     # NKI patterns (illustrative)
@@ -102,10 +100,11 @@ real `trn1.2xlarge`** (`eval_f1 = 0.846` — see [`VALIDATED.md`](VALIDATED.md))
 other examples aim to match: real data, honest metrics, the Trainium-native lessons baked in.
 
 ```bash
-# Laptop smoke test (CPU, proves the code path):
+# Laptop smoke test (CPU, proves the code path — F1 will be near zero on the tiny 1-epoch
+# subset; this checks plumbing, NOT accuracy. The 0.846 above is the full Trainium run):
 NER_SMOKE=1 python examples/use_cases/biomedical_ner.py
 
-# Real run on a Trainium instance:
+# Real run on a Trainium instance (this is what reaches eval_f1 = 0.846):
 python examples/use_cases/biomedical_ner.py
 ```
 
@@ -155,10 +154,11 @@ def flash_attention_kernel(q_tensor, k_tensor, v_tensor, scale):
    cd aws-trainium-tutorial-for-research
    ```
 
-2. **Set up the environment with [uv](https://docs.astral.sh/uv/)** (recommended):
+2. **Set up the environment with [uv](https://docs.astral.sh/uv/)** (this repo standardizes on
+   **uv + Python 3.12** — pinned in `.python-version`):
    ```bash
    # Install uv if you don't have it: https://docs.astral.sh/uv/getting-started/installation/
-   uv python install 3.12        # uses the version pinned in .python-version
+   uv python install 3.12        # the one supported version (pinned in .python-version)
    uv venv
    uv pip install -e ".[dev]"    # dev tooling (ruff, mypy, pytest)
 
@@ -166,13 +166,6 @@ def flash_attention_kernel(q_tensor, k_tensor, v_tensor, scale):
    uv pip install torch-neuronx neuronx-cc \
        --extra-index-url https://pip.repos.neuron.amazonaws.com
    ```
-   <details><summary>Prefer plain pip?</summary>
-
-   ```bash
-   python -m venv .venv && source .venv/bin/activate
-   pip install -e ".[dev]"
-   ```
-   </details>
 
 3. **Configure AWS**:
    ```bash
@@ -196,7 +189,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - **AWS Neuron Community**: [AWS Neuron SDK GitHub](https://github.com/aws-neuron/aws-neuron-sdk)
 - **GitHub Issues**: [Report bugs or request features](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/issues)
-- **Documentation**: [Full tutorial documentation](docs/README.md)
+- **Documentation**: [Full tutorial](docs/main_tutorial_doc.md) · [Quick start](docs/quick-start.md) · [Choose your path](docs/choose_your_path.md)
 
 ## Citation
 

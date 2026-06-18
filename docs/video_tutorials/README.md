@@ -27,8 +27,8 @@ This directory contains comprehensive video tutorial resources for learning AWS 
 These are on the roadmap but **not yet available as scripts** — they're listed so contributors know
 the intended arc. Until they exist, the linked written docs cover the same ground:
 
-4. **Troubleshooting** *(planned)* — see [error handling & debugging](../error_handling_debugging.md)
-   and [troubleshooting/](../troubleshooting/).
+4. **Troubleshooting** *(planned)* — see [Neuron tools & debugging](../neuron_tools_and_debugging.md)
+   and the runnable [debugging walkthrough](../../examples/debugging/).
 5. **Production Deployment** *(planned)* — see
    [`examples/complete_workflow/`](../../examples/complete_workflow/) (train → Inferentia pipeline).
 6. **Multi-Instance / Distributed Training** *(planned)* — see

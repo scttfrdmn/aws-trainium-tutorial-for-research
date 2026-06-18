@@ -10,6 +10,33 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Changed (learner-experience audit)
+- **Standardized on a single Python version (3.12) + uv everywhere.** Removed per-OS native Python
+  installs and plain-`pip`/`venv` paths from the setup guide and README; `requires-python` tightened
+  to `>=3.12,<3.13` and CI matrix reduced to 3.12 only. `pip install awscli` (deprecated v1) replaced
+  with a pointer to the AWS CLI v2 install.
+- **Fixed first-five-minutes blockers:** README's first real command now includes the required
+  `--email`; clarified that the CPU smoke run yields near-zero F1 (plumbing check, not the 0.846
+  validated number); fixed dead links (`docs/README.md`, `scripts/neuron_migration.py`,
+  `examples/quickstart/`, dashboard path) and pruned the README/tutorial TOCs to real sections.
+- **Discoverability:** rewrote `examples/use_cases/README.md` with a suggested learning order
+  surfacing all five validated examples (NER → satellite → utilization spike → distributed → Qwen3
+  LoRA); added a "Start here" reading path and reverse-nav "Where this fits" footers across the
+  conceptual docs and the debugging front door.
+- **Pedagogy gaps closed:** define **MFU** and the **128×128 systolic array** in plain language in
+  the entry doc (`choose_your_path.md`); added the bf16-inputs/**FP32-accumulation** reassurance and
+  a lazy-execution/`mark_step` mental-model intro to best-practices; corrected "two failures" → three
+  in the debugging walkthrough.
+
+### Removed (learner-experience audit)
+- Deleted stale/contradictory legacy material that undercut the validated tier: the CUDA-API-ridden
+  `docs/error_handling_debugging.md` and `docs/troubleshooting/` (superseded by
+  `neuron_tools_and_debugging.md` + the runnable debugging walkthrough), and two examples that
+  contradicted the "real data, no toys" promise — `financial_modeling.py` (CPU-only, synthetic
+  fallback, hand-typed cost claims) and `aws_open_data.py` (all loaders returned `np.random` mock
+  data). Stripped the false "✅ validated" claim from `security_compliance_patterns.py` and labeled it
+  a read-don't-run reference.
+
 ### Added
 - Hardware-validation harness (`validation/`): provenance capture, example registry,
   `spawn`/`awscli` launcher with auto-terminate + cost ceiling, and `VALIDATED.md` status

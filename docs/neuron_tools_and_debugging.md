@@ -212,10 +212,16 @@ recognize the unavoidable case.
 
 ## A worked debugging example
 
-The repo ships a runnable debugging walkthrough that *deliberately* triggers the two classic
+The repo ships a runnable debugging walkthrough that *deliberately* triggers the three classic
 failures and shows how to diagnose them with these tools:
 [`examples/debugging/diagnose_common_failures.py`](../examples/debugging/diagnose_common_failures.py).
-It reproduces (1) the bf16 SDPA→`nan` forward-pass failure and the eager fix, and (2) the
+It reproduces (1) the bf16 SDPA→`nan` forward-pass failure and the eager fix, (2) the
 variable-shape recompile storm vs. the `drop_last` fix — counting compilations so you can *see* the
-difference. Read its companion notes in
-[`examples/debugging/README.md`](../examples/debugging/README.md).
+difference — and (3) the silent CPU fallback (`aten::` counters) and how to vectorize it away. Read
+its companion notes in [`examples/debugging/README.md`](../examples/debugging/README.md).
+
+---
+
+> **Where this fits:** come here whenever something **nans / won't compile / is slow / lands ops on
+> CPU** — start with the symptom→tool table above. Background: [best practices](trainium_development_best_practices.md).
+> Earlier in the path: [choose your path](choose_your_path.md).

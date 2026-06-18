@@ -6,17 +6,13 @@
 3. [AWS Fundamentals for ML Researchers](#aws-fundamentals)
 4. [Understanding AWS ML Chips vs NVIDIA GPUs](#chip-comparison)
 5. [Migrating from CUDA to Neuron](#cuda-migration)
-6. [Setting Up Ephemeral Environments](#ephemeral-setup)
-7. [Container-Based Workflows with AWS Batch](#container-workflows)
-8. [Complete Trainium → Inferentia Workflow](#complete-workflow)
-9. [Real-Time Cost Monitoring Dashboard](#monitoring-dashboard)
-10. [Domain-Specific Research Examples](#research-examples)
-11. [Advanced Cost Optimization](#advanced-optimization)
-12. [Performance Benchmarks & Sizing](#benchmarks)
-13. [Advanced Patterns: NKI & Modern Architectures](#advanced-patterns)
-14. [Compilation: Why Your First Step Takes Forever](#compilation)
-15. [The Neuron Simulator: What It Can & Can't Do](#simulator)
-16. [Troubleshooting & Resources](#troubleshooting)
+6. [Complete Trainium → Inferentia Workflow](#complete-workflow)
+7. [Advanced Patterns: NKI & Modern Architectures](#advanced-patterns)
+8. [Compilation: Why Your First Step Takes Forever](#compilation)
+9. [The Neuron Simulator: What It Can & Can't Do](#simulator)
+
+For debugging, ephemeral setup, cost monitoring, and domain examples, see the companion chapters
+and scripts linked below — those topics live in dedicated, maintained files rather than inline here.
 
 ### Companion chapters (standalone)
 - [Choose Your Path — does Trainium fit your problem?](choose_your_path.md) — start here if you're unsure.
@@ -98,8 +94,8 @@ Before we write any ML code, let's set up safeguards to prevent runaway costs.
 #### Step 1: Set Up Budget Alerts (5 minutes)
 
 ```bash
-# First, install AWS CLI if you haven't
-pip install awscli
+# Install AWS CLI v2 if you haven't (NOT `pip install awscli`, which is the deprecated v1):
+# see the local setup guide — docs/local_setup_guide.md — for per-OS instructions.
 
 # Configure with your academic credentials
 aws configure
@@ -178,7 +174,10 @@ Create a simple cost tracking dashboard - see `monitoring/` directory for the co
 | Mixed precision (AMP) | Native BF16 support | Built into hardware |
 | NCCL | Neuron Collective Comm | Different but similar API |
 
-See `scripts/neuron_migration.py` for the complete migration helper.
+For the deeper migration lessons (lazy execution, `mark_step`, static shapes, bf16 gotchas), see
+the [Trainium development best practices](trainium_development_best_practices.md) chapter and the
+[validated NER example](../examples/use_cases/biomedical_ner.py) — it's a real CUDA-style training
+loop ported to the XLA/Neuron path.
 
 ---
 
@@ -481,13 +480,13 @@ np.testing.assert_allclose(out, reference, rtol=1e-2)
 
 Before starting your research on AWS:
 
-- [ ] Set up AWS account with billing alerts (`scripts/setup_budget.py`)
+- [ ] Set up AWS account with billing alerts (`scripts/setup_budget.py --limit 500 --email you@uni.edu`)
 - [ ] Complete IAM setup with minimal permissions
-- [ ] Install and configure AWS CLI
+- [ ] Install and configure AWS CLI (v2 — see [local setup guide](local_setup_guide.md))
 - [ ] Create S3 bucket for data/models
 - [ ] Set up auto-termination scripts (`scripts/ephemeral_instance.py`)
-- [ ] Test with small experiment first (`examples/quickstart/`)
-- [ ] Deploy cost monitoring dashboard (`monitoring/dashboard.html`)
+- [ ] Test with the CPU smoke run first (`NER_SMOKE=1 python examples/use_cases/biomedical_ner.py`)
+- [ ] Deploy cost monitoring dashboard (`monitoring/cost_monitoring_dashboard.html`)
 - [ ] Join Neuron community channels
 - [ ] Have emergency shutdown script ready (`scripts/emergency_shutdown.py`)
 

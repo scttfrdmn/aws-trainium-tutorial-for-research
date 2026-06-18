@@ -5,42 +5,41 @@ real tasks** over synthetic demos. Earlier synthetic-data examples (a `np.random
 and a synthetic "computer vision" demo) were **removed** — they taught the wrong thing on real
 hardware. Each remaining example is meant to be runnable and honest about what it does.
 
-## 🧬 Available Use Cases
+## Suggested order
 
-### [Biomedical NER](biomedical_ner.py) — ⭐ hardware-validated
-**Research Domain**: Biomedical NLP / literature mining
+Work through these roughly in order — each builds on the concepts of the last:
 
-Fine-tunes a transformer token classifier to extract **disease mentions** from biomedical abstracts,
-using the real **NCBI-disease** corpus. This is the reference example for the whole repo: it runs on
-the PyTorch/XLA Trainium path, scores entity-level F1, and is **validated on real `trn1.2xlarge`**
-(see [`/VALIDATED.md`](../../VALIDATED.md) and [`biomedical_ner.md`](biomedical_ner.md)).
+| # | Example | Domain | Teaches | Status |
+|---|---|---|---|---|
+| 1 | [Biomedical NER](biomedical_ner.py) | Biomedical NLP | the reference workflow: real corpus, XLA path, bf16/SDPA→`nan` fix, `drop_last` | ⭐ validated (trn1.2xlarge) |
+| 2 | [Satellite land-cover](satellite_landcover.py) | Geospatial / vision | a CNN on Trainium; static-shape image tiles; "runs well" vs "uses the chip well" | ✅ validated (trn1.2xlarge) |
+| 3 | [CV utilization spike](cv_utilization_spike.py) | (concept) | *measuring* under-utilization — CNN vs ViT achieved TFLOP/s; "build in the form the hardware wants" | ✅ validated (trn1.2xlarge) |
+| 4 | [Distributed NER](../distributed/) | scaling | data-parallel across NeuronCores (torchrun + XLA DDP), gradient all-reduce | ✅ validated |
+| 5 | [Qwen3 LoRA fine-tune](qwen3_lora_finetune.py) | LLM fine-tuning | the headline 2026 workflow: optimum-neuron, tensor parallelism, LoRA, the compile-cache lesson | ✅ validated (trn1.32xlarge, full epoch) |
+
+Each has a companion `.md` with prerequisites, "what you'll learn," run instructions, and an honest
+validation record. Most expose a CPU **smoke path** (e.g. `NER_SMOKE=1` / `CV_SMOKE=1`) so you can
+prove the code runs before paying for hardware:
 
 ```bash
-# Laptop smoke test (CPU, tiny subset — proves the code path):
+# Laptop smoke test (CPU, tiny subset — proves the code path; near-zero accuracy is expected):
 NER_SMOKE=1 python examples/use_cases/biomedical_ner.py
 
-# On a Trainium instance (real run):
+# On a Trainium instance (the real run that reaches the validated metric):
 python examples/use_cases/biomedical_ner.py
 ```
 
-### [Financial Modeling](financial_modeling.py)
-**Research Domain**: Quantitative Finance
+> The Qwen3 LoRA example is **hardware-only** (no CPU smoke path) — it needs the Neuron runtime. Its
+> companion `.md` explains how to launch it with `torchrun`.
 
-Portfolio optimization and risk modeling on **real market data from Yahoo Finance** (`yfinance`),
-with a synthetic fallback only when the network/data is unavailable.
-
-```bash
-python examples/use_cases/financial_modeling.py --portfolio tech_portfolio --simulations 50000
-```
-
-> **Status:** Not yet hardware-validated through the harness. Treat its cost/throughput statements
-> as estimates until it carries a `validation/results/` artifact.
+See also: the [train → serve pipeline](../complete_workflow/) (illustrative end-to-end template) and
+[enterprise security patterns](../enterprise/) (reference boto3 snippets — read, don't run blindly).
 
 ## 🎯 Common patterns
 
 - **FinOps:** spot instances + auto-termination + cost tracking (see `scripts/` and the
   [validation harness](../../validation/README.md)).
-- **Real data:** prefer real public datasets (RODA, Hugging Face, Yahoo Finance) over synthetic.
+- **Real data:** prefer real public datasets (RODA, Hugging Face) over synthetic.
 - **Trainium-native:** static shapes, bf16-stable models, `xm.mark_step()` — see the
   [Trainium development best practices](../../docs/trainium_development_best_practices.md).
 

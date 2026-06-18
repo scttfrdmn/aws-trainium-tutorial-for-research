@@ -144,3 +144,11 @@ publishable research direction, not just an optimization.
 - This is **NeuronCore-v2 (Trn1/Inf2)**. Trn2 (v3) has its own guide with different numbers.
 - The "better result via FP32-resident fusion" thesis follows from the published FP32-accumulation
   fact; the *magnitude* of any accuracy win is workload-specific — **measure it, don't assume it**.
+
+---
+
+> **Where this fits:** this is the **deepest** chapter — read it once you need a custom operator or
+> want to understand *why* the array wants large matmuls. Prerequisites:
+> [choose your path](choose_your_path.md) and [best practices](trainium_development_best_practices.md).
+> To simulate kernels without burning hardware, see the
+> [Simulator chapter](main_tutorial_doc.md#simulator).

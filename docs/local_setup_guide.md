@@ -27,13 +27,11 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
    ```
 
-2. **Install Python 3.10+ (3.12 recommended)**:
+2. **Install uv (it manages Python for you — no separate Python install needed)**:
    ```bash
-   # Using Homebrew (recommended)
-   brew install python@3.11
-
-   # Verify installation
-   python3 --version  # Should show 3.10 or newer
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   # Restart your shell, then pin the one supported version:
+   uv python install 3.12   # this repo standardizes on Python 3.12 (pinned in .python-version)
    ```
 
 3. **Install Git**:
@@ -102,14 +100,11 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
 
 #### Option B: Native Windows Setup
 
-1. **Install Python 3.10+ (3.12 recommended)**:
-   - Download from [python.org](https://www.python.org/downloads/windows/)
-   - ✅ Check "Add Python to PATH"
-   - ✅ Check "Install for all users"
-
+1. **Install uv (it manages Python for you)**:
    ```powershell
-   # Verify installation
-   python --version
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+   # Restart PowerShell, then pin the one supported version:
+   uv python install 3.12   # this repo standardizes on Python 3.12 (pinned in .python-version)
    ```
 
 2. **Install Git for Windows**:
@@ -137,11 +132,8 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
    ```
 
-2. **Configure virtual environment**:
-   ```powershell
-   python -m venv %USERPROFILE%\venv\trainium-tutorial
-   %USERPROFILE%\venv\trainium-tutorial\Scripts\activate.bat
-   ```
+2. **The virtual environment is handled by uv** in the common setup step below (`uv venv`) — no
+   manual `python -m venv` needed.
 
 ---
 
@@ -159,17 +151,16 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
    sudo apt update && sudo apt upgrade -y
    ```
 
-2. **Install Python 3.10+ (3.12 recommended)**:
-   ```bash
-   sudo apt install -y python3 python3-pip python3-venv python3-dev
-
-   # Verify installation
-   python3 --version
-   ```
-
-3. **Install development essentials**:
+2. **Install development essentials**:
    ```bash
    sudo apt install -y build-essential curl wget git software-properties-common
+   ```
+
+3. **Install uv (it manages Python for you — no system Python needed)**:
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   # Restart your shell, then pin the one supported version:
+   uv python install 3.12   # this repo standardizes on Python 3.12 (pinned in .python-version)
    ```
 
 4. **Install AWS CLI v2**:
@@ -185,16 +176,8 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
 
 #### Linux-Specific Configuration
 
-1. **Set up virtual environment**:
-   ```bash
-   python3 -m venv ~/venv/trainium-tutorial
-   source ~/venv/trainium-tutorial/bin/activate
-   ```
-
-2. **Configure pip (optional but recommended)**:
-   ```bash
-   pip install --upgrade pip setuptools wheel
-   ```
+The virtual environment is handled by uv in the common setup step below (`uv venv`) — no manual
+`python3 -m venv` needed.
 
 ---
 
@@ -225,15 +208,15 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
    cd aws-trainium-tutorial-for-research
    ```
 
-2. **Install Python dependencies**:
+2. **Create the environment and install dependencies with uv**:
    ```bash
-   # Activate virtual environment first
-   pip install -e .[dev,science]
+   uv venv                       # creates .venv using the pinned Python 3.12
+   uv pip install -e ".[dev,science]"
    ```
 
 3. **Install pre-commit hooks**:
    ```bash
-   pre-commit install
+   uv run pre-commit install
    ```
 
 ### 3. Run Environment Checker
@@ -273,17 +256,16 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
 
 #### Permission Errors (All Platforms)
 ```bash
-# If pip fails with permission errors
-pip install --user -e .[dev,science]
+# uv installs into a project-local .venv, so permission errors are rare. If you see them,
+# make sure you're not in a system Python; re-run inside the uv venv:
+uv venv && uv pip install -e ".[dev,science]"
 ```
 
 #### Python Version Issues
 ```bash
-# Check Python version
-python --version || python3 --version
-
-# If version is < 3.10, install newer version
-# Follow OS-specific Python installation above
+# This repo uses exactly Python 3.12 (pinned in .python-version). Let uv provide it:
+uv python install 3.12
+uv run python --version   # should show 3.12.x inside the project
 ```
 
 #### AWS Credentials Issues
@@ -300,10 +282,10 @@ aws sts get-caller-identity
 
 #### Virtual Environment Issues
 ```bash
-# Recreate virtual environment
-rm -rf ~/venv/trainium-tutorial  # or %USERPROFILE%\venv\trainium-tutorial on Windows
-python3 -m venv ~/venv/trainium-tutorial
-source ~/venv/trainium-tutorial/bin/activate  # or activate.bat on Windows
+# Recreate the uv-managed environment from scratch:
+rm -rf .venv
+uv venv
+uv pip install -e ".[dev,science]"
 ```
 
 ### Platform-Specific Issues

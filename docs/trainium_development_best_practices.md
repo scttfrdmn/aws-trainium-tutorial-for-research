@@ -48,6 +48,12 @@ This is the whole chapter in one story. The rest is the specifics.
 
 ## 1. The #1 issue: compilation, and why iteration feels slow
 
+**First, the execution model.** PyTorch/XLA does **not** run your ops the moment you write them.
+It *records* them lazily into a graph, and nothing actually executes until something forces it —
+that something is `xm.mark_step()` (or reading a tensor's value). `mark_step()` means "compile and
+run everything I've recorded since the last one." This is why the terms below (`mark_step`,
+"the graph") keep appearing: you're really programming a graph that gets compiled, not eager ops.
+
 A new graph is compiled **every time the compiler sees a shape (or computation) it hasn't seen
 before.** Compilation is expensive — seconds to *minutes* per graph for big models. If your program
 keeps presenting new shapes, you recompile constantly and never make progress.
@@ -207,6 +213,12 @@ has the same exponent range as fp32 but far fewer mantissa bits. The mistake is 
 problem to be worked around; the right move is to **build models that are numerically happy in
 bf16.**
 
+**Important reassurance:** the matmul *inputs* are bf16, but the systolic array **accumulates the
+running sum in FP32** (in a dedicated FP32 register bank). So you keep fp32-range dynamics on the
+accumulation — the precision risk is in *representing* individual values, not in summing them.
+That's why bf16 on Trainium is far less lossy than "everything is 16-bit" would suggest, and why
+the fix below is never "turn bf16 off."
+
 **What actually bites you (and what doesn't):**
 - ❌ **Wrong diagnosis (ours, at first):** "loss is `nan`, so training is diverging — add LR warmup
   and gradient clipping." We added both. **It didn't help**, because the `nan` appeared at *step 0,
@@ -254,3 +266,10 @@ If that count is more than "a handful," you have a shape-stability problem — g
 
 For CPU-side kernel development without burning Trainium time, use NKI's simulation mode (see the
 [Simulator chapter](main_tutorial_doc.md#simulator)).
+
+---
+
+> **Where this fits:** read this **after your first NER run, before you scale**. Came from
+> [choose your path](choose_your_path.md). Next: [Neuron tools & debugging](neuron_tools_and_debugging.md)
+> for the symptom→tool map and the profiler; [novel kernels](novel_kernels_on_trainium.md) if you need
+> a custom operator.

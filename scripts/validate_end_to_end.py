@@ -73,7 +73,9 @@ class EndToEndValidator:
                 "description": "Validated + real-data use cases",
                 "examples": [
                     "examples/use_cases/biomedical_ner.py",
-                    "examples/use_cases/financial_modeling.py",
+                    "examples/use_cases/satellite_landcover.py",
+                    "examples/use_cases/cv_utilization_spike.py",
+                    "examples/use_cases/qwen3_lora_finetune.py",
                 ],
                 "required": True,
             },

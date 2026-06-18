@@ -53,8 +53,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Neuron SDK supports CPython 3.10-3.13; test the ends and the pinned default.
-        python-version: ["3.10", "3.12", "3.13"]
+        # This repo standardizes on a single Python version (3.12, pinned in .python-version).
+        python-version: ["3.12"]
     steps:
       - uses: actions/checkout@v4
 

@@ -13,13 +13,15 @@ Enterprise Features:
     - GDPR, HIPAA, SOC2 compliance patterns
     - Security scanning and vulnerability management
 
-TESTED VERSIONS (Last validated: 2025-06-24):
+⚠️  REFERENCE SNIPPETS — READ, DON'T RUN BLINDLY. This module is illustrative: its functions
+    create real, billable, hard-to-undo AWS resources (IAM roles, KMS keys, VPCs, S3 buckets) with
+    no dry-run mode. It is NOT hardware-validated and is not part of the validation harness. Adapt
+    the patterns to your own account and governance review; do not execute `main()` against a live
+    account expecting a no-op.
+
+TARGET VERSIONS:
     - AWS Neuron SDK: 2.30.0
-    - boto3: 1.35.0
-    - AWS CloudTrail: Latest API
-    - AWS Config: Latest API
-    - AWS Security Hub: Latest API
-    - Test Status: ✅ Enterprise security patterns validated
+    - boto3: 1.35.0+
 
 COMPLIANCE FRAMEWORKS:
     - SOC 2 Type II

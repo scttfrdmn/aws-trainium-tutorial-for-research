@@ -18,6 +18,16 @@ Trainium is an **ahead-of-time-compiled, bf16-native, static-shape, matmul-optim
 (see [best practices](trainium_development_best_practices.md) and
 [novel kernels](novel_kernels_on_trainium.md) for *why*). That shape determines fit.
 
+> **Two terms used below, in plain language:**
+> - **128×128 systolic array** — Trainium's matmul engine is a fixed 128×128 grid of multiply-add
+>   units. It's happiest multiplying large matrices that fill all 128 rows/columns; a model whose
+>   matrices are much smaller than 128 leaves most of the grid idle (low utilization), even though it
+>   still runs correctly.
+> - **MFU (Model FLOPs Utilization)** — the fraction of the chip's *peak* matmul throughput your
+>   model actually achieves (achieved FLOP/s ÷ hardware peak). High MFU = you're feeding the array
+>   work in the shape it wants; low MFU = the hardware is mostly waiting. It's the number that tells
+>   you "is this slow because the chip is slow, or because my model under-fills it?"
+
 | Your workload is mostly… | Fit | Why |
 |---|---|---|
 | **Transformer training / fine-tuning** (LLM, BERT-family, ViT) | ✅ Strong | Dense matmul + attention; static shapes; the mainstream Neuron path. |
@@ -61,7 +71,7 @@ Score your workload. The more "yes", the better the fit (details + the *why* in
 | **Train then serve** | [Trainium → Inferentia pipeline](../examples/complete_workflow/trainium_to_inferentia_pipeline.py) | [Inferentia vs Trn2 decision guide](../VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference) |
 | **Satellite / image classification (CNN)** | [Satellite land-cover](../examples/use_cases/satellite_landcover.py) | keep tiles fixed-size → then the [utilization spike](../examples/use_cases/cv_utilization_spike.py) |
 | **"Is my model the *shape* the hardware wants?"** | [CV utilization spike](../examples/use_cases/cv_utilization_spike.py) (measures achieved TFLOP/s) | profiler MFU in [tools & debugging](neuron_tools_and_debugging.md) |
-| **Quant finance / time series** | [Financial modeling](../examples/use_cases/financial_modeling.py) | static-shape + bf16 review |
+| **Quant finance / time series** | a *sequence model* over your series — adapt the [NER example](../examples/use_cases/biomedical_ner.py) (swap dataset + head) | static-shape + bf16 review (Monte-Carlo / tick-event sims stay on CPU — see domain notes below) |
 | **A custom kernel / new operator** | [Novel kernels on Trainium](novel_kernels_on_trainium.md) | NKI simulation → hardware |
 | **Multi-NeuronCore / bigger models** | [Distributed training](../examples/distributed/) | best-practices (sharding) |
 | **"It's slow / it `nan`s / it won't compile"** | [Neuron tools & debugging](neuron_tools_and_debugging.md) | the symptom→tool table |
@@ -94,3 +104,11 @@ swap in a small slice of *your* data and *your* model, and run the CPU smoke pat
 (`NER_SMOKE=1 …`). If it adapts cleanly with static shapes, you're likely a good fit — validate on
 real hardware next. If you find yourself fighting dynamic shapes or control flow at every turn,
 that's your answer too.
+
+---
+
+> **Where this fits:** you're at the **start**. Next: run the
+> [NER example](../examples/use_cases/biomedical_ner.py), then read
+> [Trainium development best practices](trainium_development_best_practices.md) before you scale.
+> Hit a problem → [Neuron tools & debugging](neuron_tools_and_debugging.md). Need a custom op →
+> [novel kernels](novel_kernels_on_trainium.md).

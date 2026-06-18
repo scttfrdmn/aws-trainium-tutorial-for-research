@@ -1,13 +1,15 @@
 # Debugging walkthrough
 
 A runnable companion to [docs/neuron_tools_and_debugging.md](../../docs/neuron_tools_and_debugging.md).
-It reproduces the two classic Trainium failures — on purpose — and shows the diagnosis and fix for
-each. Both were hit for real while building the [validated NER example](../use_cases/biomedical_ner.py).
+It reproduces the three classic Trainium failures — on purpose — and shows the diagnosis and fix for
+each. All were hit for real while building the [validated NER example](../use_cases/biomedical_ner.py).
 
 > **Assumed knowledge:** you can run a Python script and have read the
 > [best-practices chapter](../../docs/trainium_development_best_practices.md).
-> **What you'll get:** hands-on recognition of (1) the bf16 SDPA→`nan` forward-pass failure and
-> (2) the variable-shape recompile storm — and the one-line fix for each.
+> Running the `nan` demo locally needs `pip install torch transformers` (the CPU "free" mode still
+> imports them); the recompile and fallback demos short-circuit before any hardware call.
+> **What you'll get:** hands-on recognition of (1) the bf16 SDPA→`nan` forward-pass failure,
+> (2) the variable-shape recompile storm, and (3) the silent CPU fallback — and the fix for each.
 
 ## Run it
 
