@@ -19,8 +19,10 @@ long tail of small conv/BN/pool ops — so per-core *utilization* is low even th
 A utilization-optimal vision model on Trainium looks **more ViT-shaped**: patch-embed + large
 attention/MLP matmuls, wide channels (>=128 to fill the partition dim), fused SBUF-resident blocks.
 This example is the "it works, statically-shaped, bf16-stable" tier — NOT a claim that small-conv
-CNNs maximize the systolic array. To *measure* the gap, read MFU/utilization in the profiler (see
-docs/neuron_tools_and_debugging.md). See docs/novel_kernels_on_trainium.md and choose_your_path.md.
+CNNs maximize the systolic array. We *measured* this: cv_utilization_spike.py pits this CNN against a
+ViT on the same trn1.2xlarge and the ViT achieves ~5x the CNN's TFLOP/s (the CNN does MORE FLOPs but
+takes ~14x longer/step — the array idles on small convs). See cv_utilization_spike.md,
+docs/novel_kernels_on_trainium.md, and choose_your_path.md.
 
 Note: data-parallel scaling (below) improves wall-clock *throughput* but NOT per-core utilization —
 each core runs the same underfilled model; you just have more cores. Two different axes.

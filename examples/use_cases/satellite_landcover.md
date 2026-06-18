@@ -27,8 +27,13 @@ per-core **utilization** is low even though it's correct and fast-to-compile.
 
 A *utilization-optimal* Trainium vision model looks **more ViT-shaped**: patch-embed → large
 attention/MLP matmuls, wide channels (≥128 to fill the partition dimension), fused SBUF-resident
-blocks (see [novel kernels](../../docs/novel_kernels_on_trainium.md)). To **measure** the gap, read
-MFU/utilization in the profiler ([tools & debugging](../../docs/neuron_tools_and_debugging.md)).
+blocks (see [novel kernels](../../docs/novel_kernels_on_trainium.md)).
+
+**We measured this** — it's not a hunch. The [utilization spike](cv_utilization_spike.md) runs this
+exact CNN against a ViT on the same trn1.2xlarge: the **ViT achieves 5.1× the CNN's TFLOP/s** while
+doing *less* total work. The CNN does 2.7× more FLOPs yet takes 13.7× longer per step — the array sits
+idle on its small convs. (On CPU the ordering *flips* — proof the gap is the systolic array, not the
+model.) That's the whole lesson, with numbers.
 
 So treat this as the **"it works — statically-shaped, bf16-stable"** tier, not as a claim that
 small-conv CNNs are the ideal Trainium CV workload.

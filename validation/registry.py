@@ -83,6 +83,27 @@ EXAMPLES: tuple[Example, ...] = (
         est_runtime_min=15.0,
         description="Satellite land-cover CNN on EuroSAT (vision modality; XLA/Trainium).",
     ),
+    Example(
+        key="cv_utilization_spike",
+        module="examples.use_cases.cv_utilization_spike",
+        entrypoint="run",
+        instances=("trn1.2xlarge",),
+        # The spike's thesis: a ViT-shaped model fills the 128x128 systolic array far better than a
+        # small CNN. Measured 5.1x on trn1.2xlarge; gate at 2.0x so a regression that inverts the
+        # relationship fails, without being flaky on step-time noise. (On CPU the ratio flips < 1,
+        # which is why this gates only the hardware run.)
+        thresholds={"vit_over_cnn_tflops": 2.0},
+        smoke_config={
+            "device": "cpu",
+            "warmup_steps": 1,
+            "timed_steps": 2,
+            "batch_size": 8,
+            "depth": 2,
+        },
+        full_config={"device": "xla"},
+        est_runtime_min=12.0,
+        description="Measures Trainium under-utilization: CNN vs ViT achieved TFLOP/s (XLA/Trainium).",
+    ),
 )
 
 # Examples that are NOT in the single-process auto-registry above because they require a multi-process

@@ -22,7 +22,7 @@ Trainium is an **ahead-of-time-compiled, bf16-native, static-shape, matmul-optim
 |---|---|---|
 | **Transformer training / fine-tuning** (LLM, BERT-family, ViT) | ✅ Strong | Dense matmul + attention; static shapes; the mainstream Neuron path. |
 | **Large-batch / high-throughput inference** | ✅ Strong | Throughput-oriented; NxD Inference + vLLM target this. |
-| **CNN / dense vision** training | ✅ Good | Convolutions map to the tensor engine; keep input sizes fixed. |
+| **CNN / dense vision** training | ✅ Runs / 🟡 utilization | It runs cleanly (static shapes, bf16), but a *small* CNN under-fills the 128×128 array — we [measured a ViT at 5× the TFLOP/s](../examples/use_cases/cv_utilization_spike.md). Wider/ViT-shaped vision uses the chip far better. |
 | **Classic dense ML** (MLPs, matrix factorization, big linear algebra) | ✅ Good | Matmul-heavy, regular. |
 | **Scientific compute that's matmul/FFT-heavy with regular tiling** | 🟡 Promising | Possible via NKI; see the novel-kernels chapter — but expect real kernel work. |
 | **Heavy dynamic shapes** (wildly varying seq lengths, ragged batches) | 🟡 Caution | Each new shape recompiles. Workable with bucketing/padding, but it's effort. |
@@ -59,7 +59,8 @@ Score your workload. The more "yes", the better the fit (details + the *why* in
 | **Any first run / NLP fine-tune** | [Biomedical NER](../examples/use_cases/biomedical_ner.py) (validated) | best-practices → tools & debugging |
 | **An LLM fine-tune (LoRA)** | [Qwen3 LoRA fine-tune](../examples/use_cases/qwen3_lora_finetune.py) (optimum-neuron) | best-practices + sizing for your instance |
 | **Train then serve** | [Trainium → Inferentia pipeline](../examples/complete_workflow/trainium_to_inferentia_pipeline.py) | [Inferentia vs Trn2 decision guide](../VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference) |
-| **Satellite / image classification (CNN)** | [Satellite land-cover](../examples/use_cases/satellite_landcover.py) | keep tiles fixed-size |
+| **Satellite / image classification (CNN)** | [Satellite land-cover](../examples/use_cases/satellite_landcover.py) | keep tiles fixed-size → then the [utilization spike](../examples/use_cases/cv_utilization_spike.py) |
+| **"Is my model the *shape* the hardware wants?"** | [CV utilization spike](../examples/use_cases/cv_utilization_spike.py) (measures achieved TFLOP/s) | profiler MFU in [tools & debugging](neuron_tools_and_debugging.md) |
 | **Quant finance / time series** | [Financial modeling](../examples/use_cases/financial_modeling.py) | static-shape + bf16 review |
 | **A custom kernel / new operator** | [Novel kernels on Trainium](novel_kernels_on_trainium.md) | NKI simulation → hardware |
 | **Multi-NeuronCore / bigger models** | [Distributed training](../examples/distributed/) | best-practices (sharding) |

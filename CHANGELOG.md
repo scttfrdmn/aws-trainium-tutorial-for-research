@@ -38,6 +38,15 @@ Project work (milestones, issues, labels) is tracked on
   **better numerical result** via FP32-resident fusion (PSUM always accumulates FP32), not just speed.
 - `examples/distributed/data_parallel_ner.py` (+README) — real multi-NeuronCore data-parallel
   training (torchrun + XLA DDP), demonstrating gradient all-reduce and Neuron-correct checkpointing.
+- Satellite land-cover CV example (`examples/use_cases/satellite_landcover.py`, +README) — EuroSAT
+  10-class residual CNN with a CPU smoke path, the `run(config)` harness contract, and an optional
+  `torchrun` data-parallel mode.
+- **`examples/use_cases/cv_utilization_spike.py` (+README) — *measures* Trainium under-utilization.**
+  A controlled CNN-vs-ViT experiment (same device/input/batch) reporting achieved TFLOP/s.
+  **Measured on a real trn1.2xlarge: the ViT achieves 5.1× the small CNN's TFLOP/s while doing 2.7×
+  fewer FLOPs (CNN 1.07 vs ViT 5.51 TFLOP/s; 307 ms vs 22 ms/step)** — proving a small CNN starves the
+  128×128 systolic array. On CPU the ordering flips, isolating the cause to the hardware's shape. This
+  turns "build in the form the hardware wants" from advice into a number.
 
 ### Changed
 - Tutorial refreshed for **June 2026**: Neuron SDK 2.30.0, PyTorch 2.9 (XLA path), a brief
