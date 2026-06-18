@@ -130,4 +130,7 @@ Two real lessons surfaced, worth teaching explicitly:
   gracefully on no-write-access.
 - **`TrainOutput.training_loss` comes back `nan`** even on a healthy run: it averages over every step,
   but on XLA the loss only materializes on `logging_steps`, so un-synced steps poison the mean. The
-  example now derives `train_loss` from `trainer.state.log_history` (the real logged losses) instead.
+  example now derives `train_loss` from `trainer.state.log_history` (the real logged losses) and
+  **never prints a bare `nan`** — if a run is too short to log any loss it says so and suggests lowering
+  `--logging_steps`, returning an explicit `-1.0` "not measured" sentinel. Pinned by
+  `tests/test_qwen3_loss_summary.py` so participants don't hit the confusing `nan` again.

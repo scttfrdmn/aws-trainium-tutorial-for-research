@@ -170,34 +170,57 @@ def train(args) -> dict[str, float]:
     result = trainer.train()
     trainer.save_model(args.output_dir)  # saves the LoRA adapter
 
-    # NOTE (verified on a trn1.32xlarge run): TrainOutput.training_loss is the average over EVERY
-    # step, but on the XLA/Neuron path the loss tensor is only materialized on logging_steps -- the
-    # un-synced intermediate steps come back nan and poison that average, so result.training_loss is
-    # reported as `nan` even when every *logged* loss is healthy. So we derive the metric from the
-    # trainer's log_history (the real, materialized losses) and fall back to the aggregate only if
-    # no per-step losses were logged. The last logged loss is the most useful single number.
+    return _summarize_training(result, trainer, args)
+
+
+def _summarize_training(result, trainer, args) -> dict[str, float]:
+    """Build a clean metrics dict that NEVER reports a misleading ``nan`` training loss.
+
+    Why this exists (verified on a trn1.32xlarge run): ``TrainOutput.training_loss`` is the mean over
+    *every* step, but on the XLA/Neuron path the loss tensor is only materialized on ``logging_steps``
+    -- the un-synced intermediate steps come back ``nan`` and poison that mean. So ``result.
+    training_loss`` shows ``nan`` even when every *logged* loss is perfectly healthy. We therefore
+    derive the reported loss from ``trainer.state.log_history`` (the real, materialized values) and
+    never print a bare ``nan``: if a run is too short to log anything, we say so and tell the user how
+    to fix it, instead of emitting a cryptic number.
+    """
+
+    def _is_real(x) -> bool:
+        return isinstance(x, (int, float)) and x == x  # x==x is False only for nan
+
     logged = [
         h["loss"]
         for h in getattr(trainer.state, "log_history", [])
-        if isinstance(h.get("loss"), (int, float))
-        and h["loss"] == h["loss"]  # exclude nan
+        if _is_real(h.get("loss"))
     ]
-    final_loss = (
-        logged[-1] if logged else float(getattr(result, "training_loss", float("nan")))
-    )
-    metrics = {
-        "train_loss": float(final_loss),  # last materialized step loss (gated metric)
-        "mean_logged_loss": float(sum(logged) / len(logged))
-        if logged
-        else float("nan"),
-        "logged_steps": float(len(logged)),
-    }
+
+    if logged:
+        final_loss = float(
+            logged[-1]
+        )  # last materialized step loss -- the most useful single number
+        mean_loss = float(sum(logged) / len(logged))
+        metrics = {
+            "train_loss": final_loss,  # gated/reported metric
+            "mean_logged_loss": mean_loss,
+            "logged_steps": float(len(logged)),
+        }
+        print(
+            f"✅ Qwen3 LoRA SFT done. final_loss={final_loss:.4f} "
+            f"(mean over {len(logged)} logged steps={mean_loss:.4f}); "
+            f"adapter -> {args.output_dir}"
+        )
+        return metrics
+
+    # No per-step loss was logged (run shorter than logging_steps). Don't fall back to the poisoned
+    # aggregate and print "nan" -- explain it instead. Report -1.0 as an explicit "not measured"
+    # sentinel so downstream code never confuses it with a real loss.
     print(
-        f"✅ Qwen3 LoRA SFT done. final_loss={metrics['train_loss']:.4f} "
-        f"(mean over {len(logged)} logged steps={metrics['mean_logged_loss']:.4f}); "
-        f"adapter -> {args.output_dir}"
+        f"✅ Qwen3 LoRA SFT done; adapter -> {args.output_dir}\n"
+        f"⚠️  No per-step loss was logged (the run had fewer than logging_steps={args.logging_steps} "
+        f"steps). Trainer's aggregate loss is nan on the XLA path and is NOT reported. Lower "
+        f"--logging_steps (e.g. 1) or train for more steps to get a real loss reading."
     )
-    return metrics
+    return {"train_loss": -1.0, "mean_logged_loss": -1.0, "logged_steps": 0.0}
 
 
 def _parser() -> argparse.ArgumentParser:
