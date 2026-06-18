@@ -67,6 +67,22 @@ example clears the first; this spike shows what clearing the second looks like �
 > limit — measure achieved FLOP/s (or read MFU in the profiler) and ask whether your *matmuls are big
 > enough to fill 128 partitions*. If they're not, reshape the model, don't blame the hardware.
 
+## A note on the compile tax (and how to stop paying it)
+
+This spike spent ~**10 minutes compiling** on a cold box (CNN ~5 min, ViT ~2 min) and seconds actually
+measuring. That's the ahead-of-time-compilation cost, and on a fresh cloud instance you pay it *every
+provision* unless you persist the cache. Point `NEURON_COMPILE_CACHE_URL` at **S3** (not local disk,
+which is empty on each new instance) so compiled graphs survive reprovisioning:
+
+```bash
+export NEURON_COMPILE_CACHE_URL=s3://my-bucket/neuron-cache
+python examples/use_cases/cv_utilization_spike.py     # first box compiles; every later box fetches
+```
+
+The validation harness exposes this directly: `... --cache-url s3://my-bucket/neuron-cache`. See
+[best-practices §1b](../../docs/trainium_development_best_practices.md) for the full caching guidance
+(compiler-version pinning, cache-key gotchas).
+
 See [novel kernels on Trainium](../../docs/novel_kernels_on_trainium.md) for *why* the array wants
 large contractions, and [choose your path](../../docs/choose_your_path.md) for which workloads have
 that shape naturally.

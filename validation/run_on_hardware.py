@@ -151,8 +151,17 @@ def run_local(args: argparse.Namespace) -> int:
     # The harness still writes results/<example>.json + logs regardless of the session.
     # python3 -u keeps stdout unbuffered so epoch/progress prints appear live in the log/tmux pane
     # (without it, tee block-buffers and you see nothing until the run ends -- a real gotcha).
+    # A persistent compile cache makes a fresh cloud instance reuse compiled graphs instead of
+    # recompiling from cold every launch. An s3:// URL is what survives reprovisioning (a local dir
+    # would be empty on each new box). Exported before the run so every example's compiles hit it.
+    cache_env = (
+        f"export NEURON_COMPILE_CACHE_URL={args.cache_url!r}; "
+        if args.cache_url
+        else ""
+    )
     inner = (
         "cd /opt/tutorial 2>/dev/null || cd ~/tutorial 2>/dev/null || cd ~/aws-trainium-tutorial-for-research; "
+        f"{cache_env}"
         f"python3 -u -m validation.run_on_hardware --in-instance {example_flag} 2>&1 | tee ~/validate.log"
     )
     remote = (
@@ -239,6 +248,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--on-demand", action="store_true", help="Use on-demand instead of spot."
+    )
+    p.add_argument(
+        "--cache-url",
+        default=None,
+        metavar="URL",
+        help="NEURON_COMPILE_CACHE_URL for the run (e.g. s3://bucket/neuron-cache). On a fresh "
+        "cloud instance a local cache is always cold; an s3:// URL persists compiled graphs across "
+        "reprovisions so you don't recompile every launch. See best-practices §1b.",
     )
     p.add_argument(
         "--yes", action="store_true", help="Actually launch (omit for a dry run)."

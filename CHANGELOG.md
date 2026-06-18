@@ -49,6 +49,10 @@ Project work (milestones, issues, labels) is tracked on
   turns "build in the form the hardware wants" from advice into a number.
 
 ### Changed
+- **Compile-cache guidance promoted for the cloud workflow** (best-practices §1b): on a fresh
+  instance a *local* cache is always cold, so an **S3** `NEURON_COMPILE_CACHE_URL` is what actually
+  saves the recompile tax across reprovisions. Added compiler-version pinning + cache-key caveats, and
+  wired a `--cache-url` flag into the validation harness (exports the env on the launched instance).
 - Tutorial refreshed for **June 2026**: Neuron SDK 2.30.0, PyTorch 2.9 (XLA path), a brief
   public note that 2.9 is the last XLA version, and Trainium-for-inference positioning.
 - Tooling modernized to **ruff** (lint+format), **uv**, pinned Python (3.12), and CI.

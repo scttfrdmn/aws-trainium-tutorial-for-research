@@ -78,10 +78,30 @@ example and watch the recompiles pile up.
 
 **b) Persist the compile cache** so you only pay compilation *once*, ever:
 ```bash
-export NEURON_COMPILE_CACHE_URL=/home/ubuntu/neuron_cache   # or an s3:// path to share across nodes
+export NEURON_COMPILE_CACHE_URL=/home/ubuntu/neuron_cache   # local dir (survives only on THIS box)
 ```
-A warm cache turned our repeated runs from minutes-of-compiling into seconds. Point it at S3 to
-share compiled graphs across a whole cluster.
+A warm cache turned our repeated runs from minutes-of-compiling into seconds.
+
+> **In the cloud, point the cache at S3 — not local disk.** This is the single biggest iteration-speed
+> win for cloud Trainium, and it's easy to miss. Every time you provision a fresh `trn1`/`trn2`
+> instance you get an *empty* local cache, so a local `NEURON_COMPILE_CACHE_URL` recompiles from
+> scratch on every new box — exactly the tax you're trying to avoid. An **S3** cache URL persists
+> across instance churn and is shared by every node:
+> ```bash
+> export NEURON_COMPILE_CACHE_URL=s3://my-bucket/neuron-cache   # survives reprovision; shared cluster-wide
+> ```
+> The Neuron runtime keys cache entries on a hash of the graph + compiler version + flags, so a hit is
+> only reused when it's genuinely the same compile — safe to share broadly. **Measured cost of *not*
+> doing this:** our CV utilization spike spent ~**10 min** compiling on a cold box (CNN ~5 min, ViT
+> ~2 min) and seconds actually running; a warm S3 cache drops that startup to the S3 fetch (seconds).
+> Pin the compiler so the cache key is stable across instances:
+> ```bash
+> export NEURON_CC_FLAGS="--model-type transformer"   # keep flags identical run-to-run, or you miss the cache
+> pip show neuronx-cc | grep Version                   # cache is keyed on this; a version bump = cold cache
+> ```
+> Caveat: changing *any* of {graph shape, compiler version, `NEURON_CC_FLAGS`} produces a new key and a
+> fresh compile — that's correct (the old artifact wouldn't be valid), just budget for it after an SDK
+> upgrade. Give the bucket lifecycle rules / the instance role `s3:GetObject`+`PutObject` on the prefix.
 
 **c) Pre-compile instead of compiling lazily during training:**
 ```bash

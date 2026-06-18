@@ -29,6 +29,11 @@ python -m validation.run_on_hardware --instance trn1.2xlarge --region us-east-2 
 # 2) Launch for real (spot + auto-terminate + --cost-limit). Needs AWS creds:
 python -m validation.run_on_hardware --instance trn1.2xlarge --region us-east-2 --example ner_biomedical --yes
 
+# 2b) Reuse compiled graphs across throwaway instances with an S3 compile cache (no cold recompile
+#     on every fresh box). Highly recommended in the cloud — see best-practices §1b:
+python -m validation.run_on_hardware --instance trn1.2xlarge --region us-east-2 \
+    --example ner_biomedical --cache-url s3://my-bucket/neuron-cache --yes
+
 # 3) On a Neuron instance — run examples and write artifacts:
 python -m validation.run_on_hardware --in-instance --all
 
