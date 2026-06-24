@@ -99,5 +99,9 @@ python -m validation.run_on_hardware --instance trn1.2xlarge --region us-east-2 
 
 ## Status
 
-See [`/VALIDATED.md`](../../VALIDATED.md) for the hardware-validation record (it's a single-device
-example, so the harness validates it automatically).
+⏳ **Trained on real hardware (trn1.2xlarge), eval artifact pending.** On a us-west-2 run it read
+**484 real Sentinel-2 + WorldCover patches** (4 classes: Tree/Grass/Crop/Built) from RODA and trained
+the CNN cleanly (loss → ~0.60). The final accuracy artifact is pending — the *eval-graph* hit a very
+long cold compile (~20 min for one uncached graph) and didn't finish within the run window. The CPU
+smoke reaches `eval_acc≈0.77`. Tracked for a clean re-validation (a warm S3 compile cache for the
+eval graph fixes the slow path). See [`/VALIDATED.md`](../../VALIDATED.md) for the live record.

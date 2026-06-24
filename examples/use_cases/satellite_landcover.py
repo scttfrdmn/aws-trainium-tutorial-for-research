@@ -63,8 +63,8 @@ WORLDCOVER_REGION = "eu-central-1"
 SENTINEL_SCENES = (
     # tile / date  ->  region                      dominant land cover
     "32/U/PU/2021/7/S2A_32UPU_20210705_0_L2A",  # S. Germany     crop/forest/urban
-    "33/U/UP/2021/8/S2B_33UUP_20210812_0_L2A",  # Czech/Alps     forest/grass
-    "31/U/DQ/2021/7/S2A_31UDQ_20210708_0_L2A",  # Belgium        crop/built/water
+    "33/U/UP/2021/8/S2A_33UUP_20210801_0_L2A",  # Czech          forest/grass/crop
+    "31/U/DQ/2021/7/S2A_31UDQ_20210704_0_L2A",  # Belgium        crop/built/water
 )
 
 # ESA WorldCover class codes -> human-readable names (the published v100/v200 legend).

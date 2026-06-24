@@ -80,10 +80,12 @@ works and reports `validity_rate = -1.0` (not measured).
 and it generated a CIF sample from a held-out composition. *Reminder: perplexity gates LM quality, not
 structural validity — see the scope note above.*
 
-> ⏳ The pymatgen **`validity_rate`** metric was added and verified locally (unit-tested; graceful
-> skip when pymatgen is absent), but its first *hardware* artifact is pending a clean re-run — the
-> validation instances drawn during this round were environmentally degraded (compiler not
-> progressing). The training/perplexity result above stands from the prior validated run.
+**Structural `validity_rate` (measured on hardware): 0.0%** of 20 generated CIFs parsed via pymatgen.
+That's honest and instructive — a 1-epoch char-GPT on 8k CIFs learns CIF *syntax* well (perplexity
+1.7) but not enough to emit fully parseable structures. **This is exactly why validity is reported,
+not gated**, and why low perplexity ≠ valid structures: the two metrics measure different things, and
+the gap between them is the real lesson. Train longer / on more data (the 36k-CIF full corpus) to lift
+the validity rate.
 
 A bf16 lesson surfaced on hardware (now fixed): masking future positions with `float("-inf")`
 produced `loss=nan` at step ~25 (the `0 * -inf = nan` softmax-backward trap). The causal mask uses a

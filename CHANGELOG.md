@@ -10,6 +10,16 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Validated (hardware, us-west-2 with S3 compile cache)
+- **5/6 examples now hardware-validated.** Re-ran in us-west-2 with `NEURON_COMPILE_CACHE_URL` on S3
+  (the cold-compile cost — not bad hosts — was what made earlier runs look stuck; the cache is the
+  fix the tutorial itself teaches). Fresh artifacts: **cv_utilization_spike** ViT **5.18× the CNN's
+  TFLOP/s** (reproduced 5.1×; CNN 1.069 / ViT 5.535 TFLOP/s), **crystal_cif_slm** perplexity 1.735
+  with the new **`validity_rate` measured at 0.0%** — an honest result (a 1-epoch char-GPT learns CIF
+  syntax but not yet parseable structures; exactly why validity is reported, not gated). The RODA
+  **satellite** example trained on real hardware (484 Sentinel-2+WorldCover patches) but its
+  eval-accuracy artifact is pending a slow eval-graph cold compile.
+
 ### Changed (RODA open data)
 - **`satellite_landcover.py` now builds its training set from the AWS Registry of Open Data**, not a
   pre-tiled Hugging Face benchmark. It reads **Sentinel-2 L2A** COGs (`s3://sentinel-cogs`) + **ESA

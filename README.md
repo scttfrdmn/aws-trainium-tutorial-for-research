@@ -9,7 +9,7 @@
 
 A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This tutorial provides what researchers and organizations need to leverage AWS Neuron hardware for cost-effective ML research and production deployment.
 
-> ✅ **Hardware-validated on real `trn1.2xlarge`** (Neuron 2.30 / PyTorch 2.9) — every registered example runs through a provenance-capturing harness; see [`VALIDATED.md`](VALIDATED.md) for the live count and per-example metrics. Every performance number in this repo traces to a captured run; nothing is hand-typed.
+> ✅ **Hardware-validated: 5/6 registered examples on real `trn1.2xlarge`** (Neuron 2.30 / PyTorch 2.9), each with a captured provenance artifact — see [`VALIDATED.md`](VALIDATED.md). Every performance number traces to a captured run; nothing is hand-typed. (The 6th, the RODA satellite example, trains correctly on hardware but its accuracy artifact is pending a slow eval-graph recompile.)
 
 > ### 📅 Status as of June 2026
 >
