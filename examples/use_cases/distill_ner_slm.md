@@ -46,6 +46,10 @@ python examples/use_cases/distill_ner_slm.py
 The teacher is fine-tuned inline so the example is self-contained; point `teacher_ckpt` at a saved
 teacher to skip that and distill directly.
 
+> **Data source — why Hugging Face, not RODA?** This reuses the NER corpus (NCBI-disease); the AWS
+> Registry of Open Data has no biomedical NER text. See the [satellite example](satellite_landcover.py)
+> for the repo's RODA-backed example.
+
 ## Prerequisites
 
 - A Neuron instance (`trn1.2xlarge`) or any CPU box for the smoke run.

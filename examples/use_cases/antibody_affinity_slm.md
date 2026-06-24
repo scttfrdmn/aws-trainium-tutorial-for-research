@@ -42,6 +42,10 @@ ANTIBODY_SMOKE=1 python examples/use_cases/antibody_affinity_slm.py
 python examples/use_cases/antibody_affinity_slm.py
 ```
 
+> **Data source — why Hugging Face, not RODA?** The AWS Registry of Open Data has no antibody /
+> protein-binding benchmark; AbBibench lives on Hugging Face. (The
+> [satellite example](satellite_landcover.py) uses RODA — that's where open geospatial data lives.)
+
 ## Prerequisites
 
 - A Neuron instance (`trn1.2xlarge`) or any CPU box for the smoke run.

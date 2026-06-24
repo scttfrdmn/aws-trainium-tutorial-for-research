@@ -70,16 +70,20 @@ EXAMPLES: tuple[Example, ...] = (
         module="examples.use_cases.satellite_landcover",
         entrypoint="run",
         instances=("trn1.2xlarge",),
-        # EuroSAT land-cover is a 10-class problem a small CNN clears comfortably; gate at 0.80 to
-        # catch a broken pipeline without being flaky on a short run.
-        thresholds={"eval_acc": 0.80},
+        # RODA Sentinel-2 + WorldCover land-cover. Patches are labeled by MAJORITY WorldCover class
+        # (mixed-class patches → inherent label noise), so this is harder than the pre-tiled EuroSAT
+        # benchmark; gate at 0.60 (the 1-epoch CPU smoke already hits ~0.77) to catch a broken
+        # pipeline without being flaky. Needs `rasterio` on the instance to read COGs from S3.
+        thresholds={"eval_acc": 0.60},
         smoke_config={
             "device": "cpu",
             "epochs": 1,
-            "max_train_samples": 128,
-            "max_eval_samples": 128,
+            "scenes": ("32/U/PU/2021/7/S2A_32UPU_20210705_0_L2A",),
+            "patches_per_side": 16,
+            "train_batch_size": 16,
+            "eval_batch_size": 16,
         },
-        full_config={"device": "xla", "epochs": 5},
+        full_config={"device": "xla", "epochs": 8},
         est_runtime_min=15.0,
         description="Satellite land-cover CNN on EuroSAT (vision modality; XLA/Trainium).",
     ),

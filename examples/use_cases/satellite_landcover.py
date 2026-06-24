@@ -1,70 +1,110 @@
 #!/usr/bin/env python3
-"""Satellite land-cover classification on AWS Trainium (real geospatial CV).
+"""Satellite land-cover classification on AWS Trainium — from real RODA open data.
 
-A genuine remote-sensing task: classify Sentinel-2 satellite image tiles into land-cover classes
-(crops, forest, residential, river, ...) using the **EuroSAT** benchmark. This is the tutorial's
-**vision / CNN** example — a different hardware story from the transformer examples: convolutions
-are dense, regular, and map cleanly onto the systolic tensor engine, with **fixed-size image tiles**
-giving static shapes for free.
+A genuine remote-sensing task built on the **AWS Registry of Open Data (RODA)**: classify
+**Sentinel-2** RGB image patches into **ESA WorldCover** land-cover classes (tree cover, cropland,
+built-up, water, ...). Both halves are public, anonymous-access S3 datasets on RODA — no Hugging
+Face, no pre-tiled benchmark:
+  * Imagery: **Sentinel-2 L2A cloud-optimized GeoTIFFs** — ``s3://sentinel-cogs`` (us-west-2).
+  * Labels:  **ESA WorldCover 10 m v200** — ``s3://esa-worldcover`` (eu-central-1).
+
+The example reads a window from a Sentinel-2 true-color COG, derives its geographic footprint,
+reads the co-located WorldCover label raster, tiles both into fixed 64x64 patches, and labels each
+patch by its **majority WorldCover class**. That gives real (image -> land-cover) training pairs,
+assembled on the fly from open satellite data — the kind of pipeline a geospatial lab actually runs.
+
+This is the tutorial's **vision / CNN** example. The hardware story is the same as before:
 
 Why it RUNS well on Trainium (the table-stakes from best-practices):
-  * Fixed 64x64x3 tiles → static shapes → compiles once (no recompile storm).
+  * Fixed 64x64x3 patches -> static shapes -> compiles once (no recompile storm).
   * bf16-native: plain convs are bf16-stable (no fragile SDPA), the tensor engine accumulates FP32.
 
 **Is this the *form the hardware wants*? Honestly: only partly — and that's the lesson.**
-Trainium's tensor engine is a **128x128 systolic array** that's hungry for *large* matmuls (the
-contraction dimension filling those 128 partitions). Convolutions lower to matmul, but a small CNN's
-early convs are tiny (the first has a contraction dim of ~3-27 vs a 128-wide array) and there's a
-long tail of small conv/BN/pool ops — so per-core *utilization* is low even though it runs cleanly.
-A utilization-optimal vision model on Trainium looks **more ViT-shaped**: patch-embed + large
-attention/MLP matmuls, wide channels (>=128 to fill the partition dim), fused SBUF-resident blocks.
-This example is the "it works, statically-shaped, bf16-stable" tier — NOT a claim that small-conv
-CNNs maximize the systolic array. We *measured* this: cv_utilization_spike.py pits this CNN against a
-ViT on the same trn1.2xlarge and the ViT achieves ~5x the CNN's TFLOP/s (the CNN does MORE FLOPs but
-takes ~14x longer/step — the array idles on small convs). See cv_utilization_spike.md,
+Trainium's tensor engine is a **128x128 systolic array** hungry for *large* matmuls. A small CNN's
+early convs are tiny (contraction dim ~3-27 vs a 128-wide array) with a long tail of small
+conv/BN/pool ops, so per-core *utilization* is low even though it runs cleanly. A utilization-optimal
+vision model on Trainium looks **more ViT-shaped**. We *measured* this: cv_utilization_spike.py pits
+this CNN against a ViT and the ViT achieves ~5x the CNN's TFLOP/s. See cv_utilization_spike.md,
 docs/novel_kernels_on_trainium.md, and choose_your_path.md.
 
-Note: data-parallel scaling (below) improves wall-clock *throughput* but NOT per-core utilization —
-each core runs the same underfilled model; you just have more cores. Two different axes.
+Note: data-parallel scaling (torchrun) improves wall-clock *throughput* but NOT per-core utilization.
 
 Harness contract: a module-level ``run(config) -> dict[str, float]`` returning ``eval_acc`` (the
-gated metric). Runs on CPU for a smoke test and on Trainium (XLA) for the real run — exactly like
-the validated NER example.
+gated metric). Runs on CPU for a smoke test and on Trainium (XLA) for the real run.
 
-    # Laptop smoke test (CPU, tiny subset — proves the code path):
-    NER_SMOKE=1 python examples/use_cases/satellite_landcover.py   # (any value works)
+    # Laptop smoke test (CPU, few RODA patches — proves the code path; needs network + rasterio):
+    CV_SMOKE=1 python examples/use_cases/satellite_landcover.py
 
     # On a Trainium instance (real run):
     python examples/use_cases/satellite_landcover.py
 
-Dataset: EuroSAT RGB via Hugging Face Datasets (parquet; no loader script). The dataset id is
-configurable in case a mirror changes.
+Dependencies (beyond the Neuron stack): ``rasterio`` (reads COGs from S3 anonymously) + ``numpy``.
 """
 
 from __future__ import annotations
 
+import math
 import os
 import random
 from dataclasses import dataclass, field
 from typing import Any
 
-# A parquet-native EuroSAT mirror (image + integer label). Overridable; the label set is read from
-# the dataset's own schema at load time so a different mirror still works.
-DEFAULT_DATASET = "blanchon/EuroSAT_RGB"
-IMAGE_SIZE = 64  # EuroSAT tiles are 64x64; fixed -> static shapes on Trainium
+IMAGE_SIZE = 64  # patch size; fixed -> static shapes on Trainium
+
+# --- RODA open-data sources (both anonymous / public) --------------------------------------------
+SENTINEL_BUCKET = "sentinel-cogs"  # Element 84 Sentinel-2 L2A COGs
+SENTINEL_REGION = "us-west-2"
+WORLDCOVER_BUCKET = "esa-worldcover"  # ESA WorldCover 10 m v200 label rasters
+WORLDCOVER_REGION = "eu-central-1"
+
+# A curated list of Sentinel-2 L2A scenes (true-color COG paths) over varied geography, so the
+# tiled patches span several land-cover classes. Cloud-light summer 2021 scenes. The loader skips
+# any scene/patch it can't read, so a transient miss doesn't fail the run.
+SENTINEL_SCENES = (
+    # tile / date  ->  region                      dominant land cover
+    "32/U/PU/2021/7/S2A_32UPU_20210705_0_L2A",  # S. Germany     crop/forest/urban
+    "33/U/UP/2021/8/S2B_33UUP_20210812_0_L2A",  # Czech/Alps     forest/grass
+    "31/U/DQ/2021/7/S2A_31UDQ_20210708_0_L2A",  # Belgium        crop/built/water
+)
+
+# ESA WorldCover class codes -> human-readable names (the published v100/v200 legend).
+WORLDCOVER_CLASSES = {
+    10: "Tree cover",
+    20: "Shrubland",
+    30: "Grassland",
+    40: "Cropland",
+    50: "Built-up",
+    60: "Bare / sparse",
+    70: "Snow / ice",
+    80: "Permanent water",
+    90: "Herbaceous wetland",
+    95: "Mangroves",
+    100: "Moss / lichen",
+}
 
 
 @dataclass
 class CVConfig:
-    """Configuration for the land-cover CNN fine-tune."""
+    """Configuration for the land-cover CNN trained on RODA Sentinel-2 + WorldCover."""
 
-    dataset_name: str = DEFAULT_DATASET
     device: str = "xla"  # "xla" (Trainium) | "cpu" (smoke) | "cuda"
     epochs: int = 5
     train_batch_size: int = 64
     eval_batch_size: int = 64
     learning_rate: float = 1e-3
     seed: int = 42
+    # Geospatial sampling knobs.
+    scenes: tuple[str, ...] = SENTINEL_SCENES
+    patches_per_side: int = (
+        22  # NxN grid of 64px patches read per scene (22 -> up to 484/scene)
+    )
+    window_offset: int = (
+        2500  # px offset into each 10980px scene (skips the black border)
+    )
+    min_valid_frac: float = (
+        0.6  # drop patches with too much nodata/cloud (mostly-black RGB)
+    )
+    log_every: int = 25  # stream step progress (0 = per-epoch only); see _progress.py
     max_train_samples: int | None = None
     max_eval_samples: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
@@ -104,60 +144,150 @@ def _resolve_device(requested: str):
     return torch.device("cpu"), "cpu"
 
 
-def _build_loaders(cfg: CVConfig, world_size: int = 1, rank: int = 0):
-    """Load EuroSAT, transform to fixed-size tensors, return (train, val, label_names).
+def _worldcover_tile(center_lat: float, center_lon: float) -> str:
+    """WorldCover tiles are 3°x3°, named by their SW corner, e.g. 'N48E009'."""
+    tlat = math.floor(center_lat / 3) * 3
+    tlon = math.floor(center_lon / 3) * 3
+    ns, ew = ("N" if tlat >= 0 else "S"), ("E" if tlon >= 0 else "W")
+    return f"{ns}{abs(tlat):02d}{ew}{abs(tlon):03d}"
 
-    When world_size>1 the train set is sharded with DistributedSampler (one shard per NeuronCore)
-    for data-parallel training; drop_last keeps every core's batch shape identical.
+
+def _load_roda_patches(cfg: CVConfig):
+    """Assemble (image, label) patches from RODA Sentinel-2 + WorldCover. Returns (X, codes).
+
+    For each scene: read an NxN-patch RGB window from the Sentinel-2 true-color COG, reproject its
+    footprint to lon/lat, read the matching WorldCover label raster resampled onto the same grid,
+    then tile both into 64x64 patches and label each by its majority WorldCover class. Patches that
+    are mostly nodata (black RGB or WorldCover code 0) are dropped.
+
+    Honest caveat: Sentinel-2 is in UTM and WorldCover in lon/lat; we align via the window's
+    geographic bounds (a small-window approximation that ignores sub-pixel rotation). Fine for a
+    teaching classifier; a production pipeline would warp to a common grid per-pixel.
+    """
+    import numpy as np
+    import rasterio
+    from rasterio.enums import Resampling
+    from rasterio.warp import transform_bounds
+    from rasterio.windows import Window, from_bounds
+
+    side = cfg.patches_per_side
+    win_px = side * IMAGE_SIZE
+    imgs: list[np.ndarray] = []
+    codes: list[int] = []
+
+    for scene in cfg.scenes:
+        tci = f"s3://{SENTINEL_BUCKET}/sentinel-s2-l2a-cogs/{scene}/TCI.tif"
+        try:
+            with (
+                rasterio.Env(
+                    AWS_NO_SIGN_REQUEST=True, AWS_DEFAULT_REGION=SENTINEL_REGION
+                ),
+                rasterio.open(tci) as s2,
+            ):
+                off = min(cfg.window_offset, max(0, s2.width - win_px))
+                win = Window(off, off, win_px, win_px)
+                rgb = s2.read(window=win)  # (3, win_px, win_px), uint8
+                b_utm = rasterio.windows.bounds(win, s2.transform)
+                minlon, minlat, maxlon, maxlat = transform_bounds(
+                    s2.crs, "EPSG:4326", *b_utm
+                )
+        except Exception as exc:  # noqa: BLE001 — skip an unreadable scene, don't fail the run
+            print(f"   ⚠️  skipping scene {scene}: {type(exc).__name__} {str(exc)[:80]}")
+            continue
+
+        tile = _worldcover_tile((minlat + maxlat) / 2, (minlon + maxlon) / 2)
+        wc_url = (
+            f"s3://{WORLDCOVER_BUCKET}/v200/2021/map/"
+            f"ESA_WorldCover_10m_2021_v200_{tile}_Map.tif"
+        )
+        try:
+            with (
+                rasterio.Env(
+                    AWS_NO_SIGN_REQUEST=True, AWS_DEFAULT_REGION=WORLDCOVER_REGION
+                ),
+                rasterio.open(wc_url) as lc,
+            ):
+                wc_win = from_bounds(
+                    minlon, minlat, maxlon, maxlat, transform=lc.transform
+                )
+                # Resample labels onto the SAME pixel grid as the RGB window (nearest = labels).
+                lab = lc.read(
+                    1,
+                    window=wc_win,
+                    out_shape=(win_px, win_px),
+                    resampling=Resampling.nearest,
+                    boundless=True,
+                    fill_value=0,
+                )
+        except Exception as exc:  # noqa: BLE001
+            print(f"   ⚠️  skipping labels {tile}: {type(exc).__name__} {str(exc)[:80]}")
+            continue
+
+        # WorldCover north-up rasters index row 0 at max latitude; the S2 RGB window we read is also
+        # north-up (row 0 = max northing), so the two grids align after the bounds-based read above.
+        kept = 0
+        for i in range(side):
+            for j in range(side):
+                r0, c0 = i * IMAGE_SIZE, j * IMAGE_SIZE
+                patch = rgb[:, r0 : r0 + IMAGE_SIZE, c0 : c0 + IMAGE_SIZE]
+                lblk = lab[r0 : r0 + IMAGE_SIZE, c0 : c0 + IMAGE_SIZE]
+                # Drop mostly-nodata patches (black S2 pixels or WorldCover 0).
+                valid = (patch.sum(axis=0) > 0) & (lblk > 0)
+                if valid.mean() < cfg.min_valid_frac:
+                    continue
+                # Majority WorldCover class over the patch (ignoring 0/nodata).
+                flat = lblk[lblk > 0]
+                code = int(np.bincount(flat).argmax())
+                imgs.append(patch.astype("float32") / 255.0)  # CHW, [0,1]
+                codes.append(code)
+                kept += 1
+        print(
+            f"   scene {scene.split('/')[-1]}: kept {kept} patches (WorldCover tile {tile})"
+        )
+
+    if not imgs:
+        raise RuntimeError(
+            "No RODA patches assembled — check network/anonymous S3 access to "
+            f"s3://{SENTINEL_BUCKET} (us-west-2) and s3://{WORLDCOVER_BUCKET} (eu-central-1)."
+        )
+    return np.stack(imgs), np.asarray(codes, dtype="int64")
+
+
+def _build_loaders(cfg: CVConfig, world_size: int = 1, rank: int = 0):
+    """Assemble RODA patches, map labels to contiguous indices, return (train, val, names, sampler).
+
+    When world_size>1 the train set is sharded with DistributedSampler (one shard per NeuronCore);
+    drop_last keeps every core's batch shape identical so the graph compiles once.
     """
     import numpy as np
     import torch
-    from datasets import load_dataset
     from torch.utils.data import DataLoader, TensorDataset
     from torch.utils.data.distributed import DistributedSampler
 
-    ds = load_dataset(cfg.dataset_name)
-    # Resolve splits (some mirrors only ship "train"); carve a val split if needed.
-    train_split = ds["train"]
-    if "test" in ds:
-        val_split = ds["test"]
-    elif "validation" in ds:
-        val_split = ds["validation"]
-    else:
-        split = train_split.train_test_split(test_size=0.2, seed=cfg.seed)
-        train_split, val_split = split["train"], split["test"]
+    x, codes = _load_roda_patches(cfg)
 
-    # Identify the image + label columns from the schema.
-    feats = train_split.features
-    label_col = next((c for c in ("label", "labels") if c in feats), None)
-    image_col = next((c for c in ("image", "img") if c in feats), None)
-    if label_col is None or image_col is None:
-        raise ValueError(f"Could not find image/label columns in {list(feats)}")
-    label_names = getattr(feats[label_col], "names", None) or [
-        str(i) for i in range(max(train_split[label_col]) + 1)
-    ]
+    # Map the WorldCover codes that actually appear to contiguous class indices [0..K).
+    present = sorted({int(c) for c in codes})
+    code_to_idx = {c: i for i, c in enumerate(present)}
+    label_names = [WORLDCOVER_CLASSES.get(c, str(c)) for c in present]
+    y = np.asarray([code_to_idx[int(c)] for c in codes], dtype="int64")
 
-    def cap(split, n):
-        return split.select(range(min(n, len(split)))) if n else split
+    # Deterministic train/val split (80/20).
+    rng = np.random.RandomState(cfg.seed)
+    perm = rng.permutation(len(x))
+    n_val = max(cfg.eval_batch_size, int(0.2 * len(x)))
+    val_idx, train_idx = perm[:n_val], perm[n_val:]
+    if cfg.max_train_samples:
+        train_idx = train_idx[: cfg.max_train_samples]
+    if cfg.max_eval_samples:
+        val_idx = val_idx[: cfg.max_eval_samples]
 
-    def to_tensors(split):
-        """Decode PIL images to a fixed 3x64x64 float tensor stack + label tensor."""
-        imgs, labels = [], []
-        for ex in split:
-            img = ex[image_col].convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
-            arr = (
-                np.asarray(img, dtype=np.float32).transpose(2, 0, 1) / 255.0
-            )  # CHW, [0,1]
-            imgs.append(arr)
-            labels.append(int(ex[label_col]))
-        x = torch.tensor(np.stack(imgs))
-        y = torch.tensor(labels, dtype=torch.long)
-        return TensorDataset(x, y)
+    def ds(idx):
+        return TensorDataset(
+            torch.tensor(x[idx]), torch.tensor(y[idx], dtype=torch.long)
+        )
 
-    train = to_tensors(cap(train_split, cfg.max_train_samples))
-    val = to_tensors(cap(val_split, cfg.max_eval_samples))
-
-    # drop_last keeps every batch shape identical -> the graph compiles once (best-practices §1).
+    train, val = ds(train_idx), ds(val_idx)
     if world_size > 1:
         sampler = DistributedSampler(
             train, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
@@ -176,8 +306,8 @@ def _build_loaders(cfg: CVConfig, world_size: int = 1, rank: int = 0):
 
 def _build_model(num_classes: int):
     """A small residual CNN — dense, regular convolutions (systolic-engine-friendly) with skip
-    connections so it actually reaches a respectable EuroSAT accuracy (a plain 3-block CNN plateaus
-    ~0.65; residual blocks + a wider stem clear ~0.9). Still tiny and bf16-stable.
+    connections. Tiny and bf16-stable. (See the docstring: it RUNS well but under-fills the array;
+    cv_utilization_spike.py measures that.)
     """
     import torch.nn as nn
 
@@ -239,15 +369,13 @@ def _evaluate(model, loader, device, backend) -> float:
 
 
 def run(config: dict | None = None) -> dict[str, float]:
-    """Train the land-cover CNN and return metrics (the harness entrypoint).
+    """Train the land-cover CNN on RODA data and return metrics (the harness entrypoint).
 
     Single-process by default. If launched under torchrun (RANK in env) with device=xla, it runs
     **data-parallel across NeuronCores** — the same workload, sharded, with gradient all-reduce.
-    Scaling cores ~linearly cuts per-epoch wall-clock (see the README's 1-core vs 2-core numbers).
 
-        torchrun --nproc_per_node=2 examples/use_cases/satellite_landcover.py   # 2-core data parallel
+        torchrun --nproc_per_node=2 examples/use_cases/satellite_landcover.py
     """
-    import os
     import time
 
     import torch
@@ -256,7 +384,6 @@ def run(config: dict | None = None) -> dict[str, float]:
     _set_seed(cfg.seed)
     device, backend = _resolve_device(cfg.device)
 
-    # Detect a torchrun launch on XLA -> data-parallel across cores.
     distributed = backend == "xla" and "RANK" in os.environ
     world_size, rank = 1, 0
     if distributed:
@@ -268,7 +395,7 @@ def run(config: dict | None = None) -> dict[str, float]:
     if rank == 0:
         mode = f"data-parallel x{world_size}" if distributed else "single-core"
         print(
-            f"🛰️  Land-cover CV | dataset={cfg.dataset_name} | device={backend} | {mode}"
+            f"🛰️  Land-cover CV (RODA: Sentinel-2 + WorldCover) | device={backend} | {mode}"
         )
 
     train_loader, val_loader, label_names, sampler = _build_loaders(
@@ -289,8 +416,18 @@ def run(config: dict | None = None) -> dict[str, float]:
     else:
         device_loader = train_loader
 
+    from examples.use_cases._progress import StepProgress
+
+    progress = StepProgress(
+        "train",
+        len(train_loader) * cfg.epochs,
+        cfg.log_every if rank == 0 else 0,
+        backend,
+    )
+    progress.announce()
     wall = time.time()
     first_step_s = None
+    gstep = 0
     for epoch in range(cfg.epochs):
         model.train()
         if sampler is not None:
@@ -311,8 +448,10 @@ def run(config: dict | None = None) -> dict[str, float]:
                 optimizer.step()
             running += loss.detach()
             n += 1
+            gstep += 1
             if first_step_s is None:
                 first_step_s = time.time() - t0
+            progress.step(gstep, loss)
         if rank == 0:
             print(
                 f"   epoch {epoch + 1}/{cfg.epochs}  avg_loss={(running / max(1, n)).item():.4f}"
@@ -324,6 +463,7 @@ def run(config: dict | None = None) -> dict[str, float]:
     acc = _evaluate(model, val_loader, device, backend)
     metrics = {
         "eval_acc": float(acc),
+        "num_classes": float(len(label_names)),
         "train_wall_s": round(time.time() - wall, 2),
         "first_step_compile_s": round(first_step_s or 0.0, 2),
     }
@@ -332,14 +472,16 @@ def run(config: dict | None = None) -> dict[str, float]:
 
 
 def main() -> None:
-    """CLI entrypoint; NER_SMOKE-style env enables a tiny CPU smoke run."""
-    cfg = {}
+    """CLI entrypoint; CV_SMOKE-style env enables a tiny CPU smoke run (still reads real RODA)."""
+    cfg: dict[str, Any] = {}
     if os.environ.get("CV_SMOKE") or os.environ.get("NER_SMOKE"):
         cfg = {
             "device": "cpu",
             "epochs": 1,
-            "max_train_samples": 128,
-            "max_eval_samples": 128,
+            "scenes": (SENTINEL_SCENES[0],),  # one scene
+            "patches_per_side": 16,  # ~256 patches: enough for a train/val split after filtering
+            "train_batch_size": 16,
+            "eval_batch_size": 16,
         }
     run(cfg)
 

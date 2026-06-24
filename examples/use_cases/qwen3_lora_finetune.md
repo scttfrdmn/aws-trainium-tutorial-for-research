@@ -57,6 +57,10 @@ torchrun --nproc_per_node=32 examples/use_cases/qwen3_lora_finetune.py \
 | Optimizer-state sharding | `zero_1=True` |
 | SFT data | chat-formatted instruction dataset via `formatting_func` + chat template |
 
+> **Data source — why Hugging Face, not RODA?** The AWS Registry of Open Data has no LLM
+> instruction-tuning corpus; the SFT dataset lives on Hugging Face. (The
+> [satellite example](satellite_landcover.py) uses RODA — that's where open geospatial data lives.)
+
 ## Sizing (be realistic on one chip)
 
 LoRA + a **~1.7B** model is the practical ceiling on `trn1.2xlarge` (32 GiB). 7–8B needs more cores

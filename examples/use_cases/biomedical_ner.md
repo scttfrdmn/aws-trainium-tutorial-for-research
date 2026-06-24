@@ -31,6 +31,11 @@ Trainium/Neuron experience needed.
    (fixed with `attn_implementation="eager"`) and the **first-step compile cost** (reported as
    `first_step_compile_s`). See the [best-practices chapter](../../docs/trainium_development_best_practices.md).
 
+> **Data source — why Hugging Face, not RODA?** The AWS Registry of Open Data is geospatial/genomics/
+> climate-heavy and has **no biomedical NER text corpus**. NCBI-disease lives on Hugging Face, which
+> is the right home for it. (The [satellite example](satellite_landcover.py) *does* use RODA — that's
+> where open geospatial data lives.)
+
 ## Prerequisites
 
 - A Neuron instance (`trn1.2xlarge` is plenty) or any CPU box for a smoke run.

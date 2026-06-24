@@ -56,6 +56,10 @@ isn't a guarantee of a *synthesizable* crystal** (charge balance, formation ener
 checks) — but it's a real, honest step beyond perplexity. If pymatgen isn't installed the run still
 works and reports `validity_rate = -1.0` (not measured).
 
+> **Data source — why Hugging Face, not RODA?** The AWS Registry of Open Data has no materials /
+> crystal-structure dataset; the CrystaLLM CIF corpus lives on Hugging Face. (The
+> [satellite example](satellite_landcover.py) uses RODA — that's where open geospatial data lives.)
+
 ## Prerequisites
 
 - A Neuron instance (`trn1.2xlarge`) or any CPU box for the smoke run.

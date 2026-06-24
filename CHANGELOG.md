@@ -10,6 +10,19 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Changed (RODA open data)
+- **`satellite_landcover.py` now builds its training set from the AWS Registry of Open Data**, not a
+  pre-tiled Hugging Face benchmark. It reads **Sentinel-2 L2A** COGs (`s3://sentinel-cogs`) + **ESA
+  WorldCover** label rasters (`s3://esa-worldcover`) anonymously via `rasterio`, co-registers them,
+  tiles into 64×64 patches, and labels each by majority WorldCover class — real `(image → land-cover)`
+  pairs from live open data. Harder than EuroSAT (majority-label noise), so the gate is 0.60 (CPU
+  smoke already hits ~0.77). The CNN/training/utilization-lesson code is unchanged.
+- Added an honest **"why Hugging Face, not RODA?"** note to the other five examples — RODA is
+  geospatial/genomics/climate-centric and has no NLP/protein/materials/LLM corpus, so only the
+  geospatial example converts. (The earlier fake `aws_open_data.py` that *pretended* to serve RODA
+  was deleted in the audit; this is the real thing.)
+- `rasterio` + `pymatgen` added to the `science` extra.
+
 ### Added (crystal validity + bookkeeping)
 - **Crystal-CIF example now reports a pymatgen-based `validity_rate`** — the fraction of generated
   CIFs that parse into a real structure. Reported, NOT gated (validity on a small/short run is

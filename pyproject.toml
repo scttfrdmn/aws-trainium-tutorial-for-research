@@ -64,6 +64,8 @@ science = [
     "rdkit>=2023.3.1",
     "biopython>=1.81",
     "faiss-cpu>=1.7.4",
+    "rasterio>=1.3.0",  # satellite_landcover: read Sentinel-2/WorldCover COGs from RODA S3
+    "pymatgen>=2024.1.1",  # crystal_cif_slm: structural-validity rate of generated CIFs
 ]
 notebooks = [
     "jupyter>=1.0.0",
