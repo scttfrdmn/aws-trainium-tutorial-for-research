@@ -457,7 +457,9 @@ def run(config: dict | None = None) -> dict[str, float]:
                 f"   epoch {epoch + 1}/{cfg.epochs}  avg_loss={(running / max(1, n)).item():.4f}"
             )
 
-    # Eval on rank 0 only.
+    # Eval on rank 0 only, on the Trainium device (this is a Trainium tutorial — eval belongs on the
+    # accelerator, same as training). The eval-mode forward is its own graph (BatchNorm uses frozen
+    # running stats) so it compiles once; with the persistent compile cache that cost amortizes.
     if rank != 0:
         return {}
     acc = _evaluate(model, val_loader, device, backend)

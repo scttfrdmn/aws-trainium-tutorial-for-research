@@ -17,8 +17,12 @@ Project work (milestones, issues, labels) is tracked on
   TFLOP/s** (reproduced 5.1×; CNN 1.069 / ViT 5.535 TFLOP/s), **crystal_cif_slm** perplexity 1.735
   with the new **`validity_rate` measured at 0.0%** — an honest result (a 1-epoch char-GPT learns CIF
   syntax but not yet parseable structures; exactly why validity is reported, not gated). The RODA
-  **satellite** example trained on real hardware (484 Sentinel-2+WorldCover patches) but its
-  eval-accuracy artifact is pending a slow eval-graph cold compile.
+  **satellite** example reads real Sentinel-2+WorldCover patches and trains on Trainium (graphs
+  compile + cache to S3), but a clean auto-validated run is still pending — a **stale compile-cache
+  lock** (a run killed mid-compile leaves a `.lock` with no `.neff` and the next run waits on it)
+  interrupted validation. This is an operational issue from repeatedly killing runs against a shared
+  cache prefix, **not** a confirmed Neuron compiler defect (no matching aws-neuron GitHub issue).
+  Remedy: clear stale locks / use a clean per-run cache prefix.
 
 ### Changed (RODA open data)
 - **`satellite_landcover.py` now builds its training set from the AWS Registry of Open Data**, not a

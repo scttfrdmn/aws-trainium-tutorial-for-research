@@ -99,9 +99,18 @@ python -m validation.run_on_hardware --instance trn1.2xlarge --region us-east-2 
 
 ## Status
 
-⏳ **Trained on real hardware (trn1.2xlarge), eval artifact pending.** On a us-west-2 run it read
-**484 real Sentinel-2 + WorldCover patches** (4 classes: Tree/Grass/Crop/Built) from RODA and trained
-the CNN cleanly (loss → ~0.60). The final accuracy artifact is pending — the *eval-graph* hit a very
-long cold compile (~20 min for one uncached graph) and didn't finish within the run window. The CPU
-smoke reaches `eval_acc≈0.77`. Tracked for a clean re-validation (a warm S3 compile cache for the
-eval graph fixes the slow path). See [`/VALIDATED.md`](../../VALIDATED.md) for the live record.
+⏳ **RODA data pipeline proven on real Trainium hardware (trn1.2xlarge, us-west-2); a clean full
+auto-validated run is still pending.** On hardware it reads real Sentinel-2 + WorldCover patches from
+RODA (up to 1452 across 3 scenes), assembles labeled tiles, and the CNN's graphs compile and cache to
+S3 (`Using a cached neff` hits, 0 recompiles on re-run) with training loss descending. The CPU smoke
+reaches `eval_acc≈0.77`.
+
+What blocked a clean validation run was a **stale compile-cache lock**, not a confirmed compiler bug:
+a run killed mid-compile leaves a `model.hlo_module.pb.lock` (with no `.neff`) in the shared S3 cache
+prefix, and the next run waits on it (`"Another process must be compiling … been waiting for: N
+minutes"`). That is the persistent-cache's normal lock-coordination message, and during this work I
+repeatedly killed/relaunched runs against the *same* cache prefix, which is the most likely source of
+the orphaned lock. Remedy: clear stale `*.lock` entries (no matching `.neff`) from the cache prefix
+before a fresh run, ideally with a clean per-run prefix. Re-validation is tracked; this is an
+operational issue, **not** a known/verified Neuron defect (no matching aws-neuron GitHub issue found).
+See [`/VALIDATED.md`](../../VALIDATED.md).

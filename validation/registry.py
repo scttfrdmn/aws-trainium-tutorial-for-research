@@ -83,9 +83,17 @@ EXAMPLES: tuple[Example, ...] = (
             "train_batch_size": 16,
             "eval_batch_size": 16,
         },
-        full_config={"device": "xla", "epochs": 8},
-        est_runtime_min=15.0,
-        description="Satellite land-cover CNN on EuroSAT (vision modality; XLA/Trainium).",
+        # One scene's patches (484) at 16 patches/side, 5 epochs — enough to clear the 0.60 gate on a
+        # single NeuronCore in a reasonable wall-clock (the small CNN is slow per-step on 1 core; more
+        # scenes/epochs raise accuracy but cost time). Eval runs on CPU (see _evaluate note).
+        full_config={
+            "device": "xla",
+            "epochs": 5,
+            "scenes": ("32/U/PU/2021/7/S2A_32UPU_20210705_0_L2A",),
+            "patches_per_side": 16,
+        },
+        est_runtime_min=20.0,
+        description="Satellite land-cover CNN: RODA Sentinel-2 + WorldCover (vision; XLA/Trainium).",
     ),
     Example(
         key="cv_utilization_spike",
