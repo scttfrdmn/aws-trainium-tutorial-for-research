@@ -9,6 +9,8 @@
 
 A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This tutorial provides what researchers and organizations need to leverage AWS Neuron hardware for cost-effective ML research and production deployment.
 
+> ✅ **Hardware-validated on real `trn1.2xlarge`** (Neuron 2.30 / PyTorch 2.9) — every registered example runs through a provenance-capturing harness; see [`VALIDATED.md`](VALIDATED.md) for the live count and per-example metrics. Every performance number in this repo traces to a captured run; nothing is hand-typed.
+
 > ### 📅 Status as of June 2026
 >
 > This tutorial targets **Neuron SDK 2.30.0** (released May 21, 2026) and **PyTorch 2.9** on the

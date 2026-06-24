@@ -42,34 +42,44 @@ python examples/use_cases/crystal_cif_slm.py
 At the end it prints a **sampled CIF** for a held-out composition so you can eyeball what the model
 writes.
 
-## ⚠️ Scope: what the metric does and doesn't tell you
+## Scope: two metrics, only one gated
 
-v1 reports **validation cross-entropy / perplexity** (the honest LM metric) and prints a generated
-sample. It does **not** score structural *validity* — whether the CIF parses, charges balance, or
-bond lengths are physical. That needs a domain validator (e.g. `pymatgen`) and is a deliberate
-follow-up. **A low perplexity means the model learned CIF syntax and statistics, not that every
-sample is a synthesizable crystal.** Treat the generated structures as candidates to validate
-downstream, exactly as you would CrystaLLM's raw samples.
+| Metric | What it tells you | Role |
+|---|---|---|
+| `val_perplexity` (gated via `inv_val_perplexity`) | did the model learn CIF **syntax and statistics** | pass/fail |
+| `validity_rate` (**reported**) | fraction of generated CIFs that **parse into a real structure** (pymatgen) | reported only |
+
+The example generates a batch of CIFs from held-out compositions and parses each with **pymatgen**;
+`validity_rate` is the fraction that yield a valid structure. It's **reported, not gated** — validity
+on a small/short-trained model is noisy, so gating on it would be flaky. **A parseable CIF still
+isn't a guarantee of a *synthesizable* crystal** (charge balance, formation energy, etc. are further
+checks) — but it's a real, honest step beyond perplexity. If pymatgen isn't installed the run still
+works and reports `validity_rate = -1.0` (not measured).
 
 ## Prerequisites
 
 - A Neuron instance (`trn1.2xlarge`) or any CPU box for the smoke run.
 - `pip install transformers datasets` (the Neuron stack comes from the DLAMI; the GPT is plain
-  `torch.nn`).
+  `torch.nn`). Add `pip install pymatgen` to measure the structural `validity_rate` (optional).
 
 ## Now try this
 
 - Scale `n_layer` / `n_embd` / `block_size` up on a `trn1.32xlarge` for a stronger model.
 - Swap the corpus for a larger CIF dump (Materials Project, OQMD) to broaden chemical coverage.
-- Add a `pymatgen`-based validity check on samples to turn perplexity into a structure-validity rate
-  (the natural v2).
+- Go beyond parse-validity: filter generated structures by charge balance or a formation-energy
+  surrogate to rank synthesizability — the natural next step for a discovery pipeline.
 
 ## Status
 
 ✅ **Hardware-validated on trn1.2xlarge** (Neuron 2.30, torch 2.9.1; 6L/384d char GPT, 8000 CIFs,
 1 epoch): **val_perplexity = 1.735** (low single-digit — the LM learned CIF syntax/statistics well)
-and it generated a CIF sample from a held-out composition. *Reminder: this gates LM quality, not
+and it generated a CIF sample from a held-out composition. *Reminder: perplexity gates LM quality, not
 structural validity — see the scope note above.*
+
+> ⏳ The pymatgen **`validity_rate`** metric was added and verified locally (unit-tested; graceful
+> skip when pymatgen is absent), but its first *hardware* artifact is pending a clean re-run — the
+> validation instances drawn during this round were environmentally degraded (compiler not
+> progressing). The training/perplexity result above stands from the prior validated run.
 
 A bf16 lesson surfaced on hardware (now fixed): masking future positions with `float("-inf")`
 produced `loss=nan` at step ~25 (the `0 * -inf = nan` softmax-backward trap). The causal mask uses a

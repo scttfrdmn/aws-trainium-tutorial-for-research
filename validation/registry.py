@@ -167,8 +167,9 @@ EXAMPLES: tuple[Example, ...] = (
         # CrystaLLM-style char GPT generating crystal CIFs. Gated metric is inv_val_perplexity
         # (= 1/perplexity, in (0,1], higher is better). A trained char-LM on structured CIF text
         # reaches low single-digit perplexity (inv >= 0.1, i.e. perplexity <= 10); gate there so a
-        # broken/untrained model (smoke perplexity ~79 → inv ~0.013) fails. NOTE: this gates LM
-        # quality, NOT structural validity (see the .md — validity scoring is a deliberate follow-up).
+        # broken/untrained model (smoke perplexity ~79 → inv ~0.013) fails. The example ALSO reports
+        # a pymatgen-based `validity_rate` (fraction of generated CIFs that parse to a real
+        # structure) — reported, NOT gated, since validity on a short run is noisy.
         thresholds={"inv_val_perplexity": 0.1},
         smoke_config={
             "device": "cpu",
@@ -180,6 +181,7 @@ EXAMPLES: tuple[Example, ...] = (
             "n_embd": 64,
             "block_size": 128,
             "sample_tokens": 64,
+            "validity_samples": 4,
         },
         # Cap to 8000 CIFs for the validation run so a single-core pass is watchable (the full 36k
         # corpus is a much longer run — scale up for a stronger model). 8k structured CIFs is plenty
@@ -189,6 +191,7 @@ EXAMPLES: tuple[Example, ...] = (
             "epochs": 1,
             "max_train_samples": 8000,
             "max_eval_samples": 1000,
+            "validity_samples": 20,
         },
         est_runtime_min=40.0,
         description="CrystaLLM-style char GPT: composition → crystal-structure CIF (XLA/Trainium).",

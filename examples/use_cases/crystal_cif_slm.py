@@ -24,10 +24,12 @@ What this demonstrates for Trainium users:
     * A real, reportable outcome: **validation cross-entropy / perplexity** (the honest LM metric)
       plus a **sampled CIF** from a held-out composition so you can eyeball what the model writes.
 
-> **Scope (honest):** v1 reports language-model loss/perplexity and prints a generated sample. It does
-> NOT score structural *validity* (parseable CIF, charge balance, physical bond lengths) — that needs
-> a domain validator (e.g. pymatgen) and is a deliberate follow-up. A low perplexity means the model
-> learned CIF *syntax and statistics*, not that every sample is a synthesizable crystal.
+> **Scope (honest):** the **gated** metric is language-model perplexity — "did it learn CIF syntax
+> and statistics." We ALSO generate a batch of CIFs and **report** a `validity_rate`: the fraction
+> that parse into a real structure via **pymatgen** (optional dependency; reported, not gated, since
+> validity on a small/short-trained model is noisy). A parseable CIF still isn't a guarantee of a
+> *synthesizable* crystal (charge balance, formation energy, etc. are further checks) — but it's a
+> real, honest step beyond perplexity. If pymatgen isn't installed, `validity_rate` is -1.0 (skipped).
 
 Harness contract: a module-level ``run(config) -> dict[str, float]`` returning ``val_perplexity``
 (lower is better). The harness gates on the derived ``inv_val_perplexity`` = 1/perplexity, which is
@@ -81,6 +83,7 @@ class CrystalConfig:
     max_train_samples: int | None = None
     max_eval_samples: int | None = None
     sample_tokens: int = 256  # how many chars to generate in the end-of-run demo
+    validity_samples: int = 20  # CIFs to generate for the structural-validity rate (0 = skip; pymatgen optional)
     extra: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -292,6 +295,48 @@ def _generate(model, prompt_ids, stoi, itos, cfg: CrystalConfig, device):
     return "".join(itos[int(i)] for i in idx[0].tolist())
 
 
+def _structure_validity_rate(cif_texts: list[str]) -> float:
+    """Fraction of generated CIFs that parse into a real crystal structure (pymatgen).
+
+    This is the honest companion to perplexity: perplexity says the model learned CIF *syntax*;
+    this says how many samples are actually *parseable, well-formed structures*. We try to parse
+    each generated CIF with pymatgen; malformed output (the expected common case for a small model)
+    just counts as invalid, it is NOT an error.
+
+    Returns the validity fraction in [0, 1], or **-1.0** as an explicit "not measured" sentinel when
+    pymatgen isn't installed — so downstream code never confuses it with a real 0% rate. This metric
+    is REPORTED, not gated (validity on a small/short-trained model is noisy).
+    """
+    try:
+        import warnings
+
+        from pymatgen.io.cif import CifParser
+    except ImportError:
+        print(
+            "   ℹ️  pymatgen not installed — skipping structural-validity rate "
+            "(install pymatgen to measure it). Reporting validity_rate=-1.0 (not measured)."
+        )
+        return -1.0
+
+    if not cif_texts:
+        return 0.0
+    valid = 0
+    for text in cif_texts:
+        # The generated doc is "formula >>> CIF"; parse the CIF portion only.
+        cif = text.split(PROMPT_SEP, 1)[-1]
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter(
+                    "ignore"
+                )  # pymatgen is chatty about minor CIF issues
+                structures = CifParser.from_str(cif).get_structures()
+            if structures:  # parsed into >=1 real structure
+                valid += 1
+        except Exception:  # noqa: BLE001 — malformed CIF is an expected outcome, not a failure
+            continue
+    return valid / len(cif_texts)
+
+
 def run(config: dict | None = None) -> dict[str, float]:
     """Train the crystal-CIF GPT; return metrics (the harness entrypoint).
 
@@ -394,13 +439,24 @@ def run(config: dict | None = None) -> dict[str, float]:
         min(val_loss, 20.0)
     )  # clamp to avoid overflow on an untrained smoke run
 
-    # --- Sample a CIF from a held-out composition (qualitative demo) -------------------------
-    sample_formula = val_docs[0].split(PROMPT_SEP)[0] if val_docs else "Na Cl"
-    prompt = f"{sample_formula}{PROMPT_SEP}"
-    prompt_ids = [stoi.get(c, pad_id) for c in prompt][: cfg.block_size]
-    sample = _generate(model, prompt_ids, stoi, itos, cfg, device)
-    print(f"   sample generation for composition '{sample_formula}':")
-    print("   " + sample.replace("\n", "\n   ")[:400])
+    # --- Generate CIFs from held-out compositions: 1 to print + N for the validity rate ------
+    n_samples = min(cfg.validity_samples, len(val_docs)) if val_docs else 0
+    prompts = [val_docs[i].split(PROMPT_SEP)[0] for i in range(max(1, n_samples))]
+    generated = []
+    for formula in prompts:
+        prompt = f"{formula}{PROMPT_SEP}"
+        prompt_ids = [stoi.get(c, pad_id) for c in prompt][: cfg.block_size]
+        generated.append(_generate(model, prompt_ids, stoi, itos, cfg, device))
+
+    print(f"   sample generation for composition '{prompts[0]}':")
+    print("   " + generated[0].replace("\n", "\n   ")[:400])
+
+    # Structural-validity rate over the generated CIFs (reported, not gated; pymatgen optional).
+    validity_rate = _structure_validity_rate(generated) if n_samples else -1.0
+    if validity_rate >= 0:
+        print(
+            f"   structural validity: {validity_rate:.1%} of {len(generated)} generated CIFs parse"
+        )
 
     metrics = {
         # Gated metric: inverse perplexity in (0, 1], higher = better. A trained char-LM on CIF
@@ -408,6 +464,9 @@ def run(config: dict | None = None) -> dict[str, float]:
         "inv_val_perplexity": float(1.0 / val_ppl) if val_ppl else 0.0,
         "val_perplexity": float(round(val_ppl, 3)),
         "val_loss": float(round(val_loss, 4)),
+        # Reported, NOT gated: fraction of generated CIFs that parse to a real structure (-1 if
+        # pymatgen absent). Perplexity = "learned syntax"; this = "generates well-formed structures".
+        "validity_rate": float(round(validity_rate, 4)),
         "params_m": float(round(n_params / 1e6, 2)),
         "train_wall_s": round(train_wall, 2),
         "first_step_compile_s": round(first_step_s or 0.0, 2),
@@ -433,6 +492,7 @@ def main() -> None:
             "n_embd": 64,
             "block_size": 128,
             "sample_tokens": 64,
+            "validity_samples": 4,  # tiny for the smoke (untrained → likely 0% valid)
         }
     run(cfg)
 

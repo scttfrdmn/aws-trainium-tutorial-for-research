@@ -10,6 +10,16 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Added (crystal validity + bookkeeping)
+- **Crystal-CIF example now reports a pymatgen-based `validity_rate`** — the fraction of generated
+  CIFs that parse into a real structure. Reported, NOT gated (validity on a small/short run is
+  noisy; perplexity stays the gate). pymatgen is optional — absent → `validity_rate = -1.0` and the
+  run still works. Unit-tested locally (0.5 on a valid+garbage CIF pair); first *hardware* artifact
+  pending a clean re-run (the trn1.2xlarge spot hosts drawn this round were environmentally degraded —
+  Neuron compiler not progressing — so the re-validation was deferred rather than forced).
+- README gained an at-a-glance hardware-validation pointer to `VALIDATED.md`.
+- Closed GitHub issues #2 (Qwen3 LoRA — shipped + validated) and #5 (NER bf16 exemplar — shipped).
+
 ### Added (SLM / "build a small model" track)
 - **All three new SLM examples are now hardware-validated on trn1.2xlarge** (Neuron 2.30, torch 2.9.1):
   distillation **student F1 0.5732** (71.4% of the 0.80 teacher at 3.8× fewer params), antibody
