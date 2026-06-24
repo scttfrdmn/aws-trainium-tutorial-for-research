@@ -68,7 +68,7 @@ Score your workload. The more "yes", the better the fit (details + the *why* in
 |---|---|---|
 | **Any first run / NLP fine-tune** | [Biomedical NER](../examples/use_cases/biomedical_ner.py) (validated) | best-practices → tools & debugging |
 | **An LLM fine-tune (LoRA)** | [Qwen3 LoRA fine-tune](../examples/use_cases/qwen3_lora_finetune.py) (optimum-neuron) | best-practices + sizing for your instance |
-| **Train then serve** | [Trainium → Inferentia pipeline](../examples/complete_workflow/trainium_to_inferentia_pipeline.py) | [Inferentia vs Trn2 decision guide](../VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference) |
+| **Train then serve** | [Trainium → Inferentia pipeline](../examples/complete_workflow/) (illustrative template) | [Inferentia vs Trn2 decision guide](../VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference) |
 | **Satellite / image classification (CNN)** | [Satellite land-cover](../examples/use_cases/satellite_landcover.py) | keep tiles fixed-size → then the [utilization spike](../examples/use_cases/cv_utilization_spike.py) |
 | **"Is my model the *shape* the hardware wants?"** | [CV utilization spike](../examples/use_cases/cv_utilization_spike.py) (measures achieved TFLOP/s) | profiler MFU in [tools & debugging](neuron_tools_and_debugging.md) |
 | **Quant finance / time series** | a *sequence model* over your series — adapt the [NER example](../examples/use_cases/biomedical_ner.py) (swap dataset + head) | static-shape + bf16 review (Monte-Carlo / tick-event sims stay on CPU — see domain notes below) |

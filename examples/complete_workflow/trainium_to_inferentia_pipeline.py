@@ -1,75 +1,69 @@
-# examples/complete_workflow/trainium_to_inferentia_pipeline.py
-"""Complete ML Pipeline: From Trainium Training to Inferentia Deployment.
+#!/usr/bin/env python3
+"""Train on Trainium → serve on Inferentia: the end-to-end shape of a research deployment.
 
-This module demonstrates a comprehensive machine learning pipeline that spans
-the entire ML lifecycle from training to deployment using AWS's specialized
-ML chips. It showcases the cost benefits and performance advantages of using
-Trainium for training and Inferentia for inference.
+This is the tutorial's **"train then serve"** example. It shows how the two halves of an ML
+project fit together on Neuron hardware: you train on a Trainium instance (the PyTorch/XLA path
+the other examples teach), then **compile the trained model once for inference** and serve it on a
+cheaper Inferentia instance behind an HTTP endpoint — with cost tracking on both phases.
 
-The pipeline covers:
-1. Model training on Trainium with automatic cost tracking
-2. Model compilation and optimization for Inferentia
-3. Production deployment with monitoring and auto-scaling
-4. Comprehensive cost analysis and ROI calculation
-5. Performance benchmarking and optimization recommendations
+> **Assumed knowledge:** you've run the [biomedical NER example](../use_cases/biomedical_ner.py)
+> (so the XLA training path is familiar) and read the
+> [best-practices chapter](../../docs/trainium_development_best_practices.md).
+> **What you'll get:** the orchestration shape of a real train→serve pipeline — SSM-resolved Neuron
+> AMIs, spot + auto-terminate, the crucial **`trace()`-is-inference-only** boundary between training
+> and serving, and where the costs land. Not a model you'll copy verbatim, but a template you adapt.
 
-Key Benefits:
-- 60-75% cost savings vs traditional GPU infrastructure
-- Automated cost tracking and budget controls
-- Production-ready deployment patterns
-- Comprehensive monitoring and alerting
-- Research-friendly configuration management
+## ⚠️ Illustrative orchestration — read it, adapt it, don't run it blind
 
-Examples:
-    Complete pipeline execution:
-        pipeline = TrainiumToInferentiaPipeline("climate-research", "my-ml-bucket")
+Unlike the validated single-file examples, this one **launches real, billable EC2 instances** and
+serves an **unauthenticated** Flask endpoint, and it trains on a **placeholder dataset** (a CSV you
+supply). It is deliberately *not* in the validation harness (the harness validates single-device
+`run(config)` examples; this orchestrates a multi-instance workflow). Treat every cost/latency
+number it prints as an **estimate**, and swap in your own dataset + governance before any real use.
 
-        # Phase 1: Training on Trainium
-        training_result = pipeline.train_on_trainium(
-            model_class="BertForSequenceClassification",
-            dataset_path="s3://my-bucket/climate-data.tar.gz",
-            config={"epochs": 10, "batch_size": 32}
-        )
+## The one lesson to take away: training graph ≠ inference graph
 
-        # Phase 2: Deploy on Inferentia
-        inference_result = pipeline.deploy_on_inferentia(
-            model_path=training_result["model_path"],
-            config={"inference_hours": 24}
-        )
+The training loop runs on the **XLA lazy-tensor** path (`xm.xla_device()`, `xm.optimizer_step()`,
+`xm.mark_step()`). When training finishes, the model is **`torch_neuronx.trace()`-d once** into a
+*frozen inference graph* and saved — you serve that. You cannot backprop through a traced graph;
+`trace()` is for inference only. Getting this boundary right is the whole point of the example.
 
-        # Phase 3: Cost analysis
-        cost_report = pipeline.run_cost_comparison(training_result, inference_result)
+## Platform note (June 2026)
 
-Cost Analysis (ILLUSTRATIVE — verify against current AWS pricing before budgeting):
-    The hourly rates below are rough, region-dependent estimates used to demonstrate the
-    cost-comparison logic, not quotes. Confirm at https://aws.amazon.com/ec2/pricing/.
-    Training Phase (Trainium vs GPU): typically 30-75% cheaper per hour.
-    Inference Phase (Inf2/Trn2 vs GPU): substantial savings, especially with spot.
+AWS positions **Trainium2 for both training and inference**, and NxD Inference dropped Inf2/Trn1
+support in Neuron 2.29. This example serves on **Inf2** for simplicity and to show the classic
+train-Trn/serve-Inf split; for new or large-scale serving, prefer **Trn2 + NxD Inference + the vLLM
+plugin**. See [`../../VERSION_MATRIX.md`](../../VERSION_MATRIX.md) for the decision guide.
 
-Platform note (June 2026):
-    AWS positions Trainium2 for both training AND inference, and NxD Inference dropped Inf2/Trn1
-    support in Neuron 2.29. This example uses Inf2 for inference for simplicity; for new or
-    large-scale serving, consider serving on Trn2 with NxD Inference + the vLLM plugin instead.
-    See ../../VERSION_MATRIX.md.
+## Cost numbers are illustrative
 
-Status:
-    This is a teaching example. AMI ids are resolved at runtime from SSM, but the example uses
-    a placeholder dataset/model and is not a hardened production service (no auth on the Flask
-    endpoint, single instance, etc.). Treat latency/cost output as estimates.
-
-Research Applications:
-    - Academic research with budget constraints
-    - Prototype development and testing
-    - Production model serving
-    - Batch inference processing
-    - Continuous model improvement cycles
+The `$/hr` rates live in one clearly-labeled table (`ILLUSTRATIVE_HOURLY_USD` below) and are rough,
+region- and time-dependent estimates used to demonstrate the comparison *logic* — not quotes, and
+not measured results from a controlled run. Always confirm current pricing at
+https://aws.amazon.com/ec2/pricing/ before budgeting.
 """
+
+from __future__ import annotations
 
 import json
 import time
 from datetime import datetime
+from typing import Any
 
 import boto3
+
+# Illustrative on-demand/spot $/hr by instance — NOT quotes. One place to edit; every cost figure
+# the pipeline prints derives from here so there are no hand-typed magic numbers scattered around.
+# Verify against https://aws.amazon.com/ec2/pricing/ before using any of these for a budget.
+ILLUSTRATIVE_HOURLY_USD: dict[str, float] = {
+    "trn1.2xlarge": 0.40,  # spot, us-east-2-ish
+    "trn1.32xlarge": 6.45,
+    "trn2.48xlarge": 12.00,
+    "inf2.xlarge": 0.227,
+    # GPU reference points for the comparison (on-demand, illustrative):
+    "p3.2xlarge": 3.06,  # V100 — a common academic baseline
+    "p5.48xlarge": 98.0,  # H100 — large-scale baseline
+}
 
 
 class TrainiumToInferentiaPipeline:
@@ -78,6 +72,9 @@ class TrainiumToInferentiaPipeline:
     def __init__(self, project_name, s3_bucket):
         self.project_name = project_name
         self.s3_bucket = s3_bucket
+        self.train_instance_type = (
+            "trn1.32xlarge"  # set in train_on_trainium; used for costing
+        )
         self.ec2 = boto3.client("ec2")
         self.s3 = boto3.client("s3")
         self.ssm = boto3.client("ssm")
@@ -113,8 +110,8 @@ class TrainiumToInferentiaPipeline:
     def train_on_trainium(self, model_class, dataset_path, config):
         """Train model on Trainium with automatic cost tracking"""
         print("🚀 Phase 1: Training on Trainium")
-        time.time()
         instance_type = config.get("instance_type", "trn1.32xlarge")
+        self.train_instance_type = instance_type
 
         # Generate training script
         training_script = self._generate_training_script(
@@ -273,14 +270,17 @@ echo "sudo shutdown -h now" | at now + {config.get("inference_hours", 24)} hours
         response = self.ec2.describe_instances(InstanceIds=[instance_id])
         public_ip = response["Reservations"][0]["Instances"][0]["PublicIpAddress"]
 
+        inf_hourly = ILLUSTRATIVE_HOURLY_USD["inf2.xlarge"]
         print(f"✅ Deployed on Inferentia: {instance_id}")
         print(f"🌐 Inference endpoint: http://{public_ip}:8080/predict")
-        print("💰 Cost: $0.227/hour (spot) - $0.758/hour (on-demand)")
+        print(
+            f"💰 Illustrative cost: ${inf_hourly:.3f}/hour (inf2.xlarge spot — verify pricing)"
+        )
 
         return {
             "instance_id": instance_id,
             "endpoint": f"http://{public_ip}:8080/predict",
-            "hourly_cost": 0.227,
+            "hourly_cost": inf_hourly,
         }
 
     def _generate_training_script(self, model_class, dataset_path, config):
@@ -667,20 +667,21 @@ monitor.run()
             response = self.ec2.describe_instances(InstanceIds=[instance_id])
             state = response["Reservations"][0]["Instances"][0]["State"]["Name"]
 
+            rate = ILLUSTRATIVE_HOURLY_USD.get(self.train_instance_type, 10.0)
             if state == "terminated":
                 end_time = time.time()
                 training_time = (end_time - start_time) / 3600
-                training_cost = training_time * 6.45  # Spot price for trn1.32xlarge
+                training_cost = training_time * rate
 
                 print("✅ Training completed!")
                 print(f"⏱️  Training time: {training_time:.2f} hours")
-                print(f"💰 Training cost: ${training_cost:.2f}")
+                print(f"💰 Training cost (illustrative): ${training_cost:.2f}")
 
                 return training_time, training_cost
 
             elif state == "running":
                 elapsed = (time.time() - start_time) / 3600
-                estimated_cost = elapsed * 6.45
+                estimated_cost = elapsed * rate
                 print(
                     f"🔄 Training in progress... {elapsed:.1f}h elapsed, ${estimated_cost:.2f} spent"
                 )
@@ -688,59 +689,68 @@ monitor.run()
             time.sleep(300)  # Check every 5 minutes
 
     def run_cost_comparison(self, training_result, inference_result):
-        """Generate cost comparison report"""
-        print("\\n📊 Cost Comparison Report")
+        """Generate an ILLUSTRATIVE cost comparison report.
+
+        Every figure derives from ILLUSTRATIVE_HOURLY_USD (one labeled table) so there are no
+        hand-typed savings percentages. The GPU baseline is an explicit instance rate, not a
+        made-up multiplier. These are planning aids, not measured results — verify pricing.
+        """
+        print("\n📊 Cost Comparison Report (ILLUSTRATIVE — verify pricing)")
         print("=" * 50)
 
-        # Training costs
-        print("Training Phase (Trainium):")
-        print(f"  Time: {training_result['training_time_hours']:.2f} hours")
-        print(f"  Cost: ${training_result['training_cost_usd']:.2f}")
-        print(
-            f"  vs H100 (estimated): ${training_result['training_cost_usd'] * 2.5:.2f}"
-        )
-        print(f"  Savings: ${training_result['training_cost_usd'] * 1.5:.2f} (60%)")
+        # Training: compare the actual Trainium instance used against a named GPU baseline at the
+        # SAME wall-clock hours (a rough "if you ran the same job on a GPU" proxy, not a benchmark).
+        train_hours = training_result["training_time_hours"]
+        train_cost = training_result["training_cost_usd"]
+        gpu_train_rate = ILLUSTRATIVE_HOURLY_USD["p5.48xlarge"]  # H100 baseline
+        gpu_train_cost = train_hours * gpu_train_rate
 
-        # Inference costs (projected monthly)
+        print(f"Training Phase ({self.train_instance_type}):")
+        print(f"  Time: {train_hours:.2f} hours")
+        print(f"  Cost: ${train_cost:.2f}")
+        print(f"  vs p5.48xlarge (H100) at same hours: ${gpu_train_cost:.2f}")
+
+        # Inference costs (projected monthly, 24/7).
         monthly_hours = 24 * 30
         inferentia_monthly = inference_result["hourly_cost"] * monthly_hours
-        gpu_monthly = 3.06 * monthly_hours  # p3.2xlarge
+        gpu_infer_rate = ILLUSTRATIVE_HOURLY_USD["p3.2xlarge"]  # V100 serving baseline
+        gpu_monthly = gpu_infer_rate * monthly_hours
 
-        print("\\nInference Phase (Inferentia):")
+        print("\nInference Phase (inf2.xlarge):")
         print(f"  Hourly: ${inference_result['hourly_cost']:.3f}")
         print(f"  Monthly (24/7): ${inferentia_monthly:.2f}")
-        print(f"  vs GPU monthly: ${gpu_monthly:.2f}")
-        print(
-            f"  Monthly savings: ${gpu_monthly - inferentia_monthly:.2f} ({((gpu_monthly - inferentia_monthly) / gpu_monthly * 100):.1f}%)"
-        )
+        print(f"  vs p3.2xlarge (V100) monthly: ${gpu_monthly:.2f}")
 
-        # Total savings
-        total_aws_cost = training_result["training_cost_usd"] + inferentia_monthly
-        total_gpu_cost = (training_result["training_cost_usd"] * 2.5) + gpu_monthly
+        # Total (training + one month of serving) — savings computed, never hardcoded.
+        total_aws_cost = train_cost + inferentia_monthly
+        total_gpu_cost = gpu_train_cost + gpu_monthly
+        savings = total_gpu_cost - total_aws_cost
+        savings_pct = (savings / total_gpu_cost * 100) if total_gpu_cost else 0.0
 
-        print("\\nTotal Monthly Cost (Training + Inference):")
-        print(f"  AWS ML Chips: ${total_aws_cost:.2f}")
-        print(f"  Traditional GPU: ${total_gpu_cost:.2f}")
-        print(
-            f"  💰 Total Savings: ${total_gpu_cost - total_aws_cost:.2f}/month ({((total_gpu_cost - total_aws_cost) / total_gpu_cost * 100):.1f}%)"
-        )
+        print("\nTotal (training + 1 month serving):")
+        print(f"  AWS Neuron: ${total_aws_cost:.2f}")
+        print(f"  GPU baseline: ${total_gpu_cost:.2f}")
+        print(f"  💰 Illustrative savings: ${savings:.2f} ({savings_pct:.1f}%)")
 
-        # Save report
+        # Save report (all figures illustrative, derived from ILLUSTRATIVE_HOURLY_USD).
         report = {
             "project": self.project_name,
             "timestamp": datetime.now().isoformat(),
+            "disclaimer": "Illustrative estimates from ILLUSTRATIVE_HOURLY_USD; verify AWS pricing.",
             "training": training_result,
             "inference": inference_result,
             "cost_comparison": {
                 "monthly_inferentia": inferentia_monthly,
-                "monthly_gpu": gpu_monthly,
+                "monthly_gpu_baseline": gpu_monthly,
                 "monthly_savings": gpu_monthly - inferentia_monthly,
                 "savings_percentage": (
                     (gpu_monthly - inferentia_monthly) / gpu_monthly * 100
+                    if gpu_monthly
+                    else 0.0
                 ),
-                "total_monthly_aws": total_aws_cost,
-                "total_monthly_gpu": total_gpu_cost,
-                "total_savings": total_gpu_cost - total_aws_cost,
+                "total_aws": total_aws_cost,
+                "total_gpu_baseline": total_gpu_cost,
+                "total_savings": savings,
             },
         }
 
@@ -749,80 +759,83 @@ monitor.run()
             Bucket=self.s3_bucket, Key=report_key, Body=json.dumps(report, indent=2)
         )
 
-        print(f"\\n✅ Full report saved to: s3://{self.s3_bucket}/{report_key}")
+        print(f"\n✅ Full report saved to: s3://{self.s3_bucket}/{report_key}")
 
         return report
 
 
-# Example usage script
-def main():
-    """Run complete Trainium to Inferentia pipeline"""
-    # Configuration
-    pipeline = TrainiumToInferentiaPipeline(
-        project_name="climate-prediction-demo",
-        s3_bucket="your-ml-experiments-bucket",  # Change this!
-    )
+def run_pipeline(project_name: str, s3_bucket: str, config: dict[str, Any]) -> dict:
+    """Run the full train→serve→compare pipeline. **Launches real, billable instances.**"""
+    pipeline = TrainiumToInferentiaPipeline(project_name, s3_bucket)
 
-    # Phase 1: Train on Trainium
-    print("🚀 Starting complete ML pipeline demo...")
-
-    training_config = {
-        "instance_type": "trn1.32xlarge",
-        "epochs": 10,
-        "batch_size": 32,
-        "learning_rate": 2e-5,
-        "num_labels": 2,
-    }
-
+    print("🚀 Starting train→serve pipeline...")
     training_result = pipeline.train_on_trainium(
-        model_class="ClimateModel",
-        dataset_path="datasets/climate_sentiment.tar.gz",
-        config=training_config,
+        model_class=config.get("model_class", "AutoModelForSequenceClassification"),
+        dataset_path=config["dataset_path"],
+        config=config,
     )
-
-    # Phase 2: Deploy on Inferentia
-    inference_config = {"inference_hours": 24 * 7}  # 1 week
-
     inference_result = pipeline.deploy_on_inferentia(
-        model_path=training_result["model_path"], config=inference_config
+        model_path=training_result["model_path"],
+        config={"inference_hours": config.get("inference_hours", 24)},
     )
+    report = pipeline.run_cost_comparison(training_result, inference_result)
+    print("\n🎉 Pipeline complete!")
+    print(f"📊 Results: s3://{pipeline.s3_bucket}/experiments/{pipeline.project_name}/")
+    return report
 
-    # Phase 3: Cost analysis
-    pipeline.run_cost_comparison(training_result, inference_result)
 
-    # Test the deployment
-    print("\\n🧪 Testing inference endpoint...")
-    import requests
+def main() -> None:
+    """CLI entrypoint. Dry by default — it does NOT launch instances unless you pass --run.
 
-    test_data = {
-        "texts": [
-            "Climate change is causing severe weather patterns",
-            "Renewable energy adoption is accelerating globally",
-            "Carbon emissions continue to rise despite commitments",
-        ]
-    }
+    This mirrors the tutorial's other hardware-touching examples: running the file with no flags
+    explains what *would* happen (and what it costs) rather than silently provisioning EC2.
+    """
+    import argparse
 
-    try:
-        response = requests.post(
-            inference_result["endpoint"], json=test_data, timeout=30
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument(
+        "--run", action="store_true", help="Actually launch instances (costs money)."
+    )
+    p.add_argument("--project", default="train-serve-demo")
+    p.add_argument(
+        "--bucket",
+        default=None,
+        help="S3 bucket for scripts/data/results (required for --run).",
+    )
+    p.add_argument(
+        "--dataset-path", default=None, help="s3://… tarball with your train.csv."
+    )
+    p.add_argument("--instance-type", default="trn1.32xlarge")
+    args = p.parse_args()
+
+    if not args.run:
+        print(
+            "DRY RUN — nothing launched.\n"
+            "This example trains on Trainium, compiles the model once with torch_neuronx.trace()\n"
+            "for inference, then serves it on an Inf2 instance behind an HTTP endpoint.\n\n"
+            "It provisions REAL, billable EC2 instances and serves an UNAUTHENTICATED endpoint, so\n"
+            "review the code and supply your own dataset first. Then re-run with, e.g.:\n"
+            "    python trainium_to_inferentia_pipeline.py --run \\\n"
+            "        --bucket my-ml-bucket --dataset-path s3://my-ml-bucket/data.tar.gz\n\n"
+            "See VERSION_MATRIX.md: for new serving, prefer Trn2 + NxD Inference over Inf2."
         )
-        if response.status_code == 200:
-            result = response.json()
-            print("✅ Inference test successful!")
-            print(f"   Predictions: {len(result['predictions'])} results")
-            print(f"   Latency: {result['latency_ms']:.2f}ms")
-            print(
-                f"   Cost per 1k requests: ${result['statistics']['cost_per_1k_requests']:.4f}"
-            )
-        else:
-            print(f"❌ Inference test failed: {response.status_code}")
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Could not connect to inference endpoint: {e}")
-        print("   The instance may still be starting up. Try again in a few minutes.")
+        return
 
-    print("\\n🎉 Pipeline demo completed!")
-    print(
-        f"📊 Check full results at: s3://{pipeline.s3_bucket}/experiments/{pipeline.project_name}/"
+    if not args.bucket or not args.dataset_path:
+        p.error("--run requires --bucket and --dataset-path")
+
+    run_pipeline(
+        args.project,
+        args.bucket,
+        {
+            "instance_type": args.instance_type,
+            "dataset_path": args.dataset_path,
+            "epochs": 10,
+            "batch_size": 32,
+            "learning_rate": 2e-5,
+            "num_labels": 2,
+            "inference_hours": 24 * 7,
+        },
     )
 
 
