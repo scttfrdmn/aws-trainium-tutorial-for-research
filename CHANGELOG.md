@@ -10,6 +10,24 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Added (SLM / "build a small model" track)
+- **Three new academic-domain examples** centered on making small/specialized models — all built to
+  the gold-standard template (`run(config)` contract, CPU smoke path, companion `.md`, registry
+  entry, honest "not yet HW-validated" status):
+  - `distill_ner_slm.py` — knowledge distillation (temperature KL + hard-label CE) of the validated
+    NER teacher into a ~4-layer student SLM; reports student-vs-teacher F1 retention + compression.
+  - `antibody_affinity_slm.py` — fine-tunes a small **ESM-2** protein LM to predict antibody
+    **binding affinity** from sequence on the public AbBibench benchmark; scored by Spearman.
+  - `crystal_cif_slm.py` — a **CrystaLLM**-style character GPT trained from scratch to generate
+    crystal-structure **CIFs** from a composition; reports perplexity + a sampled structure (LM
+    quality only — structural-validity scoring is a documented follow-up).
+
+### Changed (train→serve example)
+- Brought `examples/complete_workflow/trainium_to_inferentia_pipeline.py` up to the repo's tone:
+  assumed-knowledge/what-you'll-get header, the train-graph-vs-inference-graph (`trace()`) lesson
+  front-and-center, a single labeled `ILLUSTRATIVE_HOURLY_USD` cost table (no hand-typed savings
+  multipliers), and a DRY-by-default `main()` (`--run` to actually launch). Added companion README.
+
 ### Changed (learner-experience audit)
 - **Standardized on a single Python version (3.12) + uv everywhere.** Removed per-OS native Python
   installs and plain-`pip`/`venv` paths from the setup guide and README; `requires-python` tightened

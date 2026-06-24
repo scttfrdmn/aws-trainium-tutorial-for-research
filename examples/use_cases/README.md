@@ -17,6 +17,18 @@ Work through these roughly in order — each builds on the concepts of the last:
 | 4 | [Distributed NER](../distributed/) | scaling | data-parallel across NeuronCores (torchrun + XLA DDP), gradient all-reduce | ✅ validated |
 | 5 | [Qwen3 LoRA fine-tune](qwen3_lora_finetune.py) | LLM fine-tuning | the headline 2026 workflow: optimum-neuron, tensor parallelism, LoRA, the compile-cache lesson | ✅ validated (trn1.32xlarge, full epoch) |
 
+### Building small / specialized models (SLM track)
+
+A second thread: *making* a small, domain-specific model — distillation and from-scratch SLM
+pretraining. These are excellent Trainium workloads (dense transformer matmul, fixed shapes) and
+show off "the shape the hardware wants" from the [utilization spike](cv_utilization_spike.py).
+
+| # | Example | Domain | Teaches | Status |
+|---|---|---|---|---|
+| 6 | [Distill NER → SLM](distill_ner_slm.py) | NLP / distillation | knowledge distillation (KL+CE, temperature); student F1 vs teacher at N× compression | 🧪 code + CPU smoke (HW-validation pending) |
+| 7 | [Antibody affinity SLM](antibody_affinity_slm.py) | Protein / drug discovery | ESM-2 protein LM → binding-affinity regression on real antibody sequences (Spearman) | 🧪 code + CPU smoke (HW-validation pending) |
+| 8 | [Crystal-CIF SLM](crystal_cif_slm.py) | Materials science | CrystaLLM-style char GPT generating crystal structures from a composition (perplexity + sample) | 🧪 code + CPU smoke (HW-validation pending) |
+
 Each has a companion `.md` with prerequisites, "what you'll learn," run instructions, and an honest
 validation record. Most expose a CPU **smoke path** (e.g. `NER_SMOKE=1` / `CV_SMOKE=1`) so you can
 prove the code runs before paying for hardware:

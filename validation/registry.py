@@ -104,6 +104,76 @@ EXAMPLES: tuple[Example, ...] = (
         est_runtime_min=12.0,
         description="Measures Trainium under-utilization: CNN vs ViT achieved TFLOP/s (XLA/Trainium).",
     ),
+    Example(
+        key="distill_ner_slm",
+        module="examples.use_cases.distill_ner_slm",
+        entrypoint="run",
+        instances=("trn1.2xlarge",),
+        # Distill the NER teacher into a small student. Gate on student_f1: a 4-layer student on
+        # NCBI-disease clears ~0.55 comfortably while staying well below the ~0.80 teacher, so the
+        # gate catches a broken distillation loop without being flaky. (Also checks the student
+        # actually learned something, vs. the smoke run's near-zero F1.)
+        thresholds={"student_f1": 0.55},
+        smoke_config={
+            "device": "cpu",
+            "teacher_epochs": 1,
+            "distill_epochs": 1,
+            "max_train_samples": 64,
+            "max_eval_samples": 64,
+            "student_layers": 2,
+            "student_hidden": 128,
+            "student_heads": 2,
+            "student_intermediate": 256,
+        },
+        full_config={"device": "xla", "teacher_epochs": 2, "distill_epochs": 3},
+        est_runtime_min=30.0,
+        description="Knowledge distillation: NER teacher → small student SLM (XLA/Trainium).",
+    ),
+    Example(
+        key="antibody_affinity_slm",
+        module="examples.use_cases.antibody_affinity_slm",
+        entrypoint="run",
+        instances=("trn1.2xlarge",),
+        # ESM-2 fine-tuned to predict antibody binding affinity. Gate on Spearman rank correlation:
+        # a fine-tuned small protein LM on a single AbBibench complex should clear ~0.40 comfortably;
+        # gate there so a broken regressor (correlation ~0) fails without being flaky on a hard task.
+        thresholds={"spearman": 0.40},
+        smoke_config={
+            "device": "cpu",
+            "epochs": 1,
+            "max_train_samples": 48,
+            "max_eval_samples": 32,
+        },
+        full_config={"device": "xla", "epochs": 8},
+        est_runtime_min=15.0,
+        description="Antibody binding-affinity regression with ESM-2 protein LM (XLA/Trainium).",
+    ),
+    Example(
+        key="crystal_cif_slm",
+        module="examples.use_cases.crystal_cif_slm",
+        entrypoint="run",
+        instances=("trn1.2xlarge",),
+        # CrystaLLM-style char GPT generating crystal CIFs. Gated metric is inv_val_perplexity
+        # (= 1/perplexity, in (0,1], higher is better). A trained char-LM on structured CIF text
+        # reaches low single-digit perplexity (inv >= 0.1, i.e. perplexity <= 10); gate there so a
+        # broken/untrained model (smoke perplexity ~79 → inv ~0.013) fails. NOTE: this gates LM
+        # quality, NOT structural validity (see the .md — validity scoring is a deliberate follow-up).
+        thresholds={"inv_val_perplexity": 0.1},
+        smoke_config={
+            "device": "cpu",
+            "epochs": 1,
+            "max_train_samples": 64,
+            "max_eval_samples": 32,
+            "n_layer": 2,
+            "n_head": 2,
+            "n_embd": 64,
+            "block_size": 128,
+            "sample_tokens": 64,
+        },
+        full_config={"device": "xla", "epochs": 1},
+        est_runtime_min=40.0,
+        description="CrystaLLM-style char GPT: composition → crystal-structure CIF (XLA/Trainium).",
+    ),
 )
 
 # Examples that are NOT in the single-process auto-registry above because they require a multi-process
