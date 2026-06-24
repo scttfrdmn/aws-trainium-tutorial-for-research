@@ -74,6 +74,11 @@ class DistillConfig:
     device: str = "xla"  # "xla" (Trainium) | "cpu" (smoke) | "cuda"
 
     # Student architecture (a small BERT). These are the knobs that make it an SLM.
+    # By default the student is initialized from a PRETRAINED small BERT (real distillation practice —
+    # a from-scratch student under-learns in a short run; verified on hardware). The default model is
+    # 4-layer/512-hidden/8-head, so the *_layers/_hidden/_heads knobs below only apply when
+    # student_from_pretrained is set to None (the from-scratch baseline).
+    student_from_pretrained: str | None = "prajjwal1/bert-small"
     student_layers: int = 4
     student_hidden: int = 512
     student_heads: int = 8
@@ -96,6 +101,9 @@ class DistillConfig:
     attn_implementation: str = (
         "eager"  # Neuron-friendly (SDPA → nan in bf16); see NER example
     )
+    log_every: int = (
+        25  # stream step progress every N steps (0 = per-epoch only). See _progress.py
+    )
     max_train_samples: int | None = None
     max_eval_samples: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
@@ -108,20 +116,44 @@ class DistillConfig:
 
 
 def _build_student(cfg: DistillConfig, num_labels: int, label_names: list[str]):
-    """Construct a small token-classification BERT from scratch (random init — the student learns
-    from the teacher, not from pretrained weights). Small + fixed-shape ⇒ Trainium-friendly.
+    """Construct the small token-classification student BERT.
+
+    LESSON (learned the hard way on hardware): a **randomly-initialized** student does not reach
+    NER-grade F1 in a short distillation run — we measured student_f1≈0.24 vs a 0.80 teacher. Real
+    distillation (DistilBERT, TinyBERT) starts the student from **pretrained** weights and lets
+    distillation specialize it. So by default we load a pretrained small BERT (`prajjwal1/bert-small`,
+    a 4-layer/512-hidden general-domain model — exactly our target shape) and attach a fresh token-
+    classification head. Set `student_from_pretrained=None` to study the (much weaker) from-scratch
+    baseline. Either way the architecture is small + fixed-shape ⇒ Trainium-friendly.
     """
     from transformers import BertConfig, BertForTokenClassification
 
+    common = {
+        "num_labels": num_labels,
+        "id2label": dict(enumerate(label_names)),
+        "label2id": {n: i for i, n in enumerate(label_names)},
+        "attn_implementation": cfg.attn_implementation,
+    }
+    if cfg.student_from_pretrained:
+        try:
+            # Load explicitly as BERT, not via AutoModel: some small community checkpoints (e.g.
+            # prajjwal1/bert-small) ship a config.json WITHOUT a `model_type` key, so AutoModel
+            # raises "Unrecognized model ... Should have a model_type key". BertForTokenClassification
+            # reads the BERT dims directly and attaches a fresh classification head.
+            return BertForTokenClassification.from_pretrained(
+                cfg.student_from_pretrained, **common
+            )
+        except Exception as exc:  # noqa: BLE001 — fall back to scratch, don't fail the run
+            print(
+                f"⚠️  could not load pretrained student '{cfg.student_from_pretrained}' ({exc}); "
+                "falling back to random init (expect lower F1)."
+            )
     student_config = BertConfig(
         num_hidden_layers=cfg.student_layers,
         hidden_size=cfg.student_hidden,
         num_attention_heads=cfg.student_heads,
         intermediate_size=cfg.student_intermediate,
-        num_labels=num_labels,
-        id2label=dict(enumerate(label_names)),
-        label2id={n: i for i, n in enumerate(label_names)},
-        attn_implementation=cfg.attn_implementation,
+        **common,
     )
     return BertForTokenClassification(student_config)
 
@@ -148,7 +180,14 @@ def _train_teacher(cfg: DistillConfig, train_loader, device, backend, label_name
         optimizer, int(cfg.warmup_ratio * total), total
     )
 
+    from examples.use_cases._progress import StepProgress
+
     loader = _device_loader(train_loader, device, backend)
+    progress = StepProgress(
+        "teacher", len(train_loader) * cfg.teacher_epochs, cfg.log_every, backend
+    )
+    progress.announce()
+    gstep = 0
     for epoch in range(cfg.teacher_epochs):
         teacher.train()
         running = torch.zeros((), device=device)
@@ -163,6 +202,8 @@ def _train_teacher(cfg: DistillConfig, train_loader, device, backend, label_name
             scheduler.step()
             running += out.loss.detach()
             n += 1
+            gstep += 1
+            progress.step(gstep, out.loss)
         print(
             f"   teacher epoch {epoch + 1}/{cfg.teacher_epochs}  avg_loss={(running / max(1, n)).item():.4f}"
         )
@@ -203,6 +244,14 @@ def _distillation_loss(student_logits, teacher_logits, labels, cfg: DistillConfi
     `labels == -100` marks subword continuations / special tokens (ignored). The KL term matches
     the student's softened distribution to the teacher's; multiplying by T² keeps gradient
     magnitudes comparable to the CE term (the standard Hinton scaling).
+
+    KEY TRAINIUM LESSON (this bit us on hardware): do NOT select real tokens with boolean mask
+    indexing (`logits[labels != -100]`). The number of real tokens varies per batch, so that op has
+    a **data-dependent output shape** → the XLA graph recompiles EVERY step (the degenerate path the
+    best-practices chapter warns about; we watched the compile count climb on a trn1.2xlarge). Keep
+    the shape static instead: compute the per-position KL **densely** over all tokens, then zero out
+    the -100 positions with a multiplicative float mask and average over the real-token count. Same
+    math, fixed shape, compiles once.
     """
     import torch
     import torch.nn.functional as F
@@ -213,18 +262,18 @@ def _distillation_loss(student_logits, teacher_logits, labels, cfg: DistillConfi
         ignore_index=-100,
     )
 
-    # Soft-label KL on the real tokens (mask out -100 positions so padding doesn't dominate).
-    mask = labels.view(-1) != -100
-    s = student_logits.view(-1, student_logits.size(-1))[mask]
-    t = teacher_logits.view(-1, teacher_logits.size(-1))[mask]
-    if s.numel() == 0:
-        return ce, ce.detach(), torch.zeros((), device=ce.device)
     T = cfg.temperature
-    kl = F.kl_div(
+    s = student_logits.view(-1, student_logits.size(-1))
+    t = teacher_logits.view(-1, teacher_logits.size(-1))
+    # Per-position KL (sum over the class dim) — dense, static shape [N_positions].
+    per_pos_kl = F.kl_div(
         F.log_softmax(s / T, dim=-1),
         F.softmax(t / T, dim=-1),
-        reduction="batchmean",
-    ) * (T * T)
+        reduction="none",
+    ).sum(dim=-1)
+    valid = (labels.view(-1) != -100).to(per_pos_kl.dtype)  # 1.0 real / 0.0 ignored
+    denom = valid.sum().clamp(min=1.0)
+    kl = (per_pos_kl * valid).sum() / denom * (T * T)
     loss = cfg.alpha_ce * ce + (1.0 - cfg.alpha_ce) * kl
     return loss, ce.detach(), kl.detach()
 
@@ -296,9 +345,16 @@ def run(config: dict | None = None) -> dict[str, float]:
         optimizer, int(cfg.warmup_ratio * total), total
     )
 
+    from examples.use_cases._progress import StepProgress
+
     loader = _device_loader(train_loader, device, backend)
+    progress = StepProgress(
+        "distill", len(train_loader) * cfg.distill_epochs, cfg.log_every, backend
+    )
+    progress.announce()
     wall_start = time.time()
     first_step_s = None
+    gstep = 0
     for epoch in range(cfg.distill_epochs):
         student.train()
         running = torch.zeros((), device=device)
@@ -319,8 +375,10 @@ def run(config: dict | None = None) -> dict[str, float]:
             scheduler.step()
             running += loss.detach()
             n += 1
+            gstep += 1
             if first_step_s is None:
                 first_step_s = time.time() - step_start
+            progress.step(gstep, loss)
         print(
             f"   distill epoch {epoch + 1}/{cfg.distill_epochs}  avg_loss={(running / max(1, n)).item():.4f}"
         )
@@ -376,6 +434,8 @@ def main() -> None:
             "distill_epochs": 1,
             "max_train_samples": 64,
             "max_eval_samples": 64,
+            # From-scratch tiny student for a fast offline CPU smoke (no pretrained download).
+            "student_from_pretrained": None,
             "student_layers": 2,
             "student_hidden": 128,
             "student_heads": 2,

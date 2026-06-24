@@ -66,6 +66,12 @@ downstream, exactly as you would CrystaLLM's raw samples.
 
 ## Status
 
-⚠️ Code + CPU smoke path complete; **not yet hardware-validated** (no `validation/results/` artifact
-yet). Built to the same standards as the validated examples — it will carry a real `val_perplexity`
-once run on a Trainium instance through the harness.
+✅ **Hardware-validated on trn1.2xlarge** (Neuron 2.30, torch 2.9.1; 6L/384d char GPT, 8000 CIFs,
+1 epoch): **val_perplexity = 1.735** (low single-digit — the LM learned CIF syntax/statistics well)
+and it generated a CIF sample from a held-out composition. *Reminder: this gates LM quality, not
+structural validity — see the scope note above.*
+
+A bf16 lesson surfaced on hardware (now fixed): masking future positions with `float("-inf")`
+produced `loss=nan` at step ~25 (the `0 * -inf = nan` softmax-backward trap). The causal mask uses a
+large **finite** negative (`-1e9`) instead — same family of bf16-attention gotcha as the NER SDPA→nan
+lesson.

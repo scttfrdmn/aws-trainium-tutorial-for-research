@@ -74,6 +74,9 @@ class CrystalConfig:
     learning_rate: float = 3e-4
     warmup_ratio: float = 0.02
     grad_clip: float = 1.0
+    log_every: int = (
+        25  # stream step progress every N steps (0 = per-epoch only). See _progress.py
+    )
     seed: int = 42
     max_train_samples: int | None = None
     max_eval_samples: int | None = None
@@ -203,7 +206,12 @@ def _build_model(cfg: CrystalConfig, vocab_size: int, pad_id: int):
             qkv = qkv.permute(2, 0, 3, 1, 4)
             q, k, v = qkv[0], qkv[1], qkv[2]
             att = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
-            att = att.masked_fill(self.mask[:, :, :t, :t] == 0, float("-inf"))
+            # Mask future positions with a large FINITE negative, NOT float("-inf"). On the bf16
+            # Neuron path, -inf in the masked positions produces `0 * -inf = nan` in the softmax
+            # BACKWARD pass (we hit loss=nan at step ~25 on a trn1.2xlarge). A large finite value
+            # (-1e9) softmaxes to ~0 just the same but keeps gradients finite. (Same family of bf16
+            # attention gotcha as the SDPA→nan lesson in the NER example.)
+            att = att.masked_fill(self.mask[:, :, :t, :t] == 0, -1e9)
             att = torch.softmax(att.float(), dim=-1).to(
                 v.dtype
             )  # fp32 softmax (bf16-safe)
@@ -261,15 +269,24 @@ def _build_model(cfg: CrystalConfig, vocab_size: int, pad_id: int):
 
 
 def _generate(model, prompt_ids, stoi, itos, cfg: CrystalConfig, device):
-    """Greedy/temperature-free autoregressive sample for the end-of-run demo (CPU-side decode)."""
+    """Greedy autoregressive sample for the end-of-run demo.
+
+    Runs the decode loop on **CPU**: a composition prompt is short (~10 chars), and a negative
+    slice like ``idx[:, -block_size:]`` on a sequence shorter than block_size raised "Value out of
+    range" on the XLA backend (hit on a trn1.2xlarge). Generation is a tiny, one-off qualitative
+    demo, so we move the model to CPU and use an explicit non-negative slice start — robust and
+    backend-independent. (Training/eval stay on the device; only this demo decode is on CPU.)
+    """
     import torch
 
-    model.eval()
-    idx = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+    cpu_model = model.to("cpu")
+    cpu_model.eval()
+    idx = torch.tensor([prompt_ids], dtype=torch.long)
     with torch.no_grad():
         for _ in range(cfg.sample_tokens):
-            idx_cond = idx[:, -cfg.block_size :]
-            logits, _ = model(idx_cond)
+            start = max(0, idx.shape[1] - cfg.block_size)  # explicit, non-negative
+            idx_cond = idx[:, start:]
+            logits, _ = cpu_model(idx_cond)
             next_id = logits[:, -1, :].argmax(dim=-1, keepdim=True)
             idx = torch.cat([idx, next_id], dim=1)
     return "".join(itos[int(i)] for i in idx[0].tolist())
@@ -320,8 +337,15 @@ def run(config: dict | None = None) -> dict[str, float]:
     else:
         device_loader = train_loader
 
+    from examples.use_cases._progress import StepProgress
+
+    progress = StepProgress(
+        "train", len(train_loader) * cfg.epochs, cfg.log_every, backend
+    )
+    progress.announce()
     wall_start = time.time()
     first_step_s = None
+    gstep = 0
     for epoch in range(cfg.epochs):
         model.train()
         running = torch.zeros((), device=device)
@@ -343,8 +367,10 @@ def run(config: dict | None = None) -> dict[str, float]:
             scheduler.step()
             running += loss.detach()
             n += 1
+            gstep += 1
             if first_step_s is None:
                 first_step_s = time.time() - step_start
+            progress.step(gstep, loss)
         print(
             f"   epoch {epoch + 1}/{cfg.epochs}  avg_loss={(running / max(1, n)).item():.4f}"
         )

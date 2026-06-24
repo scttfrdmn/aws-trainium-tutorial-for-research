@@ -11,9 +11,17 @@ Project work (milestones, issues, labels) is tracked on
 ## [Unreleased]
 
 ### Added (SLM / "build a small model" track)
+- **All three new SLM examples are now hardware-validated on trn1.2xlarge** (Neuron 2.30, torch 2.9.1):
+  distillation **student F1 0.5732** (71.4% of the 0.80 teacher at 3.8× fewer params), antibody
+  affinity **Spearman 0.542**, crystal-CIF **perplexity 1.735**. Validation surfaced (and fixed) three
+  real hardware bugs, each now a documented teaching point: a **dynamic-shape recompile storm** from
+  boolean-mask token selection in the distill loss (→ dense masked KL), a **bf16 `-inf`-mask → nan** in
+  the crystal GPT's causal attention (→ `-1e9`), and a from-scratch student that under-learns (→ init
+  from pretrained `bert-small`). Added per-step **progress logging** (`_progress.py`) with a
+  "first step is compiling, not hung" heads-up so long runs are legible to learners.
 - **Three new academic-domain examples** centered on making small/specialized models — all built to
   the gold-standard template (`run(config)` contract, CPU smoke path, companion `.md`, registry
-  entry, honest "not yet HW-validated" status):
+  entry):
   - `distill_ner_slm.py` — knowledge distillation (temperature KL + hard-label CE) of the validated
     NER teacher into a ~4-layer student SLM; reports student-vs-teacher F1 retention + compression.
   - `antibody_affinity_slm.py` — fine-tunes a small **ESM-2** protein LM to predict antibody

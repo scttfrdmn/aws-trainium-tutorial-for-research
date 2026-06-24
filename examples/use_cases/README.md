@@ -25,9 +25,9 @@ show off "the shape the hardware wants" from the [utilization spike](cv_utilizat
 
 | # | Example | Domain | Teaches | Status |
 |---|---|---|---|---|
-| 6 | [Distill NER → SLM](distill_ner_slm.py) | NLP / distillation | knowledge distillation (KL+CE, temperature); student F1 vs teacher at N× compression | 🧪 code + CPU smoke (HW-validation pending) |
-| 7 | [Antibody affinity SLM](antibody_affinity_slm.py) | Protein / drug discovery | ESM-2 protein LM → binding-affinity regression on real antibody sequences (Spearman) | 🧪 code + CPU smoke (HW-validation pending) |
-| 8 | [Crystal-CIF SLM](crystal_cif_slm.py) | Materials science | CrystaLLM-style char GPT generating crystal structures from a composition (perplexity + sample) | 🧪 code + CPU smoke (HW-validation pending) |
+| 6 | [Distill NER → SLM](distill_ner_slm.py) | NLP / distillation | knowledge distillation (KL+CE, temperature); student F1 vs teacher at N× compression | ✅ validated (student F1 0.57, 71% retention, 3.8× smaller) |
+| 7 | [Antibody affinity SLM](antibody_affinity_slm.py) | Protein / drug discovery | ESM-2 protein LM → binding-affinity regression on real antibody sequences (Spearman) | ✅ validated (Spearman 0.54) |
+| 8 | [Crystal-CIF SLM](crystal_cif_slm.py) | Materials science | CrystaLLM-style char GPT generating crystal structures from a composition (perplexity + sample) | ✅ validated (perplexity 1.74) |
 
 Each has a companion `.md` with prerequisites, "what you'll learn," run instructions, and an honest
 validation record. Most expose a CPU **smoke path** (e.g. `NER_SMOKE=1` / `CV_SMOKE=1`) so you can

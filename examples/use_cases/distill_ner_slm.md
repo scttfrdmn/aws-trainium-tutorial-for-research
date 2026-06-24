@@ -66,6 +66,14 @@ example) is NER-specific.
 
 ## Status
 
-⚠️ Code + CPU smoke path complete; **not yet hardware-validated** (no `validation/results/` artifact
-yet). Built to the same standards as the validated examples — it will carry a real `student_f1` once
-run on a Trainium instance through the harness.
+✅ **Hardware-validated on trn1.2xlarge** (Neuron 2.30, torch 2.9.1): teacher eval_f1 **0.8023**,
+distilled student eval_f1 **0.5732** — **71.4% of the teacher's F1 at 3.8× fewer parameters**.
+
+Two lessons surfaced *because* we ran it on hardware (and are now baked into the code):
+- **A from-scratch student under-learns** in a short run (we measured student_f1≈0.24). Real
+  distillation initializes the student from **pretrained** weights (`prajjwal1/bert-small`); that
+  alone lifted it to 0.57. The from-scratch baseline is still available via
+  `student_from_pretrained=None`.
+- **Don't select real tokens with boolean mask indexing** in the loss — `logits[labels != -100]`
+  has a data-dependent shape that **recompiles the XLA graph every step** (we watched the compile
+  count climb). The loss now computes a dense masked KL (static shape, compiles once).

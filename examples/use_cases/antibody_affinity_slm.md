@@ -58,6 +58,6 @@ python examples/use_cases/antibody_affinity_slm.py
 
 ## Status
 
-⚠️ Code + CPU smoke path complete; **not yet hardware-validated** (no `validation/results/` artifact
-yet). Built to the same standards as the validated examples — it will carry a real `spearman` once
-run on a Trainium instance through the harness.
+✅ **Hardware-validated on trn1.2xlarge** (Neuron 2.30, torch 2.9.1, ESM-2 t6 8M, 8 epochs on the
+`2fjg` complex): **Spearman = 0.542**, Pearson = 0.638 on the held-out split — a real, useful
+ranking signal for candidate triage on a genuinely hard task.

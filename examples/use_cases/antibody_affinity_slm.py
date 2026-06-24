@@ -72,6 +72,9 @@ class AntibodyConfig:
     grad_clip: float = 1.0
     test_fraction: float = 0.2
     freeze_encoder: bool = False  # set True to train only the head (faster, weaker)
+    log_every: int = (
+        25  # stream step progress every N steps (0 = per-epoch only). See _progress.py
+    )
     seed: int = 42
     attn_implementation: str = (
         "eager"  # Neuron-friendly (SDPA → nan in bf16); see NER example
@@ -291,8 +294,15 @@ def run(config: dict | None = None) -> dict[str, float]:
     else:
         device_loader = train_loader
 
+    from examples.use_cases._progress import StepProgress
+
+    progress = StepProgress(
+        "train", len(train_loader) * cfg.epochs, cfg.log_every, backend
+    )
+    progress.announce()
     wall_start = time.time()
     first_step_s = None
+    gstep = 0
     for epoch in range(cfg.epochs):
         model.train()
         running = torch.zeros((), device=device)
@@ -318,8 +328,10 @@ def run(config: dict | None = None) -> dict[str, float]:
             scheduler.step()
             running += loss.detach()
             n += 1
+            gstep += 1
             if first_step_s is None:
                 first_step_s = time.time() - step_start
+            progress.step(gstep, loss)
         print(
             f"   epoch {epoch + 1}/{cfg.epochs}  avg_mse={(running / max(1, n)).item():.4f}"
         )

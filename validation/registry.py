@@ -120,12 +120,23 @@ EXAMPLES: tuple[Example, ...] = (
             "distill_epochs": 1,
             "max_train_samples": 64,
             "max_eval_samples": 64,
+            # From-scratch tiny student for a fast offline CPU smoke (no pretrained download).
+            "student_from_pretrained": None,
             "student_layers": 2,
             "student_hidden": 128,
             "student_heads": 2,
             "student_intermediate": 256,
         },
-        full_config={"device": "xla", "teacher_epochs": 2, "distill_epochs": 3},
+        # Cap train/eval so the inline teacher fine-tune + distillation finish in a watchable time on
+        # a single NeuronCore (the full NCBI set × 5 total epochs is hours on 1 core). 2000 sentences
+        # is ample for a distilled 4-layer student to clear the 0.55 F1 gate.
+        full_config={
+            "device": "xla",
+            "teacher_epochs": 2,
+            "distill_epochs": 3,
+            "max_train_samples": 2000,
+            "max_eval_samples": 600,
+        },
         est_runtime_min=30.0,
         description="Knowledge distillation: NER teacher → small student SLM (XLA/Trainium).",
     ),
@@ -170,7 +181,15 @@ EXAMPLES: tuple[Example, ...] = (
             "block_size": 128,
             "sample_tokens": 64,
         },
-        full_config={"device": "xla", "epochs": 1},
+        # Cap to 8000 CIFs for the validation run so a single-core pass is watchable (the full 36k
+        # corpus is a much longer run — scale up for a stronger model). 8k structured CIFs is plenty
+        # for the char-LM to clear the perplexity gate.
+        full_config={
+            "device": "xla",
+            "epochs": 1,
+            "max_train_samples": 8000,
+            "max_eval_samples": 1000,
+        },
         est_runtime_min=40.0,
         description="CrystaLLM-style char GPT: composition → crystal-structure CIF (XLA/Trainium).",
     ),
