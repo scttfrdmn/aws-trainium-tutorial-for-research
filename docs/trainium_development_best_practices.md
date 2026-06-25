@@ -117,6 +117,19 @@ python train.py                           # real run hits a warm cache
 `neuron_parallel_compile` runs your script with execution stubbed, collects every graph, and
 compiles them in parallel — so epoch 1 isn't where you discover a 20-minute compile.
 
+> **Compilation is a CPU job — it does NOT need a NeuronCore.** `neuronx-cc` lowers HLO → NEFF
+> entirely on the host CPU; the accelerator sits idle during compile. Two consequences worth
+> internalizing:
+> - **Don't reach for a bigger Trainium instance just to compile faster.** A `trn1.32xlarge` compiles
+>   quicker than a `trn1.2xlarge` only because it has more *vCPUs* — you'd be renting 16 Trainium chips
+>   to do a CPU job. That's wasteful and pushes the tutorial off the cheap single-device box.
+> - **Compile on a cheap CPU instance, then run warm on Trainium.** The supported pattern: run
+>   `neuron_parallel_compile` on a compute-optimized box (e.g. a `c7g`/`c6i` with many vCPUs), point
+>   `NEURON_COMPILE_CACHE_URL` at S3, and let the `trn1.2xlarge` *consume* the warm cache. This
+>   decouples compile horsepower from accelerator cost and keeps your actual Trainium time spent on
+>   training, not compiling. If a model is so compile-heavy that even this is painful, that's a signal
+>   to reshape it toward the form the array wants (see §1's "build in the form the hardware wants").
+
 **Expect a slow first step (or first few), then a cliff.** Because compilation happens lazily the
 first time each graph shape is seen, the opening steps are dominated by the *compiler*, not compute.
 Measured on a cold trn1.32xlarge (Qwen3-8B LoRA, 32 cores):
