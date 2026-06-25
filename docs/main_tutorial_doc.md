@@ -174,6 +174,34 @@ Create a simple cost tracking dashboard - see `monitoring/` directory for the co
 | Mixed precision (AMP) | Native BF16 support | Built into hardware |
 | NCCL | Neuron Collective Comm | Different but similar API |
 
+### The biggest mental shift: eager (GPU) vs trace-and-compile (Neuron)
+
+This is the difference that surprises CUDA users most, so it's worth stating plainly:
+
+- **On a GPU, PyTorch is *eager* by default.** Each op dispatches immediately to a precompiled
+  cuDNN/cuBLAS kernel. There's no whole-model compile step, so a brand-new model just *runs* — the
+  first step is about as fast as the hundredth. (GPUs *do* have a compile path — `torch.compile` /
+  TorchInductor, and NVCC for custom kernels — but you opt into it, and it's incremental.)
+- **On Neuron today (PyTorch/XLA), the default is the opposite: trace-the-whole-graph, then compile
+  it ahead of time.** The *first* time the compiler sees a graph it lowers the entire thing to a NEFF
+  before anything executes. That up-front compile is real — seconds for small models, **many minutes
+  for a heavy graph** — and it's the single biggest "why is my first step taking forever?!" shock when
+  porting from CUDA.
+
+So the contrast isn't really "GPU JIT vs Neuron AOT" — it's **eager-by-default vs
+graph-compiled-by-default**. Neither is wrong; they're different execution models. The practical
+consequences (and how to make the compile a *one-time* cost) are the whole point of
+[best-practices §1](trainium_development_best_practices.md#1-the-1-issue-compilation-and-why-iteration-feels-slow):
+persist the compile cache (S3), pre-compile with `neuron_parallel_compile` (on a cheap CPU box —
+compilation doesn't need a NeuronCore), and keep shapes static so you compile once and reuse.
+
+> **Forward-looking:** the **native (non-XLA) PyTorch backend** announced for Neuron — *TorchNeuron*,
+> targeting **PyTorch 2.10+** — is expected to bring an **eager-style** path that narrows this gap
+> (closer to the GPU experience). As of Neuron 2.30 it is **not generally available** (private
+> preview), so everything above describes the XLA path you run *today*. Treat the eager backend as a
+> coming improvement, not something to depend on yet. See
+> [VERSION_MATRIX.md](../VERSION_MATRIX.md#-the-pytorch-path-xla-today).
+
 For the deeper migration lessons (lazy execution, `mark_step`, static shapes, bf16 gotchas), see
 the [Trainium development best practices](trainium_development_best_practices.md) chapter and the
 [validated NER example](../examples/use_cases/biomedical_ner.py) — it's a real CUDA-style training
