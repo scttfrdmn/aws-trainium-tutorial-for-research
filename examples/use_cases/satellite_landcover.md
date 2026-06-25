@@ -105,12 +105,15 @@ RODA (up to 1452 across 3 scenes), assembles labeled tiles, and the CNN's graphs
 S3 (`Using a cached neff` hits, 0 recompiles on re-run) with training loss descending. The CPU smoke
 reaches `eval_acc≈0.77`.
 
-What blocked a clean validation run was a **stale compile-cache lock**, not a confirmed compiler bug:
-a run killed mid-compile leaves a `model.hlo_module.pb.lock` (with no `.neff`) in the shared S3 cache
-prefix, and the next run waits on it (`"Another process must be compiling … been waiting for: N
-minutes"`). That is the persistent-cache's normal lock-coordination message, and during this work I
-repeatedly killed/relaunched runs against the *same* cache prefix, which is the most likely source of
-the orphaned lock. Remedy: clear stale `*.lock` entries (no matching `.neff`) from the cache prefix
-before a fresh run, ideally with a clean per-run prefix. Re-validation is tracked; this is an
-operational issue, **not** a known/verified Neuron defect (no matching aws-neuron GitHub issue found).
-See [`/VALIDATED.md`](../../VALIDATED.md).
+**What's blocking a clean auto-validated run (verified):** on a fresh, lock-free S3 cache prefix, the
+residual-CNN **training graph took ≥14 min to compile on a single `trn1.2xlarge` and did not finish**
+within the run window — `neuronx-cc` processes ran for that whole time without producing the `.neff`.
+This is a *slow compile* of this particular multi-ResBlock + BatchNorm graph on an 8-vCPU box, not a
+cache lock (0 lock-waits on the clean prefix) and not a confirmed Neuron defect (no matching
+aws-neuron GitHub issue). It's also consistent with this example's own lesson — a small-conv CNN is
+*not* the shape the hardware wants (see [the utilization spike](cv_utilization_spike.md), which
+measured the same CNN at ~5× *lower* TFLOP/s than a ViT).
+
+Re-validation options (tracked): compile on a larger box (`trn1.32xlarge`, 32 vCPUs → far faster
+compile), pre-compile with `neuron_parallel_compile`, or simplify the model toward the ViT-shaped
+form the array prefers. The data pipeline itself needs no changes. See [`/VALIDATED.md`](../../VALIDATED.md).
