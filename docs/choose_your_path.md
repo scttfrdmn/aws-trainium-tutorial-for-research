@@ -16,7 +16,13 @@ example.
 
 Trainium is an **ahead-of-time-compiled, bf16-native, static-shape, matmul-optimized** accelerator
 (see [best practices](trainium_development_best_practices.md) and
-[novel kernels](novel_kernels_on_trainium.md) for *why*). That shape determines fit.
+[novel kernels](novel_kernels_on_trainium.md) for *why*). That shape determines fit. In plain terms,
+those four adjectives mean:
+- **ahead-of-time-compiled** — your whole model is compiled to a binary *before* it runs (slow first
+  step, fast after), unlike eager GPU PyTorch where each line runs immediately;
+- **bf16-native** — the math runs in 16-bit `bfloat16` (with FP32 accumulation), not fp32;
+- **static-shape** — tensor shapes must be fixed; a *new* shape triggers a fresh (slow) recompile;
+- **matmul-optimized** — built around large matrix multiplies (the systolic array below).
 
 > **Two terms used below, in plain language:**
 > - **128×128 systolic array** — Trainium's matmul engine is a fixed 128×128 grid of multiply-add
@@ -67,7 +73,7 @@ Score your workload. The more "yes", the better the fit (details + the *why* in
 | If you're doing… | Start with | Then |
 |---|---|---|
 | **Any first run / NLP fine-tune** | [Biomedical NER](../examples/use_cases/biomedical_ner.py) (validated) | best-practices → tools & debugging |
-| **An LLM fine-tune (LoRA)** | [Qwen3 LoRA fine-tune](../examples/use_cases/qwen3_lora_finetune.py) (optimum-neuron) | best-practices + sizing for your instance |
+| **An LLM fine-tune (LoRA*)** | [Qwen3 LoRA fine-tune](../examples/use_cases/qwen3_lora_finetune.py) (optimum-neuron) | best-practices + sizing for your instance |
 | **Train then serve** | [Trainium → Inferentia pipeline](../examples/complete_workflow/) (illustrative template) | [Inferentia vs Trn2 decision guide](../VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference) |
 | **Satellite / image classification (CNN)** | [Satellite land-cover](../examples/use_cases/satellite_landcover.py) | keep tiles fixed-size → then the [utilization spike](../examples/use_cases/cv_utilization_spike.py) |
 | **"Is my model the *shape* the hardware wants?"** | [CV utilization spike](../examples/use_cases/cv_utilization_spike.py) (measures achieved TFLOP/s) | profiler MFU in [tools & debugging](neuron_tools_and_debugging.md) |
@@ -75,6 +81,9 @@ Score your workload. The more "yes", the better the fit (details + the *why* in
 | **A custom kernel / new operator** | [Novel kernels on Trainium](novel_kernels_on_trainium.md) | NKI simulation → hardware |
 | **Multi-NeuronCore / bigger models** | [Distributed training](../examples/distributed/) (torchrun + XLA data-parallel) | the [Qwen3 LoRA example](../examples/use_cases/qwen3_lora_finetune.py) for tensor-parallel sharding |
 | **"It's slow / it `nan`s / it won't compile"** | [Neuron tools & debugging](neuron_tools_and_debugging.md) | the symptom→tool table |
+
+\* **LoRA** = Low-Rank Adaptation: instead of updating all of a large model's weights, you train a
+few small added matrices — far cheaper, and the standard way to fine-tune an LLM on one instance.
 
 ---
 

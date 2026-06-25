@@ -13,9 +13,9 @@ A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This
 > auto-validated on `trn1.2xlarge`** (each with a captured provenance artifact), **plus 2 multi-process
 > examples** (`qwen3_lora`, `ddp_ner`) validated by manual `torchrun` launch — see
 > [`VALIDATED.md`](VALIDATED.md). Every performance number traces to a real run; nothing is hand-typed.
-> (The RODA satellite CNN compiles slowly — ~44 min cold on the small box's 8 vCPUs — so it uses
-> `neuron_parallel_compile` + an S3 cache; warm re-runs finish in ~1.5 min. A concrete illustration of
-> the trace-and-compile execution model — see the [CUDA→Neuron chapter](docs/main_tutorial_doc.md#cuda-migration).)
+> (One example, the satellite CNN, is slow to *compile* the first time — Trainium compiles your whole
+> model before running it, unlike a GPU. That first-compile cost and how to make it one-time is a core
+> lesson, explained in the [CUDA→Neuron chapter](docs/main_tutorial_doc.md#cuda-migration).)
 
 > ### 📅 Status as of June 2026
 >
@@ -59,6 +59,10 @@ New to this tutorial? Follow this path — each step builds on the last:
    workload, and which example to start from.
 4. **[Full tutorial](docs/main_tutorial_doc.md)** — the in-depth chapters (FinOps, CUDA→Neuron
    migration, the complete workflow) with its own table of contents.
+5. **[Trainium development best practices](docs/trainium_development_best_practices.md)** — the
+   compile / bf16 / static-shape rules. Best read **after your first real Trainium run**, when its
+   "we hit a `nan` at step 0 / 7 recompiles" field notes match what you just saw (read it earlier for
+   the rules, and revisit).
 
 Hit an error? Jump to **[Neuron tools & debugging](docs/neuron_tools_and_debugging.md)** (symptom→tool table).
 
@@ -129,10 +133,13 @@ It's a teaching template (edit the S3 bucket; it's not a hardened service).
 
 ### Advanced NKI Development
 
-> **Note:** The snippet below is **illustrative pseudocode** to convey the shape of an NKI
-> kernel and the NeuronCore memory hierarchy — it is not a drop-in, runnable kernel. The real
-> `neuronxcc.nki.language` API operates on tiles with explicit partition/free-axis reductions and
-> masking. For working kernels, start from the
+> **Note:** This is advanced material — skim it on a first read. The snippet below is **illustrative
+> pseudocode** to convey the shape of an NKI kernel and the NeuronCore memory hierarchy — it is not a
+> drop-in, runnable kernel. The terms it uses (SBUF/PSUM on-chip memories, the 128×128 systolic
+> array) are explained from scratch in the
+> [novel kernels chapter](docs/novel_kernels_on_trainium.md); the real `neuronxcc.nki.language` API
+> operates on tiles with explicit partition/free-axis reductions and masking. For working kernels,
+> start from the
 > [official NKI documentation and samples](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/nki/index.html).
 
 ```python

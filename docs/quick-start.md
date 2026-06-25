@@ -25,7 +25,8 @@ cd aws-trainium-tutorial-for-research
 # Install with uv (this repo standardizes on uv + Python 3.12)
 make install-dev
 
-# Neuron SDK (run this ON a Neuron instance / DLAMI, not your laptop)
+# Neuron SDK (run this ON a Neuron instance / DLAMI — the AWS Deep Learning AMI with Neuron
+# preinstalled — not your laptop)
 make install-neuron
 ```
 

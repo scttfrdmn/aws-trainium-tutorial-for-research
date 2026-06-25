@@ -183,10 +183,12 @@ This is the difference that surprises CUDA users most, so it's worth stating pla
   first step is about as fast as the hundredth. (GPUs *do* have a compile path — `torch.compile` /
   TorchInductor, and NVCC for custom kernels — but you opt into it, and it's incremental.)
 - **On Neuron today (PyTorch/XLA), the default is the opposite: trace-the-whole-graph, then compile
-  it ahead of time.** The *first* time the compiler sees a graph it lowers the entire thing to a NEFF
-  before anything executes. That up-front compile is real — seconds for small models, **many minutes
-  for a heavy graph** — and it's the single biggest "why is my first step taking forever?!" shock when
-  porting from CUDA.
+  it ahead of time.** Your ops aren't run as you write them — they're *recorded* into a graph, and
+  `xm.mark_step()` is the call that says "compile and run everything recorded since the last one."
+  The *first* time the compiler sees a graph it lowers the entire thing to a **NEFF** (Neuron
+  Executable File Format — the compiled binary the chip runs) before anything executes. That up-front
+  compile is real — seconds for small models, **many minutes for a heavy graph** — and it's the
+  single biggest "why is my first step taking forever?!" shock when porting from CUDA.
 
 So the contrast isn't really "GPU JIT vs Neuron AOT" — it's **eager-by-default vs
 graph-compiled-by-default**. Neither is wrong; they're different execution models. The practical
@@ -241,6 +243,12 @@ See `examples/complete_workflow/` for the full implementation.
 ---
 
 ## 7. Advanced Patterns: NKI & Modern Architectures {#advanced-patterns}
+
+> **Skip this section on a first read.** It previews advanced topics — custom NKI kernels (with
+> SBUF/PSUM and the systolic array, all defined in [novel kernels](novel_kernels_on_trainium.md)) and
+> distributed-training concepts (tensor/data parallel, ZeRO/FSDP, covered in
+> [the distributed example](../examples/distributed/)). The code blocks here are illustrative; it's
+> fine not to follow every term yet.
 
 ### Neuron Kernel Interface (NKI) Development
 
