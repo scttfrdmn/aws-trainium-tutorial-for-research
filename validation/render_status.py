@@ -92,6 +92,29 @@ def render(clock: str | None = None) -> str:
             f"{r.get('commit') or '—'} | {(r.get('timestamp') or '—')[:10]} |"
         )
 
+    # Multi-process (torchrun) examples — validated by manual launch, not the single-device
+    # auto-harness, so they carry no results/*.json. Listed separately so the count above stays
+    # honest about what the harness auto-verifies, while still recording their hardware runs.
+    torchrun = getattr(registry, "TORCHRUN_EXAMPLES", ())
+    if torchrun:
+        lines.append("")
+        lines.append("## Multi-process examples (torchrun — validated by manual launch)")
+        lines.append("")
+        lines.append(
+            "These need one process per NeuronCore (`torchrun`), which the single-device auto-harness "
+            "doesn't orchestrate, so they're validated by a manual launch and recorded here rather "
+            "than in the auto-table above."
+        )
+        lines.append("")
+        lines.append("| Example | Status | Instance | Observed | Notes |")
+        lines.append("|---------|--------|----------|----------|-------|")
+        for ex in torchrun:
+            note = (ex.description or "").replace("|", "·")
+            lines.append(
+                f"| `{ex.key}` | ✅ validated (manual) | "
+                f"{', '.join(ex.instances) or '—'} | {ex.validated_note or '—'} | {note} |"
+            )
+
     lines.append("")
     lines.append("### Legend")
     lines.append(

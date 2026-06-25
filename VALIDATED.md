@@ -15,6 +15,15 @@ _Last rendered: 2026-06-25_
 | `antibody_affinity_slm` | ✅ passed | trn1.2xlarge | 2.30.10 | 2.9.0.2.14.27725+e2ff0410 | spearman=0.5420 | 1007.43s | — | 2026-06-24 |
 | `crystal_cif_slm` | ✅ passed | trn1.2xlarge | 2.30.10 | 2.9.0.2.14.27725+e2ff0410 | inv_val_perplexity=0.5764 | 976.55s | — | 2026-06-24 |
 
+## Multi-process examples (torchrun — validated by manual launch)
+
+These need one process per NeuronCore (`torchrun`), which the single-device auto-harness doesn't orchestrate, so they're validated by a manual launch and recorded here rather than in the auto-table above.
+
+| Example | Status | Instance | Observed | Notes |
+|---------|--------|----------|----------|-------|
+| `qwen3_lora` | ✅ validated (manual) | trn1.32xlarge | Qwen3-8B, full epoch on 32 cores: loss 1.93→1.43, ~5s/step, MFU ~29% | Qwen3 LoRA SFT via optimum-neuron (torchrun; hardware-only). |
+| `ddp_ner` | ✅ validated (manual) | trn1.2xlarge | 2-core data-parallel: eval_f1 0.826, gradient all-reduce verified | Data-parallel NER across NeuronCores (torchrun XLA DDP). |
+
 ### Legend
 - ✅ **passed** — ran on the listed instance and met its registry thresholds.
 - ❌ **failed** — ran but missed a threshold or errored (see the artifact's `error`).

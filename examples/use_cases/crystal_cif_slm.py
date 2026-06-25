@@ -340,8 +340,9 @@ def _structure_validity_rate(cif_texts: list[str]) -> float:
 def run(config: dict | None = None) -> dict[str, float]:
     """Train the crystal-CIF GPT; return metrics (the harness entrypoint).
 
-    Gated metric: ``neg_val_perplexity`` = -perplexity (higher is better, so the harness's
-    ``metric >= threshold`` gate works). Also reports raw ``val_perplexity`` and ``val_loss``.
+    Gated metric: ``inv_val_perplexity`` = 1/perplexity, in (0, 1], higher is better (so the
+    harness's ``metric >= threshold`` gate works). Also reports raw ``val_perplexity``, ``val_loss``,
+    and the pymatgen ``validity_rate``.
     """
     import math
     import time

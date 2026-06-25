@@ -72,12 +72,15 @@ mode**, not the forward-looking platform.
 
 ## 🐍 Python Environment
 
+> **This repo pins Python 3.12 + uv** (`.python-version`); that's what every tutorial command and the
+> CI assume. The table below is the broader range *Neuron itself* supports, for reference.
+
 | Component | Version | Status | Notes |
 |-----------|---------|--------|-------|
-| **Python** | 3.11 / 3.12 | ✅ | Recommended; current Neuron DLAMIs ship these |
+| **Python** | 3.12 | ✅ | **This tutorial's pinned version** (uv-managed) |
 | **Python** | 3.13 | ✅ | Available in recent DLAMIs (e.g. JAX SF) |
-| **Python** | 3.10 | ✅ | Supported |
-| **Python** | 3.9 | ⚠️ | Minimum; nearing end of upstream support |
+| **Python** | 3.10 / 3.11 | ✅ | Supported by Neuron, but not what this repo targets |
+| **Python** | 3.9 | ⚠️ | Neuron minimum; nearing end of upstream support |
 | **Python** | 3.8 | ❌ | EOL (Oct 2024) — do not use |
 
 ## 🔥 ML Frameworks
@@ -166,11 +169,10 @@ bandwidth, ~1.3 PFLOPS FP8 per chip. Confirm exact figures on the
 ### Framework Integration Status
 | Framework | Training | Inference | Compilation | Mixed Precision | Issues |
 |-----------|----------|-----------|-------------|-----------------|--------|
-| **PyTorch + Neuronx** | ✅ | ✅ | ✅ | ✅ | None |
-| **TensorFlow + Neuronx** | ✅ | ✅ | ✅ | ✅ | None |
+| **PyTorch + Neuronx** | ✅ | ✅ | ✅ | ✅ | None — the supported path |
+| **TensorFlow + Neuronx** | ❌ | ❌ | ❌ | ❌ | **Archived** — no longer developed (see above) |
 | **JAX + Neuronx** | ⚠️ | ✅ | ✅ | ⚠️ | Experimental features |
 | **Transformers + Optimum** | ✅ | ✅ | ✅ | ✅ | None |
-| **Lightning + Neuronx** | ✅ | ✅ | ✅ | ✅ | None |
 | **XGBoost + Neuronx** | ⚠️ | ⚠️ | ⚠️ | ❌ | Beta quality |
 
 ## 🐛 Known Issues and Workarounds

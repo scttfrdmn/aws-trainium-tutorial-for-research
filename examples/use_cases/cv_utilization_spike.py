@@ -41,7 +41,7 @@ import os
 import time
 from dataclasses import dataclass
 
-IMAGE_SIZE = 64  # EuroSAT tiles; fixed -> static shapes (same input both models see)
+IMAGE_SIZE = 64  # 64x64x3 patches (same shape as the CV example); fixed -> static shapes
 IN_CHANS = 3
 
 
@@ -59,7 +59,7 @@ class SpikeConfig:
     depth: int = 6
     heads: int = 4
     mlp_ratio: int = 4
-    num_classes: int = 10  # EuroSAT
+    num_classes: int = 10  # arbitrary head width; this is a throughput benchmark, not a real task
 
 
 # --------------------------------------------------------------------------------------------------

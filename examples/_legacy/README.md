@@ -9,9 +9,9 @@ least one of: fabricated metrics presented as results, the `trace()`-then-`backw
 (see [best practices](../../docs/trainium_development_best_practices.md)), stale version pins, broken
 imports, or all-mock AWS infrastructure.
 
-**Use the validated examples instead:**
-- [`examples/use_cases/biomedical_ner.py`](../use_cases/biomedical_ner.py) — validated NER fine-tune.
-- [`examples/use_cases/financial_modeling.py`](../use_cases/financial_modeling.py) — real market data.
+**Use the validated examples instead** (see [`/VALIDATED.md`](../../VALIDATED.md)):
+- [`examples/use_cases/`](../use_cases/) — six hardware-validated examples: biomedical NER, RODA
+  satellite land-cover, the CV utilization spike, and the distillation / antibody / crystal SLMs.
 - [`examples/complete_workflow/`](../complete_workflow/) — train → Inferentia pipeline (real AWS calls).
 - [`examples/debugging/`](../debugging/) — runnable failure-diagnosis walkthrough.
 

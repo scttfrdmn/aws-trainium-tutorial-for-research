@@ -66,11 +66,8 @@ Before running ML workloads on AWS Trainium and Inferentia, you need to set up y
    export PATH="/usr/local/bin:$PATH"     # For Intel Macs
    ```
 
-2. **Set up virtual environment**:
-   ```bash
-   python3 -m venv ~/venv/trainium-tutorial
-   source ~/venv/trainium-tutorial/bin/activate
-   ```
+2. **The virtual environment is handled by uv** in the common setup step below (`uv venv`) — no
+   manual `python3 -m venv` needed.
 
 ---
 

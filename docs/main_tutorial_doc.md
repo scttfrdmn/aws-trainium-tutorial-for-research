@@ -209,7 +209,7 @@ loop ported to the XLA/Neuron path.
 
 ---
 
-## 8. Complete Trainium → Inferentia Workflow {#complete-workflow}
+## 6. Complete Trainium → Inferentia Workflow {#complete-workflow}
 
 > **📌 2026 framing: "train on Trainium, serve on Inferentia" is now one option, not the default.**
 > AWS has not announced an Inferentia3, and the modern serving stack (NxD Inference) **dropped
@@ -240,7 +240,7 @@ See `examples/complete_workflow/` for the full implementation.
 
 ---
 
-## 13. Advanced Patterns: NKI & Modern Architectures {#advanced-patterns}
+## 7. Advanced Patterns: NKI & Modern Architectures {#advanced-patterns}
 
 ### Neuron Kernel Interface (NKI) Development
 
@@ -392,7 +392,7 @@ class TrainiumDistributedTrainer:
 
 ---
 
-## Compilation: why your first step takes forever (and how to tame it) {#compilation}
+## 8. Compilation: why your first step takes forever (and how to tame it) {#compilation}
 
 The single biggest surprise for people coming from CUDA is **compilation time**. Neuron is an
 ahead-of-time (AOT) compiled platform: the Neuron compiler (`neuronx-cc`) turns your model graph
@@ -439,7 +439,7 @@ eager CUDA execution.
 > **Rule of thumb:** if "training" seems stuck with high host CPU and no step progress, you are
 > almost certainly recompiling every step. Fix the shapes, then warm the cache.
 
-## The Neuron simulator / NKI simulation: what it can and can't do {#simulator}
+## 9. The Neuron simulator / NKI simulation: what it can and can't do {#simulator}
 
 You do **not** need a Trainium/Inferentia instance to start developing — especially for custom
 **NKI** kernels. NKI provides a **simulation mode** that runs a kernel on CPU using NumPy semantics

@@ -9,7 +9,13 @@
 
 A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This tutorial provides what researchers and organizations need to leverage AWS Neuron hardware for cost-effective ML research and production deployment.
 
-> ✅ **Hardware-validated: 6/6 registered examples on real `trn1.2xlarge`** (Neuron 2.30 / PyTorch 2.9), each with a captured provenance artifact — see [`VALIDATED.md`](VALIDATED.md). Every performance number traces to a captured run; nothing is hand-typed. (The RODA satellite example's small-conv CNN compiles slowly — ~44 min cold on the small box's 8 vCPUs — so it uses `neuron_parallel_compile` + an S3 cache; warm re-runs then finish in ~1.5 min. A concrete illustration of the trace-and-compile execution model, see the [CUDA→Neuron chapter](docs/main_tutorial_doc.md#cuda-migration).)
+> ✅ **Hardware-validated on real Trainium** (Neuron 2.30 / PyTorch 2.9): **6 single-device examples
+> auto-validated on `trn1.2xlarge`** (each with a captured provenance artifact), **plus 2 multi-process
+> examples** (`qwen3_lora`, `ddp_ner`) validated by manual `torchrun` launch — see
+> [`VALIDATED.md`](VALIDATED.md). Every performance number traces to a real run; nothing is hand-typed.
+> (The RODA satellite CNN compiles slowly — ~44 min cold on the small box's 8 vCPUs — so it uses
+> `neuron_parallel_compile` + an S3 cache; warm re-runs finish in ~1.5 min. A concrete illustration of
+> the trace-and-compile execution model — see the [CUDA→Neuron chapter](docs/main_tutorial_doc.md#cuda-migration).)
 
 > ### 📅 Status as of June 2026
 >
@@ -84,7 +90,7 @@ aws-trainium-tutorial-for-research/
 ├── scripts/                           # Utility scripts (budget, ephemeral instance, monitor)
 ├── validation/                        # Hardware-validation harness + provenance artifacts
 ├── examples/
-│   ├── use_cases/                    # biomedical_ner, satellite_landcover, cv_utilization_spike, qwen3_lora (all hardware-validated)
+│   ├── use_cases/                    # biomedical_ner, satellite_landcover, cv_utilization_spike, distill/antibody/crystal SLMs, qwen3_lora (all hardware-validated)
 │   ├── complete_workflow/            # Trainium → Inferentia pipeline
 │   ├── deployment/ · integration/    # serving + MLflow/Kubeflow/CI templates
 │   └── advanced/                     # NKI patterns (illustrative)
@@ -106,7 +112,8 @@ other examples aim to match: real data, honest metrics, the Trainium-native less
 # subset; this checks plumbing, NOT accuracy. The 0.846 above is the full Trainium run):
 NER_SMOKE=1 python examples/use_cases/biomedical_ner.py
 
-# Real run on a Trainium instance (this is what reaches eval_f1 = 0.846):
+# Real run — execute this ON a Trainium instance / DLAMI (it reaches eval_f1 = 0.846).
+# Off-Trainium it silently falls back to a slow full CPU run, so only run it on a Neuron box:
 python examples/use_cases/biomedical_ner.py
 ```
 
@@ -162,7 +169,8 @@ def flash_attention_kernel(q_tensor, k_tensor, v_tensor, scale):
    # Install uv if you don't have it: https://docs.astral.sh/uv/getting-started/installation/
    uv python install 3.12        # the one supported version (pinned in .python-version)
    uv venv
-   uv pip install -e ".[dev]"    # dev tooling (ruff, mypy, pytest)
+   uv pip install -e ".[dev,science]"  # dev tooling + the science deps the examples need
+                                       # (rasterio, pymatgen, biopython, …). `make install-dev` is equivalent.
 
    # Neuron wheels come from the AWS Neuron index (run on a Neuron instance/DLAMI):
    uv pip install torch-neuronx neuronx-cc \

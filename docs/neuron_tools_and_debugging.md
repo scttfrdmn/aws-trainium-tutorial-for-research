@@ -73,8 +73,9 @@ As of **SDK 2.30, Neuron Explorer is the profiler** (it supersedes the older `ne
 public release notes, a **timeline** view (op execution + latencies), a **memory** view, and a
 **tensor** view (shapes/dtypes/layout).
 
-Use it to find: the ops eating wall-clock, memory/SBUF pressure, and recompilation. This is the
-primary "why is it slow?" tool. (The detailed user guide is thin publicly — explore the UI and the
+Use it to find: the ops eating wall-clock, memory/SBUF pressure (SBUF = the small on-chip SRAM
+workspace each NeuronCore computes from; see [novel kernels](novel_kernels_on_trainium.md)), and
+recompilation. This is the primary "why is it slow?" tool. (The detailed user guide is thin publicly — explore the UI and the
 [dev-tools release notes](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/release-notes/components/dev-tools.html).)
 
 > If you're on an older SDK, you may still have `neuron-profile`; the concepts (capture a profile,

@@ -10,6 +10,25 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Removed / fixed (repo audit)
+- **Deleted stale pre-revamp clutter** that contradicted reality and the repo's own CONTRIBUTING
+  policy: `PROJECT_STATUS.md`, `NEXT_ACTIONS.md`, `RESUMPTION_GUIDE.md`, `DEVELOPMENT_COMPLETE.md`,
+  `docs/REVAMP_PLAN.md` (a "not yet executed" plan that's fully done), `docs/research_papers/`
+  (papers for the deleted, partly-fabricated genomics/finance examples), `docs/video_tutorials/`
+  (pinned retired versions: torch-neuronx 2.2.0, plain pip), and `docs/aws_engagement/` (re:Invent-2025
+  outreach). Project tracking lives in CHANGELOG + GitHub issues.
+- **Made the validation count honest.** `VALIDATED.md` now also lists the two `torchrun`-validated
+  examples (`qwen3_lora`, `ddp_ner`) in a separate "validated by manual launch" table; the README no
+  longer claims "6/6 registered" (the registry has 8 — 6 auto + 2 manual). Added a `validated_note`
+  field to the registry to record their observed hardware results.
+- **Consistency fixes:** README install now `[dev,science]` (the examples need rasterio/pymatgen/…);
+  "real run" command flagged as on-Trainium-only (it silently CPU-degrades off-device); VERSION_MATRIX
+  reconciled to "this repo pins 3.12" + TensorFlow row marked archived (was ✅) + unsubstantiated
+  Lightning row dropped; crystal `run()` docstring fixed (`inv_val_perplexity`, not the nonexistent
+  `neg_val_perplexity`); cv_spike "EuroSAT" comments removed (it's synthetic input); `main_tutorial_doc`
+  body headings renumbered 1–9 to match the TOC; macOS setup uses uv (not plain venv); fixed the
+  `_legacy/README` link to a deleted file and the `validation/` refs to the deleted REVAMP_PLAN.
+
 ### Validated (hardware — all on trn1.2xlarge, with an S3 compile cache)
 - **6/6 examples now hardware-validated**, each with a captured provenance artifact. Metrics:
   ner_biomedical f1=0.846, satellite_landcover (RODA) eval_acc=0.75, cv_utilization_spike ViT
@@ -45,9 +64,9 @@ Project work (milestones, issues, labels) is tracked on
 - **Crystal-CIF example now reports a pymatgen-based `validity_rate`** — the fraction of generated
   CIFs that parse into a real structure. Reported, NOT gated (validity on a small/short run is
   noisy; perplexity stays the gate). pymatgen is optional — absent → `validity_rate = -1.0` and the
-  run still works. Unit-tested locally (0.5 on a valid+garbage CIF pair); first *hardware* artifact
-  pending a clean re-run (the trn1.2xlarge spot hosts drawn this round were environmentally degraded —
-  Neuron compiler not progressing — so the re-validation was deferred rather than forced).
+  run still works. Unit-tested locally (0.5 on a valid+garbage CIF pair); hardware-validated on
+  trn1.2xlarge — `validity_rate` measured at 0.0% (a 1-epoch char-GPT learns CIF syntax, not yet
+  parseable structures; see the 6/6 summary above).
 - README gained an at-a-glance hardware-validation pointer to `VALIDATED.md`.
 - Closed GitHub issues #2 (Qwen3 LoRA — shipped + validated) and #5 (NER bf16 exemplar — shipped).
 

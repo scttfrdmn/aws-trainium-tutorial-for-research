@@ -2,7 +2,7 @@
 
 This directory holds the machinery that keeps one promise: **every tutorial example is proven to
 run on real AWS Neuron hardware**, with the proof captured as a provenance artifact rather than a
-hand-typed claim. See [`docs/REVAMP_PLAN.md`](../docs/REVAMP_PLAN.md) for the full design.
+hand-typed claim. The current status table is [`/VALIDATED.md`](../VALIDATED.md).
 
 ## How it works
 
@@ -44,7 +44,7 @@ python -m validation.render_status --check    # exit 1 if anything is unvalidate
 
 ## Launcher: spawn vs awscli
 
-Per [REVAMP_PLAN §0b](../docs/REVAMP_PLAN.md), the harness prefers [`spawn`](https://github.com/spore-host/spawn)
+The harness prefers [`spawn`](https://github.com/spore-host/spawn)
 when it's installed (launch + lifecycle + guaranteed auto-terminate + `--cost-limit`), and falls
 back to raw `aws ec2 run-instances` otherwise — so it stays runnable without spore.host tools.
 Choose explicitly with `--launcher spawn|awscli|auto`.

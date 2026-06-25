@@ -73,7 +73,7 @@ Score your workload. The more "yes", the better the fit (details + the *why* in
 | **"Is my model the *shape* the hardware wants?"** | [CV utilization spike](../examples/use_cases/cv_utilization_spike.py) (measures achieved TFLOP/s) | profiler MFU in [tools & debugging](neuron_tools_and_debugging.md) |
 | **Quant finance / time series** | a *sequence model* over your series — adapt the [NER example](../examples/use_cases/biomedical_ner.py) (swap dataset + head) | static-shape + bf16 review (Monte-Carlo / tick-event sims stay on CPU — see domain notes below) |
 | **A custom kernel / new operator** | [Novel kernels on Trainium](novel_kernels_on_trainium.md) | NKI simulation → hardware |
-| **Multi-NeuronCore / bigger models** | [Distributed training](../examples/distributed/) | best-practices (sharding) |
+| **Multi-NeuronCore / bigger models** | [Distributed training](../examples/distributed/) (torchrun + XLA data-parallel) | the [Qwen3 LoRA example](../examples/use_cases/qwen3_lora_finetune.py) for tensor-parallel sharding |
 | **"It's slow / it `nan`s / it won't compile"** | [Neuron tools & debugging](neuron_tools_and_debugging.md) | the symptom→tool table |
 
 ---

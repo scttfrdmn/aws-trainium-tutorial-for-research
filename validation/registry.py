@@ -29,6 +29,7 @@ class Example:
     full_config: dict = field(default_factory=dict)  # real config for hardware run
     est_runtime_min: float = 0.0  # rough wall-clock estimate for planning
     description: str = ""
+    validated_note: str = ""  # for TORCHRUN_EXAMPLES: the observed hardware result (manual launch)
 
 
 # The registry. Phase 1 ships exactly one entry (the NER exemplar); more are added as they are
@@ -219,19 +220,21 @@ TORCHRUN_EXAMPLES: tuple[Example, ...] = (
         key="qwen3_lora",
         module="examples.use_cases.qwen3_lora_finetune",
         entrypoint="run",
-        instances=("trn1.2xlarge", "trn1.32xlarge"),
+        instances=("trn1.32xlarge",),
         thresholds={},  # validated by inspecting train_loss from a manual torchrun launch
         est_runtime_min=30.0,
         description="Qwen3 LoRA SFT via optimum-neuron (torchrun; hardware-only).",
+        validated_note="Qwen3-8B, full epoch on 32 cores: loss 1.93→1.43, ~5s/step, MFU ~29%",
     ),
     Example(
         key="ddp_ner",
         module="examples.distributed.data_parallel_ner",
         entrypoint="run",
-        instances=("trn1.2xlarge", "trn1.32xlarge"),
+        instances=("trn1.2xlarge",),
         thresholds={"eval_f1": 0.75},
         est_runtime_min=20.0,
         description="Data-parallel NER across NeuronCores (torchrun XLA DDP).",
+        validated_note="2-core data-parallel: eval_f1 0.826, gradient all-reduce verified",
     ),
 )
 

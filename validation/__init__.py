@@ -12,7 +12,7 @@ Layout:
     run_on_hardware.py - orchestrator: runs examples on the current instance, writes artifacts
     render_status.py   - aggregates artifacts into VALIDATED.md + README badge
 
-See ../docs/REVAMP_PLAN.md for the full design and the spawn/lagotto tooling decision.
+The status table this produces is /VALIDATED.md.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """Hardware launcher abstraction: spawn when available, boto3/aws-cli otherwise.
 
 This runs on your workstation. It provisions a Neuron instance, runs the in-instance half of the
-harness there, and brings results back. The design decision (see docs/REVAMP_PLAN.md §0b):
+harness there, and brings results back. The design decision:
 
   * Prefer `spawn` (spore.host) -- it gives launch + guaranteed auto-terminate + lifecycle for free.
   * Fall back to raw `aws ec2` so the harness stays runnable for someone without spore.host tools.
