@@ -48,6 +48,24 @@ A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This
 > current pricing in the [AWS pricing pages](https://aws.amazon.com/ec2/pricing/) before
 > planning a budget, and treat throughput/cost tables as planning aids rather than guarantees.
 
+## ⏱️ Time & cost expectations
+
+Pick the path that matches your goal — they differ by an order of magnitude in time and cost:
+
+| Path | What you do | Time | AWS cost* |
+|---|---|---|---|
+| **Read + laptop smoke tests** | Read the core docs; run each example's CPU `*_SMOKE` path on your laptop (proves the code, no Trainium) | **~3–4 hrs** | **$0** |
+| **Guided hands-on** | The above **+ launch one `trn1.2xlarge`** and run 2–3 examples end-to-end on real hardware | **~half a day** | **~$1–3** |
+| **Full hardware lab** | Run **all** examples on Trainium, including the multi-core (`qwen3_lora`, `ddp_ner`) and train→serve pipeline | **~1–2 days** (mostly unattended) | **~$10–25** |
+
+\* `trn1.2xlarge` is ≈ **$0.40/hr spot / ~$1.34/hr on-demand** (us-east/us-west, illustrative — confirm
+current pricing). Auto-terminating scripts + budget alerts (Quick Start steps 1–2) keep this bounded.
+
+**Expect the wall-clock to be *compile*-dominated, not compute-dominated** — that's the tutorial's
+central lesson, not a bug. A first run pays an ahead-of-time compile (minutes for small models,
+**~40 min for the satellite CNN** on the small box); an **S3 compile cache** makes it a one-time cost,
+so warm re-runs finish in **~1–2 min**. Budget generously for your *first* launch, then it's fast.
+
 ## Start here (reading order)
 
 New to this tutorial? Follow this path — each step builds on the last:
