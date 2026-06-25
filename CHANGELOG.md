@@ -10,22 +10,23 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
-### Validated (hardware, us-west-2 with S3 compile cache)
-- **5/6 examples now hardware-validated.** Re-ran in us-west-2 with `NEURON_COMPILE_CACHE_URL` on S3
-  (the cold-compile cost — not bad hosts — was what made earlier runs look stuck; the cache is the
-  fix the tutorial itself teaches). Fresh artifacts: **cv_utilization_spike** ViT **5.18× the CNN's
-  TFLOP/s** (reproduced 5.1×; CNN 1.069 / ViT 5.535 TFLOP/s), **crystal_cif_slm** perplexity 1.735
-  with the new **`validity_rate` measured at 0.0%** — an honest result (a 1-epoch char-GPT learns CIF
-  syntax but not yet parseable structures; exactly why validity is reported, not gated). The RODA
-  **satellite** example reads real Sentinel-2+WorldCover patches and trains on Trainium, but a clean
-  auto-validated run is still pending: on a fresh lock-free cache prefix, its residual-CNN training
-  graph took **≥14 min to compile on a single trn1.2xlarge and didn't finish** in the window (a slow
-  compile of this multi-ResBlock+BatchNorm graph on 8 vCPUs — not a cache lock, not a confirmed Neuron
-  defect). Consistent with the example's own lesson that a small-conv CNN isn't the shape the array
-  wants. Re-try options: compile on trn1.32xlarge, `neuron_parallel_compile`, or a ViT-shaped model.
-  (Earlier in this work a separate **stale-S3-cache-lock** failure mode — killing a run mid-compile
-  leaves a `.lock` with no `.neff` and wedges the next run — was found and is documented; fix is a
-  per-run cache prefix. Eval was also restored to the Trainium device, not CPU.)
+### Validated (hardware — all on trn1.2xlarge, with an S3 compile cache)
+- **6/6 examples now hardware-validated**, each with a captured provenance artifact. Metrics:
+  ner_biomedical f1=0.846, satellite_landcover (RODA) eval_acc=0.75, cv_utilization_spike ViT
+  **5.18× the CNN's TFLOP/s** (CNN 1.069 / ViT 5.535), distill_ner_slm student_f1=0.573,
+  antibody_affinity_slm spearman=0.542, crystal_cif_slm perplexity 1.735 + `validity_rate`=0.0%
+  (honest — a 1-epoch char-GPT learns CIF syntax but not yet parseable structures; why validity is
+  reported, not gated).
+- **Satellite compile story (a real teaching artifact).** The small-conv residual CNN is *slow to
+  compile* on the trn1.2xlarge's 8 vCPUs — a cold compile took **~44 min** (compilation is a
+  CPU-bound, ahead-of-time step; `neuronx-cc` lowers the whole graph to a NEFF before step 1). The fix
+  is the standard Neuron pattern, **not** a bigger accelerator: `neuron_parallel_compile` + a
+  persistent **S3 compile cache** made it one-time, and the validated **warm re-run finished in
+  ~1.5 min** (`Using a cached neff`, 0 recompiles). Eval runs on-device (Trainium tutorial).
+- Process lessons captured along the way: the **stale-S3-cache-lock** failure mode (a run killed
+  mid-compile leaves a `.lock` with no `.neff` and wedges the next run on a *shared* prefix → use a
+  per-run prefix), and that the cold-compile cost — not bad hosts — was what made earlier runs look
+  "degraded." Both folded into best-practices §1.
 
 ### Changed (RODA open data)
 - **`satellite_landcover.py` now builds its training set from the AWS Registry of Open Data**, not a

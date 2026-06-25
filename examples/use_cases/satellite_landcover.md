@@ -99,21 +99,23 @@ python -m validation.run_on_hardware --instance trn1.2xlarge --region us-east-2 
 
 ## Status
 
-⏳ **RODA data pipeline proven on real Trainium hardware (trn1.2xlarge, us-west-2); a clean full
-auto-validated run is still pending.** On hardware it reads real Sentinel-2 + WorldCover patches from
-RODA (up to 1452 across 3 scenes), assembles labeled tiles, and the CNN's graphs compile and cache to
-S3 (`Using a cached neff` hits, 0 recompiles on re-run) with training loss descending. The CPU smoke
-reaches `eval_acc≈0.77`.
+✅ **Hardware-validated on `trn1.2xlarge`** (us-west-2, Neuron 2.30 / torch 2.9.1): `eval_acc = 0.75`
+on the held-out RODA patches (4 classes: Tree/Grassland/Cropland/Built-up), trained end-to-end on
+real Sentinel-2 + WorldCover open data. Warm-cache train wall-clock **~80 s**.
 
-**What's blocking a clean auto-validated run (verified):** on a fresh, lock-free S3 cache prefix, the
-residual-CNN **training graph took ≥14 min to compile on a single `trn1.2xlarge` and did not finish**
-within the run window — `neuronx-cc` processes ran for that whole time without producing the `.neff`.
-This is a *slow compile* of this particular multi-ResBlock + BatchNorm graph on an 8-vCPU box, not a
-cache lock (0 lock-waits on the clean prefix) and not a confirmed Neuron defect (no matching
-aws-neuron GitHub issue). It's also consistent with this example's own lesson — a small-conv CNN is
-*not* the shape the hardware wants (see [the utilization spike](cv_utilization_spike.md), which
-measured the same CNN at ~5× *lower* TFLOP/s than a ViT).
+**The interesting part — the compile story (a real teaching artifact).** This small-conv residual CNN
+is *slow to compile* on the trn1.2xlarge's 8 vCPUs: a cold compile of the training graph took **~44
+minutes**. That is not a hardware fault — compilation is a CPU-bound, ahead-of-time step
+(`neuronx-cc` lowers the whole graph to a NEFF before the first step runs), and this particular
+multi-ResBlock + BatchNorm graph is expensive. The fix is the standard Neuron pattern, **not** a
+bigger accelerator:
 
-Re-validation options (tracked): compile on a larger box (`trn1.32xlarge`, 32 vCPUs → far faster
-compile), pre-compile with `neuron_parallel_compile`, or simplify the model toward the ViT-shaped
-form the array prefers. The data pipeline itself needs no changes. See [`/VALIDATED.md`](../../VALIDATED.md).
+- **`neuron_parallel_compile`** compiles all graphs up front, and a **persistent S3 compile cache**
+  (`NEURON_COMPILE_CACHE_URL=s3://…`) makes that a one-time cost — the validated **warm re-run finished
+  in ~1.5 min** (`Using a cached neff`, 0 recompiles). Compilation needs only CPU, so you can even
+  pre-compile on a cheap compute instance and let the trn1.2xlarge consume the cache
+  (see [best-practices §1](../../docs/trainium_development_best_practices.md)).
+
+It's also a live example of this repo's thesis: a small-conv CNN is *not* the shape the array wants —
+the [utilization spike](cv_utilization_spike.md) measured this same CNN at ~5× *lower* TFLOP/s than a
+ViT, and the heavy compile is another face of that mismatch. See [`/VALIDATED.md`](../../VALIDATED.md).

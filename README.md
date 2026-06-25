@@ -9,7 +9,7 @@
 
 A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This tutorial provides what researchers and organizations need to leverage AWS Neuron hardware for cost-effective ML research and production deployment.
 
-> ✅ **Hardware-validated: 5/6 registered examples on real `trn1.2xlarge`** (Neuron 2.30 / PyTorch 2.9), each with a captured provenance artifact — see [`VALIDATED.md`](VALIDATED.md). Every performance number traces to a captured run; nothing is hand-typed. (The 6th — the RODA satellite example — reads real open data and trains on Trainium, but its small-conv CNN graph compiles too slowly to finish auto-validation on a single `trn1.2xlarge`; details + re-try options in its [README](examples/use_cases/satellite_landcover.md#status).)
+> ✅ **Hardware-validated: 6/6 registered examples on real `trn1.2xlarge`** (Neuron 2.30 / PyTorch 2.9), each with a captured provenance artifact — see [`VALIDATED.md`](VALIDATED.md). Every performance number traces to a captured run; nothing is hand-typed. (The RODA satellite example's small-conv CNN compiles slowly — ~44 min cold on the small box's 8 vCPUs — so it uses `neuron_parallel_compile` + an S3 cache; warm re-runs then finish in ~1.5 min. A concrete illustration of the trace-and-compile execution model, see the [CUDA→Neuron chapter](docs/main_tutorial_doc.md#cuda-migration).)
 
 > ### 📅 Status as of June 2026
 >
