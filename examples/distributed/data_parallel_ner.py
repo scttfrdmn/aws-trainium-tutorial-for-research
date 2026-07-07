@@ -125,6 +125,8 @@ def _build_sharded_loaders(cfg: DDPConfig, tokenizer, label_names, world_size, r
 
 def train_ddp(cfg: DDPConfig) -> dict[str, float]:
     """The per-process training function (one process per NeuronCore). Returns rank-0 metrics."""
+    import time
+
     import torch
     import torch.distributed as dist
     import torch_xla.core.xla_model as xm
@@ -176,6 +178,9 @@ def train_ddp(cfg: DDPConfig) -> dict[str, float]:
     )
 
     device_loader = pl.MpDeviceLoader(train_loader, device)
+    xm.rendezvous("train_start")  # align all cores before timing so wall-clock is comparable
+    wall_start = time.time()
+    steps_per_core = 0
     for epoch in range(cfg.epochs):
         model.train()
         sampler.set_epoch(epoch)  # reshuffle shards each epoch
@@ -195,22 +200,33 @@ def train_ddp(cfg: DDPConfig) -> dict[str, float]:
             scheduler.step()
             running += out.loss.detach()
             n += 1
+            steps_per_core += 1
         if rank == 0:
             print(
                 f"   epoch {epoch + 1}/{cfg.epochs}  rank0 avg_loss={(running / max(1, n)).item():.4f}"
             )
+    xm.mark_step()
+    train_wall = time.time() - wall_start
+    # Aggregate throughput = samples processed across ALL cores / wall-clock. Each core did
+    # steps_per_core steps of per_core_batch_size samples; world_size cores ran concurrently.
+    total_samples = steps_per_core * cfg.per_core_batch_size * world_size
 
     # Evaluate + checkpoint on rank 0 only.
     metrics: dict[str, float] = {}
     if rank == 0:
         metrics = _evaluate(model, eval_loader, device, "xla", label_names)
         metrics["world_size"] = float(world_size)
+        metrics["train_wall_s"] = round(train_wall, 2)
+        metrics["train_throughput_samples_s"] = (
+            round(total_samples / train_wall, 2) if train_wall > 0 else 0.0
+        )
         # Neuron-correct checkpointing: move XLA tensors to CPU, then torch.save.
         os.makedirs("/tmp/ddp_ner_ckpt", exist_ok=True)
         cpu_state = xm._maybe_convert_to_cpu(model.state_dict())
         torch.save(cpu_state, "/tmp/ddp_ner_ckpt/model.pt")
         print(
-            f"✅ DDP done. eval_f1={metrics.get('eval_f1', float('nan')):.4f} on {world_size} cores; checkpoint saved."
+            f"✅ DDP done. eval_f1={metrics.get('eval_f1', float('nan')):.4f} on {world_size} cores; "
+            f"throughput={metrics['train_throughput_samples_s']} samples/s; checkpoint saved."
         )
 
     xm.rendezvous("train_ddp_finished")
@@ -236,8 +252,24 @@ def run(config: dict | None = None) -> dict[str, float]:
 
 
 def main() -> None:
-    """CLI entrypoint (under torchrun)."""
-    run({})
+    """CLI entrypoint (under torchrun).
+
+    A few knobs are read from the environment so a benchmark harness can match a single-core run's
+    config without editing code: DDP_EPOCHS, DDP_PER_CORE_BATCH, DDP_MAX_TRAIN, DDP_MAX_EVAL,
+    DDP_MAX_LENGTH.
+    """
+    cfg: dict[str, Any] = {}
+    _env = {
+        "epochs": "DDP_EPOCHS",
+        "per_core_batch_size": "DDP_PER_CORE_BATCH",
+        "max_train_samples": "DDP_MAX_TRAIN",
+        "max_eval_samples": "DDP_MAX_EVAL",
+        "max_length": "DDP_MAX_LENGTH",
+    }
+    for key, envvar in _env.items():
+        if os.environ.get(envvar):
+            cfg[key] = int(os.environ[envvar])
+    run(cfg)
 
 
 if __name__ == "__main__":

@@ -31,6 +31,32 @@ launcher for torch-neuronx/XLA training.
 | **Overlap + mark_step** | `pl.MpDeviceLoader` |
 | **Neuron-correct checkpointing** | rank 0 only: `xm._maybe_convert_to_cpu(state_dict)` → `torch.save` (don't `torch.save` raw XLA tensors) |
 
+## Does the second core pay off? (measured)
+
+The point of DDP is throughput: two cores should train faster than one. Here's the **same job**
+(NCBI-disease, `bert-base-cased`, 1600 train samples, batch 16/core, 2 epochs, `max_length=64`) run
+single-core (`NEURON_RT_NUM_CORES=1`) vs. 2-core (`torchrun --nproc_per_node=2`) on one
+**trn1.2xlarge**, sharing one S3 compile cache:
+
+| Run | Cores | Train throughput | `eval_f1` |
+|---|---|---|---|
+| Single-core | 1 | **90.1 samples/s** | 0.809 |
+| Data-parallel (DDP) | 2 | **119.8 samples/s** | 0.774 |
+
+**~1.33× faster on 2 cores — not 2×, and that's the honest lesson.** Two things eat the ideal
+speedup at this scale: (1) each core now sees only 800 samples/epoch, so per-step fixed overhead and
+the extra **gradient all-reduce** are a larger slice of a shorter run; (2) rank-0 eval is serial. DDP
+scaling improves as the per-core batch and step count grow (it pays off far more on `trn1.32xlarge`
+with 32 cores and a real dataset). The small `eval_f1` dip is expected too: sharding halves each
+core's data per epoch while gradient averaging acts like a larger effective batch with fewer updates
+per shard — tune epochs/LR if you need to close it.
+
+> **Measure warm, not cold.** These are **warm-cache** numbers — the *first* run of each pays an
+> ahead-of-time compile (the single-core cold run above spent **201 s of its 844 s** wall-clock on
+> the first-step compile alone). Comparing cold wall-clocks would measure the compiler, not the
+> cores. With the [S3 compile cache](../../docs/trainium_development_best_practices.md) warm, the
+> single-core run drops from **844 s → 36 s**. Always benchmark the second run.
+
 ## Notes
 
 - **Fixed shapes still matter.** `drop_last=True` on the sampler *and* loaders keeps every core's
@@ -41,7 +67,8 @@ launcher for torch-neuronx/XLA training.
 ## ✅ Hardware-validated
 
 Run on a real **trn1.2xlarge** (2 NeuronCores, Neuron 2.30 / torch-neuronx 2.9) via
-`torchrun --nproc_per_node=2`:
+`torchrun --nproc_per_node=2` on the **full** NCBI-disease train set (the throughput table above
+instead caps to 1600 samples for a fair single-vs-2-core A/B, so its `eval_f1` is lower):
 
 | Metric | Value |
 |---|---|
