@@ -41,6 +41,14 @@ NER_SMOKE=1 python examples/use_cases/biomedical_ner.py
 python examples/use_cases/biomedical_ner.py
 ```
 
+> **Note — these examples use one NeuronCore.** A `trn1.2xlarge` has **2 NeuronCores**, but the
+> examples here run single-core on purpose (simplest, most reproducible; the validation scripts even
+> set `NEURON_RT_NUM_CORES=1`). So a default run leaves the second core idle. To put *both* cores to
+> work — data-parallel with gradient all-reduce — see the
+> [distributed training example](../distributed/) (`torchrun --nproc_per_node=2`). Leaving silicon
+> idle is itself worth noticing: it's the same "use what the hardware gives you" theme as the
+> [utilization spike](cv_utilization_spike.py).
+
 > The Qwen3 LoRA example is **hardware-only** (no CPU smoke path) — it needs the Neuron runtime. Its
 > companion `.md` explains how to launch it with `torchrun`.
 
