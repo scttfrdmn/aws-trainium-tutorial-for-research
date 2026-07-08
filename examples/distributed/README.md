@@ -167,9 +167,17 @@ stack trace) — with a message tailored to the single-core vs. TP=2 case.
 ## ✅ Hardware-validated (manual torchrun launch)
 
 Measured on a real **trn1.2xlarge** (2 NeuronCores, Neuron 2.30 / torch-neuronx 2.9 / optimum-neuron
-0.4.3), full fine-tune, `max_length` 512, AdamW. Each core has a hard **16.00 GB** HBM ceiling:
+0.4.3). Each core has a hard **16.00 GB** HBM ceiling. The circle-closing comparison — **same model,
+same 2 cores, only `peft_config` differs:**
 
-| Model | 1 core (`tp=1`) | TP=2 (`--nproc_per_node=2`) |
+| Qwen3-1.7B, TP=2 on trn1.2xlarge | Trainable params | Result |
+|---|---|---|
+| **Full fine-tune** (this example, `peft_config=None`) | 1,720,574,976 (100%) | ❌ OOM — **19.59 GB/core** > 16 GB ceiling |
+| **LoRA** ([`qwen3_lora_finetune.py`](../use_cases/qwen3_lora_finetune.py), `peft_config=LoraConfig(...)`) | 66,060,288 (~3.8%) | ✅ **fits and trains** on the same 2 cores |
+
+And the full fine-tune across two models and both core counts (this example, `max_length` 512, AdamW):
+
+| Full FT | 1 core (`tp=1`) | TP=2 (`--nproc_per_node=2`) |
 |---|---|---|
 | **Qwen3-1.7B** | ❌ OOM — **17.87 GB** needed at compile (`NCC_EOOM001`) | ❌ OOM — **19.59 GB/core** at compile (too big to lay out) |
 | **Llama-3.2-1B** | ❌ OOM — exhausts HBM at runtime (`NRT_RESOURCE`) | ⚠️ **trains steps 1–2**, then OOMs on step 3 at **15.958 GB** (32 MB over) |
@@ -179,10 +187,13 @@ shards the model far enough that Llama-3.2-1B actually *runs training steps* —
 genuinely marginal on 2 cores: the weight-update step's fp32-master + Adam moments tip it over the
 ceiling. With only 2 cores there's no data-parallel dimension for ZeRO-1 to shard optimizer state.
 
-**So the real-world play is exactly what the Qwen3 example does:** **LoRA** on `trn1.2xlarge` (tiny
-trainable footprint → fits easily), and **full** fine-tuning on `trn1.32xlarge` / Trn2 (32 cores →
-far more aggregate HBM *and* a data-parallel dimension for optimizer-state sharding). That's the
-lesson this example makes concrete with numbers.
+**Squaring the circle — full FT vs LoRA on the *same* model and box.** The top table is the punchline:
+on one `trn1.2xlarge`, TP=2, Qwen3-1.7B, the only thing that changes is `peft_config`. Full FT trains
+all 1.72B params and OOMs; LoRA trains a **66M-param adapter (~3.8%)** and fits comfortably — same
+model, same 2 cores. That's *why* the [Qwen3 example](../use_cases/qwen3_lora_finetune.py) uses LoRA
+here, and why **full** fine-tuning belongs on `trn1.32xlarge` / Trn2 (32 cores → far more aggregate
+HBM *and* a data-parallel dimension for optimizer-state sharding). This example makes the "just use
+LoRA / get a bigger box" advice concrete with numbers.
 
 ## Notes
 
