@@ -110,9 +110,15 @@ def render(clock: str | None = None) -> str:
         lines.append("|---------|--------|----------|----------|-------|")
         for ex in torchrun:
             note = (ex.description or "").replace("|", "·")
+            # Only claim "validated" when a real hardware observation has been recorded. A missing or
+            # placeholder validated_note (e.g. "TODO-AFTER-HW") means the run hasn't happened yet —
+            # render it as pending so the table never overstates what was verified.
+            observed = (ex.validated_note or "").strip()
+            pending = (not observed) or observed.upper().startswith("TODO")
+            status = "⏳ pending hardware" if pending else "✅ validated (manual)"
             lines.append(
-                f"| `{ex.key}` | ✅ validated (manual) | "
-                f"{', '.join(ex.instances) or '—'} | {ex.validated_note or '—'} | {note} |"
+                f"| `{ex.key}` | {status} | "
+                f"{', '.join(ex.instances) or '—'} | {observed or '—'} | {note} |"
             )
 
     lines.append("")

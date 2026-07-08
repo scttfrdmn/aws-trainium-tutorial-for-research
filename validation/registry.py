@@ -236,6 +236,21 @@ TORCHRUN_EXAMPLES: tuple[Example, ...] = (
         description="Data-parallel NER across NeuronCores (torchrun XLA DDP).",
         validated_note="2-core data-parallel: eval_f1 0.826, gradient all-reduce verified",
     ),
+    Example(
+        key="tp_full_finetune",
+        module="examples.distributed.tensor_parallel_full_finetune",
+        entrypoint="run",
+        instances=("trn1.2xlarge",),
+        thresholds={},  # torchrun example — validated by manual launch, not auto-gated
+        est_runtime_min=25.0,
+        description="Tensor-parallel FULL fine-tune: 1 core OOMs; TP=2 shards but stays tight (optimum-neuron; torchrun; hardware-only).",
+        validated_note=(
+            "Full FT, 16.00 GB/core HBM ceiling: 1 core OOMs (Qwen3-1.7B 17.87 GB compile; "
+            "Llama-3.2-1B runtime). TP=2 shards the model + trains steps (Llama), but full FT is "
+            "marginal — Qwen3-1.7B 19.59 GB/core, Llama-3.2-1B 15.958 GB (32 MB over). TP necessary, "
+            "not sufficient on 2 cores → LoRA here, full FT on trn1.32xlarge."
+        ),
+    ),
 )
 
 

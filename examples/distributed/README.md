@@ -6,9 +6,19 @@
 > instance — the thing single-core training leaves on the table.
 
 A `trn1.2xlarge` has **2 NeuronCores**; a `trn1.32xlarge` has **32**. Training on one core wastes the
-rest. [`data_parallel_ner.py`](data_parallel_ner.py) replicates the model per core and averages
-gradients each step (PyTorch/XLA distributed data parallel), using the same task and Trainium-native
-rules as the validated single-core example.
+rest. There are two ways to use the others, and this directory has an example of each:
+
+- **Data parallel** — [`data_parallel_ner.py`](data_parallel_ner.py): *replicate* the model on every
+  core, split the data, all-reduce gradients. Speeds up training when the model already fits on one
+  core. (First half of this README.)
+- **Tensor parallel** — [`tensor_parallel_full_finetune.py`](tensor_parallel_full_finetune.py):
+  *split* one model across cores — the only single-instance option when the model is **too big for
+  one core** (and an honest, measured look at how far that gets you on 2 cores).
+  (["Tensor parallelism"](#tensor-parallelism-when-the-model-doesnt-fit-on-one-core) section below.)
+
+The data-parallel example replicates the model per core and averages gradients each step (PyTorch/XLA
+distributed data parallel), using the same task and Trainium-native rules as the validated
+single-core NER example.
 
 ## Run it
 
@@ -82,3 +92,108 @@ instead caps to 1600 samples for a fair single-vs-2-core A/B, so its `eval_f1` i
 > The captured result above is the proof. One API fix was needed and made along the way:
 > torch-xla 2.x replaced `xm.get_ordinal()`/`xm.xrt_world_size()` with
 > `torch_xla.runtime.global_ordinal()`/`world_size()`.
+
+---
+
+# Tensor parallelism: when the model doesn't fit on one core
+
+> **Assumed knowledge:** you've run the data-parallel example above and the
+> [Qwen3 LoRA fine-tune](../use_cases/qwen3_lora_finetune.py).
+> **What you'll get:** the case data parallelism *can't* solve — a **full** fine-tune that
+> **out-of-memories on one NeuronCore** — and an honest, measured picture of how far tensor
+> parallelism gets you on the smallest box (further, but not all the way).
+
+[`tensor_parallel_full_finetune.py`](tensor_parallel_full_finetune.py) fine-tunes **all** of a ~1–2B
+LLM (no LoRA) on one `trn1.2xlarge`. It's the sharpest demonstration of the difference between the two
+kinds of parallelism — and, validated on real hardware, a more honest lesson than "TP makes it fit":
+**TP is *necessary but, on 2 cores, not sufficient* for a full fine-tune.**
+
+## Why TP, not DP?
+
+Data parallelism *replicates* the whole model on each core — so it only helps if the model already
+fits on one core. When it doesn't, DP can't help: there's nowhere to put the copy. Tensor parallelism
+*splits* every large matmul across cores, so each core holds only a **slice** of the model. That's
+the only way to attempt a model bigger than one core on a single instance.
+
+The [Qwen3 LoRA example](../use_cases/qwen3_lora_finetune.py) already passes `tensor_parallel_size=2`,
+but LoRA's trainable footprint is tiny — the model fits on one core anyway, so TP looks optional.
+Full fine-tuning the *same* model makes TP **mandatory**. That contrast is the lesson.
+
+## The memory arithmetic
+
+Full fine-tune with AdamW, bf16 weights:
+
+| Per parameter | Bytes |
+|---|---|
+| bf16 weight | 2 |
+| fp32 master weight | 4 |
+| Adam `m` | 4 |
+| Adam `v` | 4 |
+| **Total** | **14 B/param** (before gradients + activations) |
+
+A 1.2–1.7B model → **~17–24 GiB** of weights + optimizer state. Each NeuronCore of a `trn1.2xlarge`
+has a hard **16.00 GB** HBM ceiling (reported verbatim by `neuronx-cc`). One core can't hold it. TP=2
+shards the *weights* across both cores — but activations plus the fp32-master + Adam-moment optimizer
+state in the weight-update step keep the peak near, and for these models over, that 16 GB ceiling.
+
+## Run it BOTH ways (the contrast is the lesson)
+
+```bash
+export NEURON_CC_FLAGS="--model-type transformer --retry_failed_compilation"
+export NEURON_FUSE_SOFTMAX=1
+
+# 1 core — EXPECTED TO OOM (this is the lesson, not a bug):
+NEURON_RT_NUM_CORES=1 torchrun --nproc_per_node=1 \
+    examples/distributed/tensor_parallel_full_finetune.py --tensor_parallel_size 1
+
+# TP=2 — shards the model across both cores (gets further; still tight on this box):
+torchrun --nproc_per_node=2 \
+    examples/distributed/tensor_parallel_full_finetune.py --tensor_parallel_size 2
+```
+
+Both runs catch the Neuron out-of-memory error and print the lesson (they do **not** crash with a raw
+stack trace) — with a message tailored to the single-core vs. TP=2 case.
+
+## What it demonstrates (beyond data parallel)
+
+| Concept | How |
+|---|---|
+| **Model *sharding* (not replication)** | `NeuronModelForCausalLM.from_pretrained(model_id, training_args.trn_config)` splits each big matmul across cores |
+| **TP is the knob** | `NeuronTrainingArguments(tensor_parallel_size=…)` — `1` vs `2` cores |
+| **Full FT is the load-bearing footprint** | `NeuronSFTTrainer(..., peft_config=None)` — the whole model is trainable (LoRA would hide the OOM) |
+| **The 16 GB/core ceiling is real** | both a compile-time (`NCC_EOOM001`) and a runtime (`NRT_RESOURCE`) OOM are caught and explained |
+| **TP ≠ unlimited memory** | 2 cores shard weights but not enough to fit full-FT optimizer state — the honest nuance |
+
+## ✅ Hardware-validated (manual torchrun launch)
+
+Measured on a real **trn1.2xlarge** (2 NeuronCores, Neuron 2.30 / torch-neuronx 2.9 / optimum-neuron
+0.4.3), full fine-tune, `max_length` 512, AdamW. Each core has a hard **16.00 GB** HBM ceiling:
+
+| Model | 1 core (`tp=1`) | TP=2 (`--nproc_per_node=2`) |
+|---|---|---|
+| **Qwen3-1.7B** | ❌ OOM — **17.87 GB** needed at compile (`NCC_EOOM001`) | ❌ OOM — **19.59 GB/core** at compile (too big to lay out) |
+| **Llama-3.2-1B** | ❌ OOM — exhausts HBM at runtime (`NRT_RESOURCE`) | ⚠️ **trains steps 1–2**, then OOMs on step 3 at **15.958 GB** (32 MB over) |
+
+**Reading of the result.** One core never fits a full 1–2B fine-tune. TP=2 is real progress — it
+shards the model far enough that Llama-3.2-1B actually *runs training steps* — but full fine-tuning is
+genuinely marginal on 2 cores: the weight-update step's fp32-master + Adam moments tip it over the
+ceiling. With only 2 cores there's no data-parallel dimension for ZeRO-1 to shard optimizer state.
+
+**So the real-world play is exactly what the Qwen3 example does:** **LoRA** on `trn1.2xlarge` (tiny
+trainable footprint → fits easily), and **full** fine-tuning on `trn1.32xlarge` / Trn2 (32 cores →
+far more aggregate HBM *and* a data-parallel dimension for optimizer-state sharding). That's the
+lesson this example makes concrete with numbers.
+
+## Notes
+
+- **bf16 + eager rules still apply** — same Trainium-native constraints as the other examples.
+- **Margin knobs (and their limits).** `--max_length` shrinks *activations*, but the full-FT peak here
+  is driven by *optimizer state* in the update step, so shorter sequences don't rescue it.
+  `--gradient_checkpointing` is exposed but trips an optimum-neuron API incompatibility on this stack
+  (`Unexpected keyword arguments: use_cache,reduction`) — left off by default. The honest fix is more
+  cores, not a knob.
+- **ZeRO-1 is orthogonal to TP.** TP shards the *model*; ZeRO-1 shards the *optimizer state* across
+  data-parallel replicas — of which there are none at TP=2 on a 2-core box. This is the crux of why
+  TP alone doesn't close the gap here.
+- Like the DDP and Qwen3 examples, this is validated by a **manual torchrun launch**, not the
+  single-process auto-harness, so it appears in `VALIDATED.md`'s manual table rather than the auto one.

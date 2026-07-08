@@ -10,6 +10,26 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Added (multi-core parallelism: measured on real hardware)
+- **Data-parallel throughput measured (`data_parallel_ner.py`).** Same NER job single-core vs. 2-core
+  DDP on one trn1.2xlarge, warm compile cache: **90.1 → 119.8 samples/s (~1.33×, not 2×)**. Added
+  `train_wall_s` / `train_throughput_samples_s` metrics + `DDP_*` env knobs so a benchmark can match a
+  single-core run's config. The README explains the ~1.33× (per-step overhead + all-reduce + serial
+  rank-0 eval dominate at small scale) and why to benchmark **warm** (single-core cold spent 201 s of
+  844 s on first-step compile; warm 844 s → 36 s).
+- **Tensor-parallel full fine-tune (`examples/distributed/tensor_parallel_full_finetune.py`, +README).**
+  The load-bearing counterpart to data parallelism: a **full** (non-LoRA) fine-tune too big for one
+  NeuronCore, via optimum-neuron `NeuronModelForCausalLM` + `tensor_parallel_size`. **Validated on a
+  real trn1.2xlarge** across two models — the honest finding is that TP is *necessary but, on 2 cores,
+  not sufficient* for full FT. Each core has a hard **16.00 GB** HBM ceiling: 1 core always OOMs
+  (Qwen3-1.7B 17.87 GB at compile, `NCC_EOOM001`; Llama-3.2-1B at runtime, `NRT_RESOURCE`); TP=2 shards
+  the model and Llama-3.2-1B trains steps but tips over at **15.958 GB** (32 MB short), Qwen3-1.7B needs
+  19.59 GB/core. This is why the Qwen3 example uses **LoRA** on trn1.2xlarge and reserves **full** FT for
+  trn1.32xlarge/Trn2 (more cores → more aggregate HBM + a data-parallel dimension for ZeRO-1). The
+  example catches both compile- and runtime-OOMs and explains them; registered in `TORCHRUN_EXAMPLES`.
+- `VALIDATED.md` manual table now renders **⏳ pending hardware** for torchrun examples whose
+  `validated_note` is empty/placeholder, so it never claims "validated" before a real run.
+
 ### Removed / fixed (repo audit)
 - **Deleted stale pre-revamp clutter** that contradicted reality and the repo's own CONTRIBUTING
   policy: `PROJECT_STATUS.md`, `NEXT_ACTIONS.md`, `RESUMPTION_GUIDE.md`, `DEVELOPMENT_COMPLETE.md`,
