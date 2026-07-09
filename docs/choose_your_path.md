@@ -81,6 +81,7 @@ Score your workload. The more "yes", the better the fit (details + the *why* in
 | **A custom kernel / new operator** | [Novel kernels on Trainium](novel_kernels_on_trainium.md) | NKI simulation → hardware |
 | **Multi-NeuronCore / bigger models** | [Distributed training](../examples/distributed/) (torchrun: data-parallel *and* tensor-parallel examples) | the [tensor-parallel full fine-tune](../examples/distributed/tensor_parallel_full_finetune.py) (why full FT needs more than 2 cores) → [Qwen3 LoRA](../examples/use_cases/qwen3_lora_finetune.py) |
 | **"It's slow / it `nan`s / it won't compile"** | [Neuron tools & debugging](neuron_tools_and_debugging.md) | the symptom→tool table |
+| **Using Claude Code / Kiro; want an AI accelerator** | [Agentic Neuron development side-quest](agentic_development_sidequest.md) | AWS's official NKI / autoport / profiling agents |
 
 \* **LoRA** = Low-Rank Adaptation: instead of updating all of a large model's weights, you train a
 few small added matrices — far cheaper, and the standard way to fine-tune an LLM on one instance.

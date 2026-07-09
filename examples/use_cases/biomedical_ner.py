@@ -11,7 +11,8 @@ What this demonstrates for Trainium users:
     * The PyTorch/XLA training path on Trainium (`xm.xla_device()`, `xm.optimizer_step`,
       `xm.mark_step`) -- the supported path as of Neuron SDK 2.31.0 / PyTorch 2.9.
     * **Build in the form the hardware wants** -- the single most important lesson. Verified on a
-      real trn1.2xlarge (Neuron 2.30, transformers 5.12):
+      real trn1.2xlarge (re-run on Neuron 2.31.13 / transformers 5.13: eval_f1 0.8467; the bf16
+      findings below first reproduced on 2.30):
         - HF v5 defaults to SDPA attention, which produces **nan loss at step 0** on the Neuron
           bf16 path. The same model on CPU/fp32 gives loss ~1.21.
         - Setting `attn_implementation="eager"` (this example's default) gives loss **1.13** on

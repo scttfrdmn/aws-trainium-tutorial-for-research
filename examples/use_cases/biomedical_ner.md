@@ -75,7 +75,13 @@ Replace the dataset with any IOB2 token-classification corpus exposing `tokens` 
 (e.g. your own annotations loaded via `datasets`). The label set is read from the dataset schema,
 so multi-entity corpora (genes, chemicals, drugs) work without code changes.
 
-## Hardware verification log (real trn1.2xlarge, us-east-2, Neuron 2.30.10 / torch-neuronx 2.9 / transformers 5.12.1)
+## Hardware verification log (real trn1.2xlarge, Neuron 2.30.10 / torch-neuronx 2.9 / transformers 5.12.1)
+
+> **Re-confirmed on Neuron 2.31.13** (torch-neuronx 2.9.0.2.15, neuronx-cc 2.26.6360,
+> transformers 5.13.0, 2026-07-09): **eval_f1 0.8467** — statistically identical to the 2.30 run
+> below, confirming the PyTorch 2.9 / XLA stack carries over unchanged. The current provenance
+> artifact in `VALIDATED.md` is the 2.31 run; the detailed bf16/compile findings below were first
+> captured on 2.30.10 and remain valid.
 
 **Validated.** A full run on real hardware passed the gate:
 

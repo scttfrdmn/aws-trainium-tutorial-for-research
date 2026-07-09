@@ -10,16 +10,34 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Added
+- **Agentic Neuron development side-quest** (`docs/agentic_development_sidequest.md`) — an optional
+  capstone pointing at AWS's official [`aws-neuron/neuron-agentic-development`](https://github.com/aws-neuron/neuron-agentic-development)
+  (agents + skills for **Claude Code** and **Kiro**: NKI writing/debugging, profiling, GPU-model
+  autoport, equivalence checking). Maps each agent to the tutorial chapter that teaches the same task
+  by hand, with honest "do the manual version first" guidance. Linked from the README reading order
+  and `choose_your_path.md`.
+
+### Removed
+- **Deleted two orphaned validation scripts** (`scripts/validate_hardware_performance.py`,
+  `scripts/validate_end_to_end.py`). They were referenced nowhere (not CI/tests/docs), duplicated the
+  provenance-backed `validation/` harness, and carried **hand-typed performance baselines**
+  (`expected_bert_throughput: 450`, `expected_latency_p99: 15ms`, …) plus a stale `PyTorch 2.4.0`
+  header — exactly the un-provenanced claims the repo's honesty policy forbids. `validation/` (which
+  generates `VALIDATED.md` from captured artifacts) is the single source of truth.
+
 ### Changed (version refresh → Neuron 2.31.0)
 - **Bumped the tutorial's target to Neuron SDK 2.31.0** (released 2026-07-07; `torch-neuronx`
   2.9.0.2.15) across the README badge/status box, `VERSION_MATRIX.md`, `docs/quick-start.md`,
   `main_tutorial_doc.md`, `local_setup_guide.md`, and the docker-image tags. 2.31 is the **same
   PyTorch 2.9 / XLA stack** as 2.30 — no code or guidance changes; the native (non-XLA) **TorchNeuron**
   backend is still **Private Preview** (not GA), still slated for PyTorch 2.10+.
-- **Hardware-validation records intentionally left at 2.30.** `VALIDATED.md` and the per-example
-  "measured on real trn1.2xlarge" notes keep **Neuron 2.30.10 / torch-neuronx 2.9.0.2.14** — that's
-  what actually ran. The target-version lines now say "validated on 2.30; 2.31 is the same PyTorch
-  2.9/XLA stack" so "latest" and "what was proven" are both honest and distinguishable.
+- **Re-validated the NER exemplar on real 2.31 hardware.** Ran `ner_biomedical` through the
+  `validation/` harness on a fresh **trn1.2xlarge / Neuron 2.31.13** DLAMI (neuronx-cc 2.26.6360,
+  torch-neuronx 2.9.0.2.15, transformers 5.13.0): **eval_f1 0.8467** (vs 0.8462 on 2.30 — the stack
+  carries over cleanly). `VALIDATED.md` now shows `ner_biomedical` on **2.31.13** with a captured
+  artifact; the other five examples retain their **2.30.10** records (each still a real run) until
+  re-run. So "we target 2.31" is now backed by a real 2.31 provenance row, not just an inference.
 
 ### Added (multi-core parallelism: measured on real hardware)
 - **Data-parallel throughput measured (`data_parallel_ner.py`).** Same NER job single-core vs. 2-core
