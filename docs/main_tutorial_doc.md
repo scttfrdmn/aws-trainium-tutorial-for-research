@@ -156,7 +156,7 @@ Create a simple cost tracking dashboard - see `monitoring/` directory for the co
 
 ## 5. Migrating from CUDA to Neuron {#cuda-migration}
 
-> **Note (June 2026):** this chapter teaches the **PyTorch/XLA** path (`torch_xla`,
+> **Note (July 2026):** this chapter teaches the **PyTorch/XLA** path (`torch_xla`,
 > `xm.xla_device()`, lazy graphs + `xm.mark_step()`) — the production path on **PyTorch 2.9**, which
 > AWS's public docs note is the **last XLA-based version**. A future, non-XLA PyTorch path is
 > mentioned for **PyTorch 2.10+** but is not generally available yet, so everything below targets
@@ -199,7 +199,7 @@ compilation doesn't need a NeuronCore), and keep shapes static so you compile on
 
 > **Forward-looking:** the **native (non-XLA) PyTorch backend** announced for Neuron — *TorchNeuron*,
 > targeting **PyTorch 2.10+** — is expected to bring an **eager-style** path that narrows this gap
-> (closer to the GPU experience). As of Neuron 2.30 it is **not generally available** (private
+> (closer to the GPU experience). As of Neuron 2.31 it is **not generally available** (still private
 > preview), so everything above describes the XLA path you run *today*. Treat the eager backend as a
 > coming improvement, not something to depend on yet. See
 > [VERSION_MATRIX.md](../VERSION_MATRIX.md#-the-pytorch-path-xla-today).
@@ -543,5 +543,5 @@ The future of academic ML research is cost-efficient, and AWS ML chips provide t
 
 ---
 
-*Last Updated: June 16, 2026*
-*Tutorial Version: 2026.1.0 — targets Neuron SDK 2.30.0 / PyTorch 2.9 (PyTorch/XLA)*
+*Last Updated: July 8, 2026*
+*Tutorial Version: 2026.1.0 — targets Neuron SDK 2.31.0 / PyTorch 2.9 (PyTorch/XLA)*

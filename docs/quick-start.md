@@ -12,8 +12,9 @@
 - Run the validated biomedical-NER example on CPU (smoke) and understand what a real Trainium run does.
 - Know where to go next (the full tutorial, the best-practices chapter, the validation harness).
 
-**Versions:** this tutorial targets **Neuron SDK 2.30**, **PyTorch 2.9** on the **PyTorch/XLA** path,
-and **Python 3.12** via **uv** (the one supported version, pinned in `.python-version`).
+**Versions:** this tutorial targets **Neuron SDK 2.31** (latest; validated on 2.30, same PyTorch 2.9 /
+XLA stack), **PyTorch 2.9** on the **PyTorch/XLA** path, and **Python 3.12** via **uv** (the one
+supported version, pinned in `.python-version`).
 
 ## Installation
 

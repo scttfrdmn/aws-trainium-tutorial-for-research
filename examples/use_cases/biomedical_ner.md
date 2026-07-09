@@ -21,7 +21,7 @@ Trainium/Neuron experience needed.
 **After this example you can:**
 
 1. Run a genuine PyTorch fine-tune on Trainium via the **PyTorch/XLA** path (`xm.xla_device()`,
-   `xm.optimizer_step`, `xm.mark_step`) — the supported path on Neuron SDK 2.30 / PyTorch 2.9.
+   `xm.optimizer_step`, `xm.mark_step`) — the supported path on Neuron SDK 2.31 / PyTorch 2.9.
 2. Handle the one genuinely tricky part of NER: **subword↔label alignment** (why `-100` labels
    exist and where they come from).
 3. Evaluate honestly with **entity-level** precision/recall/F1 — computed in-module from IOB2 spans

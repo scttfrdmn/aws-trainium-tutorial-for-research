@@ -53,7 +53,7 @@ and the comparison report derives every figure from it (no hand-typed savings pe
 rough, region- and time-dependent estimates, **not** quotes or measured results. Confirm current
 pricing at the [AWS pricing pages](https://aws.amazon.com/ec2/pricing/) before budgeting.
 
-## Platform note (June 2026)
+## Platform note (July 2026)
 
 AWS positions **Trainium2 for both training and inference**, and NxD Inference dropped Inf2/Trn1
 support in Neuron 2.29. This example serves on **Inf2** to show the classic train-Trn/serve-Inf

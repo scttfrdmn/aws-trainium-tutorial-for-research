@@ -10,6 +10,17 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Changed (version refresh → Neuron 2.31.0)
+- **Bumped the tutorial's target to Neuron SDK 2.31.0** (released 2026-07-07; `torch-neuronx`
+  2.9.0.2.15) across the README badge/status box, `VERSION_MATRIX.md`, `docs/quick-start.md`,
+  `main_tutorial_doc.md`, `local_setup_guide.md`, and the docker-image tags. 2.31 is the **same
+  PyTorch 2.9 / XLA stack** as 2.30 — no code or guidance changes; the native (non-XLA) **TorchNeuron**
+  backend is still **Private Preview** (not GA), still slated for PyTorch 2.10+.
+- **Hardware-validation records intentionally left at 2.30.** `VALIDATED.md` and the per-example
+  "measured on real trn1.2xlarge" notes keep **Neuron 2.30.10 / torch-neuronx 2.9.0.2.14** — that's
+  what actually ran. The target-version lines now say "validated on 2.30; 2.31 is the same PyTorch
+  2.9/XLA stack" so "latest" and "what was proven" are both honest and distinguishable.
+
 ### Added (multi-core parallelism: measured on real hardware)
 - **Data-parallel throughput measured (`data_parallel_ner.py`).** Same NER job single-core vs. 2-core
   DDP on one trn1.2xlarge, warm compile cache: **90.1 → 119.8 samples/s (~1.33×, not 2×)**. Added

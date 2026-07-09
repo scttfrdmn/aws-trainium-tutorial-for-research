@@ -20,7 +20,7 @@ Enterprise Features:
     account expecting a no-op.
 
 TARGET VERSIONS:
-    - AWS Neuron SDK: 2.30.0
+    - AWS Neuron SDK: 2.31.0
     - boto3: 1.35.0+
 
 COMPLIANCE FRAMEWORKS:

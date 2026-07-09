@@ -9,7 +9,7 @@ pharmacovigilance), and NCBI-disease is a standard benchmark for it.
 
 What this demonstrates for Trainium users:
     * The PyTorch/XLA training path on Trainium (`xm.xla_device()`, `xm.optimizer_step`,
-      `xm.mark_step`) -- the supported path as of Neuron SDK 2.30.0 / PyTorch 2.9.
+      `xm.mark_step`) -- the supported path as of Neuron SDK 2.31.0 / PyTorch 2.9.
     * **Build in the form the hardware wants** -- the single most important lesson. Verified on a
       real trn1.2xlarge (Neuron 2.30, transformers 5.12):
         - HF v5 defaults to SDPA attention, which produces **nan loss at step 0** on the Neuron
