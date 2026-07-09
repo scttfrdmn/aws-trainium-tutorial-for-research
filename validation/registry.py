@@ -29,7 +29,9 @@ class Example:
     full_config: dict = field(default_factory=dict)  # real config for hardware run
     est_runtime_min: float = 0.0  # rough wall-clock estimate for planning
     description: str = ""
-    validated_note: str = ""  # for TORCHRUN_EXAMPLES: the observed hardware result (manual launch)
+    validated_note: str = (
+        ""  # for TORCHRUN_EXAMPLES: the observed hardware result (manual launch)
+    )
 
 
 # The registry. Phase 1 ships exactly one entry (the NER exemplar); more are added as they are

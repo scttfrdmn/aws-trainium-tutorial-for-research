@@ -98,7 +98,9 @@ def render(clock: str | None = None) -> str:
     torchrun = getattr(registry, "TORCHRUN_EXAMPLES", ())
     if torchrun:
         lines.append("")
-        lines.append("## Multi-process examples (torchrun — validated by manual launch)")
+        lines.append(
+            "## Multi-process examples (torchrun — validated by manual launch)"
+        )
         lines.append("")
         lines.append(
             "These need one process per NeuronCore (`torchrun`), which the single-device auto-harness "

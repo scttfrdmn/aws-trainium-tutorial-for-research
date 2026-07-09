@@ -124,7 +124,9 @@ class TPConfig:
     gradient_accumulation_steps: int = 4
     learning_rate: float = 5e-5  # full-FT LR (lower than LoRA's 8e-4)
     max_length: int = 1024  # margin knob: shorter seq => smaller activations
-    gradient_checkpointing: bool = False  # margin knob: trade compute for activation memory
+    gradient_checkpointing: bool = (
+        False  # margin knob: trade compute for activation memory
+    )
     zero_1: bool = True  # ZeRO-1 shards optimizer state further (orthogonal to TP)
     logging_steps: int = 1  # log every step so a short run still reports a real loss
     seed: int = 42

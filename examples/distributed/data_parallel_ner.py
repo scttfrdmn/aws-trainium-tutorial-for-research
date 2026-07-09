@@ -178,7 +178,9 @@ def train_ddp(cfg: DDPConfig) -> dict[str, float]:
     )
 
     device_loader = pl.MpDeviceLoader(train_loader, device)
-    xm.rendezvous("train_start")  # align all cores before timing so wall-clock is comparable
+    xm.rendezvous(
+        "train_start"
+    )  # align all cores before timing so wall-clock is comparable
     wall_start = time.time()
     steps_per_core = 0
     for epoch in range(cfg.epochs):
