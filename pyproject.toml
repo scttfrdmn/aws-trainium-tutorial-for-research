@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aws-trainium-inferentia-tutorial"
-version = "2026.1.0"
+version = "2026.2.0"
 description = "Complete tutorial and tools for academic research using AWS Trainium and Inferentia chips"
 readme = "README.md"
 license = {text = "MIT"}

@@ -4,6 +4,7 @@ Comprehensive test runner for AWS Trainium & Inferentia Tutorial
 """
 
 import argparse
+import shutil
 import subprocess
 import sys
 import time
@@ -36,12 +37,11 @@ def check_dependencies() -> bool:
     """Check if required dependencies are installed"""
     print("🔍 Checking dependencies...")
 
+    # pytest and mypy are import-checkable modules; ruff is a standalone binary (not importable),
+    # so probe it on PATH instead.
     required_packages = [
         "pytest",
-        "black",
-        "flake8",
         "mypy",
-        "isort",
     ]
 
     missing = []
@@ -50,6 +50,9 @@ def check_dependencies() -> bool:
             __import__(package)
         except ImportError:
             missing.append(package)
+
+    if shutil.which("ruff") is None:
+        missing.append("ruff")
 
     if missing:
         print(f"❌ Missing dependencies: {', '.join(missing)}")
@@ -81,67 +84,29 @@ def main():
 
     # Formatting and linting
     if not args.skip_lint:
+        targets = ["scripts/", "examples/", "advanced/", "tests/"]
+
         if args.fix:
-            # Auto-fix formatting
+            # Auto-fix lint issues and formatting (ruff replaces black + isort + flake8)
             all_passed &= run_command(
-                [
-                    "python",
-                    "-m",
-                    "black",
-                    "scripts/",
-                    "examples/",
-                    "advanced/",
-                    "tests/",
-                ],
-                "Auto-formatting code with Black",
+                ["ruff", "check", "--fix", *targets],
+                "Auto-fixing lint issues with Ruff",
             )
             all_passed &= run_command(
-                [
-                    "python",
-                    "-m",
-                    "isort",
-                    "scripts/",
-                    "examples/",
-                    "advanced/",
-                    "tests/",
-                ],
-                "Auto-sorting imports with isort",
+                ["ruff", "format", *targets],
+                "Auto-formatting code with Ruff",
             )
 
         # Check formatting
         all_passed &= run_command(
-            [
-                "python",
-                "-m",
-                "black",
-                "--check",
-                "scripts/",
-                "examples/",
-                "advanced/",
-                "tests/",
-            ],
+            ["ruff", "format", "--check", *targets],
             "Checking code formatting",
         )
 
-        # Check import sorting
+        # Lint (includes import sorting)
         all_passed &= run_command(
-            [
-                "python",
-                "-m",
-                "isort",
-                "--check-only",
-                "scripts/",
-                "examples/",
-                "advanced/",
-                "tests/",
-            ],
-            "Checking import sorting",
-        )
-
-        # Lint with flake8
-        all_passed &= run_command(
-            ["python", "-m", "flake8", "scripts/", "examples/", "advanced/", "tests/"],
-            "Running flake8 linting",
+            ["ruff", "check", *targets],
+            "Running Ruff linting",
         )
 
         # Type checking with mypy (only for scripts)
