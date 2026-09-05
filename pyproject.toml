@@ -46,7 +46,10 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.10.0",
-    "ruff>=0.6.0",
+    # Pinned exactly: ruff makes no format-stability guarantee across releases, so a floating
+    # version can silently reformat code (incl. markdown code fences) and break `ruff format
+    # --check` in CI. Bump this deliberately alongside a reformat commit. See .pre-commit-config.yaml.
+    "ruff==0.16.6",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
     "coverage[toml]>=7.0.0",
