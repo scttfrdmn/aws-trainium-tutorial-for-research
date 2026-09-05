@@ -264,37 +264,38 @@ For advanced users who want hardware-level optimization.
 import neuronxcc.nki as nki
 import neuronxcc.nki.language as nl
 
+
 @nki.jit
 def flash_attention_kernel(q_tensor, k_tensor, v_tensor, scale):
     """Illustrative Flash Attention sketch for Trainium (NOT runnable as-is)"""
     # NeuronCore has 24MB SBUF and 2MB PSUM
     # Tile computations to fit in on-chip memory
-    
+
     batch, seq_len, d_head = q_tensor.shape
     assert seq_len <= nl.tile_size.pmax  # 128 max
-    
+
     # Load Q, K, V tiles to SBUF (on-chip memory)
     q_tile = nl.load(q_tensor)
     k_tile = nl.load(k_tensor)
     v_tile = nl.load(v_tensor)
-    
+
     # Compute attention scores in PSUM buffer
     scores = nl.matmul(q_tile, k_tile.transpose(), dtype=nl.float32)
     scores = nl.multiply(scores, scale)
-    
+
     # Softmax (custom implementation for NeuronCore)
     scores_max = nl.max(scores, axis=-1, keepdim=True)
     scores_exp = nl.exp(nl.subtract(scores, scores_max))
     scores_sum = nl.sum(scores_exp, axis=-1, keepdim=True)
     attn_weights = nl.divide(scores_exp, scores_sum)
-    
+
     # Apply attention to values
     output = nl.matmul(attn_weights, v_tile)
-    
+
     # Store result back to HBM
     output_tensor = nl.ndarray(output.shape, dtype=q_tensor.dtype)
     nl.store(output_tensor, output)
-    
+
     return output_tensor
 ```
 
@@ -305,27 +306,29 @@ Complete RAG pipeline optimized for Trainium/Inferentia:
 ```python
 class NeuronRAGPipeline:
     """Complete RAG pipeline optimized for AWS ML chips"""
-    
+
     def __init__(self, embedding_model_path, llm_model_path):
         # Load embedding model on Inferentia2
         self.embedder = self._load_embedding_model(embedding_model_path)
-        
+
         # Load LLM on Trainium/Inferentia2
         self.llm = self._load_llm(llm_model_path)
-        
+
         # Initialize vector store (FAISS on CPU)
         self.index = None
         self.documents = []
-        
+
     def generate(self, query, max_length=512):
         """Complete RAG pipeline with cost tracking"""
-        
+
         # Retrieve relevant documents
         docs, scores = self.retrieve(query, k=3)
-        
+
         # Build context
-        context = "\n\n".join([f"Document {i+1}: {doc}" for i, doc in enumerate(docs)])
-        
+        context = "\n\n".join(
+            [f"Document {i + 1}: {doc}" for i, doc in enumerate(docs)]
+        )
+
         # Create prompt
         prompt = f"""Based on the following context, answer the question.
 
@@ -335,21 +338,17 @@ Context:
 Question: {query}
 
 Answer:"""
-        
+
         # Generate response on Trainium/Inferentia
         response = self.llm.sample(
-            prompt,
-            max_length=max_length,
-            top_k=50,
-            top_p=0.95,
-            temperature=0.7
+            prompt, max_length=max_length, top_k=50, top_p=0.95, temperature=0.7
         )
-        
+
         return {
-            'answer': response,
-            'sources': docs,
-            'scores': scores.tolist(),
-            'inference_cost': self._calculate_inference_cost()
+            "answer": response,
+            "sources": docs,
+            "scores": scores.tolist(),
+            "inference_cost": self._calculate_inference_cost(),
         }
 ```
 
@@ -362,29 +361,32 @@ Answer:"""
 ```python
 class TrainiumDistributedTrainer:
     """Advanced distributed training utilizing Trainium2 features"""
-    
+
     @staticmethod
     def train_with_neuron_features(model_fn, dataset, config):
         """Utilize Trainium2-specific optimizations"""
-        
+
         def _mp_fn(rank, flags):
             # Trainium2 specific features:
             # - 4x sparsity support (16:4)
             # - Stochastic rounding for better accuracy
             # - Dedicated collective engines
-            
+
             # Enable Trainium2 optimizations
             import os
-            os.environ['NEURON_CC_FLAGS'] = ' '.join([
-                '--model-type=transformer',
-                '--enable-saturate-infinity',
-                '--enable-stochastic-rounding',  # Trainium2 feature
-                '--enable-sparse-compute',  # 4x sparsity
-                '--collective-engine-mode=dedicated'  # Use dedicated engines
-            ])
-            
+
+            os.environ["NEURON_CC_FLAGS"] = " ".join(
+                [
+                    "--model-type=transformer",
+                    "--enable-saturate-infinity",
+                    "--enable-stochastic-rounding",  # Trainium2 feature
+                    "--enable-sparse-compute",  # 4x sparsity
+                    "--collective-engine-mode=dedicated",  # Use dedicated engines
+                ]
+            )
+
             device = xm.xla_device()
-            
+
             # Model with FSDP
             model = model_fn()
             model = FSDP(
@@ -394,7 +396,7 @@ class TrainiumDistributedTrainer:
                 forward_prefetch=True,
                 backward_prefetch=True,
                 sharding_strategy=ShardingStrategy.HYBRID_SHARD,
-                use_orig_params=True
+                use_orig_params=True,
             )
 ```
 
@@ -458,7 +460,7 @@ import neuronxcc.nki as nki
 import numpy as np
 
 # Run an NKI kernel on CPU via simulation (no Trainium required):
-out = nki.simulate_kernel(my_kernel, a_tensor, b_tensor)   # returns NumPy results
+out = nki.simulate_kernel(my_kernel, a_tensor, b_tensor)  # returns NumPy results
 np.testing.assert_allclose(out, reference, rtol=1e-2)
 ```
 

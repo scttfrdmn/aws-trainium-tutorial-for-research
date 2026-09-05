@@ -174,15 +174,15 @@ def flash_attention_kernel(q_tensor, k_tensor, v_tensor, scale):
     # - SBUF: 24MB on-chip memory
     # - PSUM: 2MB for matrix multiply results
     # - Native 128x128 matrix operations
-    
+
     q_tile = nl.load(q_tensor)
-    k_tile = nl.load(k_tensor) 
+    k_tile = nl.load(k_tensor)
     v_tile = nl.load(v_tensor)
-    
+
     scores = nl.matmul(q_tile, k_tile.transpose())
     attn_weights = nl.softmax(scores * scale)
     output = nl.matmul(attn_weights, v_tile)
-    
+
     return output
 ```
 

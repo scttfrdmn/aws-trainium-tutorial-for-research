@@ -182,6 +182,7 @@ host↔device. A few of these per step quietly serialize your training and waste
 **Detect it — the canonical, documented way:**
 ```python
 import torch_xla.debug.metrics as met
+
 # ... run one training step, then:
 print(met.metrics_report())
 ```

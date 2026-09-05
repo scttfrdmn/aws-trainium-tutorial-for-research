@@ -175,7 +175,7 @@ the next step and executing the current one.
 ```python
 for batch in loader:
     ...
-    running += loss.item()        # ❌ host sync EVERY step
+    running += loss.item()  # ❌ host sync EVERY step
 ```
 
 **Better — accumulate on device, fetch once:**
@@ -183,8 +183,8 @@ for batch in loader:
 running = torch.zeros((), device=device)
 for batch in loader:
     ...
-    running += loss.detach()      # ✅ stays on device
-avg = (running / n).item()        # ✅ one sync per epoch
+    running += loss.detach()  # ✅ stays on device
+avg = (running / n).item()  # ✅ one sync per epoch
 ```
 For periodic logging without a hard sync, use
 [`xm.add_step_closure`](https://docs.pytorch.org/xla/master/learn/pytorch-on-xla-devices.html).
@@ -203,17 +203,19 @@ model = Model().to(device)
 opt = torch.optim.AdamW(model.parameters(), lr=3e-5)
 
 # MpDeviceLoader overlaps host->device copy with compute and issues mark_step per batch.
-loader = pl.MpDeviceLoader(torch.utils.data.DataLoader(ds, batch_size=16, drop_last=True), device)
+loader = pl.MpDeviceLoader(
+    torch.utils.data.DataLoader(ds, batch_size=16, drop_last=True), device
+)
 
 for epoch in range(epochs):
     model.train()
-    for batch in loader:                  # tensors already on device
+    for batch in loader:  # tensors already on device
         opt.zero_grad()
         out = model(**batch)
         out.loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)   # see §4
-        xm.optimizer_step(opt)            # applies grads
-        xm.mark_step()                    # end + execute this step's graph
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # see §4
+        xm.optimizer_step(opt)  # applies grads
+        xm.mark_step()  # end + execute this step's graph
 ```
 Source: [PyTorch on XLA devices](https://docs.pytorch.org/xla/master/learn/pytorch-on-xla-devices.html).
 
