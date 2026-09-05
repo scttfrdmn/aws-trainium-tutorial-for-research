@@ -163,9 +163,17 @@ class ValidationResult:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
 
     def write(self, results_dir: Path) -> Path:
-        """Write this result to results_dir/<example-slug>.json and return the path."""
+        """Write this result to results_dir/<example-slug>[@<instance>].json and return the path.
+
+        When ``instance_type`` is set, it's appended (``…@trn1.2xlarge.json``) so results for the
+        SAME example on DIFFERENT instances coexist instead of overwriting each other -- that's what
+        lets VALIDATED.md show, e.g., an example validated on both trn1.2xlarge and trn2.48xlarge.
+        Off-hardware (``instance_type`` None, as in unit tests) the name is unqualified, unchanged.
+        """
         results_dir.mkdir(parents=True, exist_ok=True)
         slug = self.example.replace("/", "__").removesuffix(".py")
+        if self.instance_type:
+            slug = f"{slug}@{self.instance_type}"
         out = results_dir / f"{slug}.json"
         out.write_text(self.to_json())
         return out

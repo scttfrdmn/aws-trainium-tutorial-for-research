@@ -125,11 +125,14 @@ def build_plan(
     max_hours: float = 2.0,
     use_spot: bool = True,
     cost_limit_usd: float | None = 5.0,
+    iam_instance_profile: str | None = None,
 ) -> LaunchPlan:
     """Construct a LaunchPlan (no side effects beyond read-only AMI resolution).
 
     `remote_command` is the shell to run on the instance (the in-instance harness invocation).
     `cost_limit_usd` maps to spawn's --cost-limit (hard $ ceiling); None disables it.
+    `iam_instance_profile` (awscli path only) attaches an instance profile so the in-instance run can
+    write artifacts to S3 without SSH -- the retrieval mechanism for a self-terminating spot box.
     """
     launcher = choose_launcher(instance_type, prefer)
     ami = resolve_neuron_dlami(region)
@@ -178,11 +181,16 @@ def build_plan(
             f"ResourceType=instance,Tags=[{{Key=Name,Value={name}}},{{Key=spore,Value=validation}}]",
             "--count",
             "1",
+            # instance profile (optional): lets the in-instance run push artifacts to S3 without SSH.
+            "--iam-instance-profile",
+            f"Name={iam_instance_profile}" if iam_instance_profile else "",
             # user-data wraps the remote command with a hard-timeout shutdown for cost safety.
             "--user-data",
             _awscli_user_data(remote_command, max_hours),
         ]
-        cmd = [c for c in cmd if c != ""]  # drop empty market-options when on-demand
+        # Drop empty market-options (on-demand) and empty iam-instance-profile (none given), plus the
+        # now-dangling flag name that precedes each — so we never emit `--flag ""`.
+        cmd = _drop_empty_flag_pairs(cmd)
 
     return LaunchPlan(
         instance_type=instance_type,
@@ -195,6 +203,24 @@ def build_plan(
         command=cmd,
         cost_limit_usd=cost_limit_usd if launcher == "spawn" else None,
     )
+
+
+def _drop_empty_flag_pairs(cmd: list[str]) -> list[str]:
+    """Remove `--flag ""` pairs (and the dangling flag) from an aws-cli argv.
+
+    We build the run-instances argv with placeholder empty values for optional flags
+    (`--instance-market-options` on-demand, `--iam-instance-profile` when none given). Dropping only
+    the empty string would leave the flag name consuming the next real arg, so drop both.
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(cmd):
+        if cmd[i].startswith("--") and i + 1 < len(cmd) and cmd[i + 1] == "":
+            i += 2  # skip flag + its empty value
+            continue
+        out.append(cmd[i])
+        i += 1
+    return out
 
 
 def _awscli_user_data(remote_command: str, max_hours: float) -> str:

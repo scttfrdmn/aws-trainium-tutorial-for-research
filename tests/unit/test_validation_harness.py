@@ -80,6 +80,50 @@ def test_result_roundtrip(tmp_path: Path):
     assert data["versions"]["torch_neuronx"] is None
 
 
+def test_write_qualifies_filename_by_instance(tmp_path: Path):
+    """When instance_type is set, the artifact filename is qualified with it, so results for the
+    same example on different instances coexist instead of overwriting."""
+    r1 = ValidationResult(
+        example="examples.use_cases.biomedical_ner",
+        status="passed",
+        instance_type="trn1.2xlarge",
+    )
+    r2 = ValidationResult(
+        example="examples.use_cases.biomedical_ner",
+        status="passed",
+        instance_type="trn2.48xlarge",
+    )
+    p1 = r1.write(tmp_path)
+    p2 = r2.write(tmp_path)
+    assert p1.name == "examples.use_cases.biomedical_ner@trn1.2xlarge.json"
+    assert p2.name == "examples.use_cases.biomedical_ner@trn2.48xlarge.json"
+    assert p1 != p2 and p1.exists() and p2.exists()  # neither overwrote the other
+
+
+def test_render_status_groups_by_instance(tmp_path: Path, monkeypatch):
+    """render_status renders one row per (example, instance) and counts multi-instance coverage."""
+    from validation import render_status
+
+    ex = registry.EXAMPLES[0]  # a real registered example (its module path)
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    for inst in ("trn1.2xlarge", "trn2.48xlarge"):
+        ValidationResult(example=ex.module, status="passed", instance_type=inst).write(
+            results_dir
+        )
+
+    monkeypatch.setattr(render_status, "RESULTS_DIR", results_dir)
+    loaded = render_status._load_results()
+    assert len(loaded[ex.module]) == 2  # both instances grouped under the one example
+    assert render_status._passed_on_any(loaded[ex.module])
+
+    out = render_status.render(clock="2026-08-18T00:00:00Z")
+    # Two data rows for this example (one per instance), and the multi-instance note is present.
+    assert out.count(f"| `{ex.key}` |") == 2
+    assert "trn1.2xlarge" in out and "trn2.48xlarge" in out
+    assert "more than one instance" in out
+
+
 def test_capture_environment_is_offline_safe():
     """capture_environment must never raise off-hardware (no EC2, maybe no git)."""
     r = capture_environment(

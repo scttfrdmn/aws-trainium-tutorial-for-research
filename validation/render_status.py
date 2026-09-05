@@ -22,17 +22,29 @@ OUT = _REPO_ROOT / "VALIDATED.md"
 from validation import registry  # noqa: E402
 
 
-def _load_results() -> dict[str, dict]:
-    """Load all result artifacts, keyed by example module path."""
-    results: dict[str, dict] = {}
+def _load_results() -> dict[str, list[dict]]:
+    """Load all result artifacts, grouped by example module path.
+
+    An example may have MORE than one artifact now -- one per instance it was validated on (e.g.
+    trn1.2xlarge and trn2.48xlarge). Each example maps to a list of its per-instance results, sorted
+    by instance type so the rendered rows are stable.
+    """
+    results: dict[str, list[dict]] = {}
     if RESULTS_DIR.is_dir():
         for path in sorted(RESULTS_DIR.glob("*.json")):
             try:
                 data = json.loads(path.read_text())
             except (OSError, json.JSONDecodeError):
                 continue
-            results[data.get("example", path.stem)] = data
+            results.setdefault(data.get("example", path.stem), []).append(data)
+    for rows in results.values():
+        rows.sort(key=lambda d: d.get("instance_type") or "")
     return results
+
+
+def _passed_on_any(rows: list[dict]) -> bool:
+    """True if the example passed on at least one instance."""
+    return any(r.get("status") == "passed" for r in rows)
 
 
 def render(clock: str | None = None) -> str:
@@ -53,11 +65,15 @@ def render(clock: str | None = None) -> str:
 
     total = len(registry.EXAMPLES)
     passed = sum(
-        1
-        for ex in registry.EXAMPLES
-        if results.get(ex.module, {}).get("status") == "passed"
+        1 for ex in registry.EXAMPLES if _passed_on_any(results.get(ex.module, []))
     )
-    lines.append(f"**Coverage: {passed}/{total} examples validated on hardware.**")
+    multi = sum(1 for ex in registry.EXAMPLES if len(results.get(ex.module, [])) > 1)
+    coverage = f"**Coverage: {passed}/{total} examples validated on hardware.**"
+    if multi:
+        coverage += (
+            f" ({multi} validated on more than one instance — one row each below.)"
+        )
+    lines.append(coverage)
     lines.append("")
 
     lines.append(
@@ -67,30 +83,32 @@ def render(clock: str | None = None) -> str:
         "|---------|--------|----------|-----------|---------------|-----------|-----------|--------|------|"
     )
     for ex in registry.EXAMPLES:
-        r = results.get(ex.module)
-        if not r:
+        rows = results.get(ex.module, [])
+        if not rows:
             lines.append(f"| `{ex.key}` | ⚠️ unvalidated | — | — | — | — | — | — | — |")
             continue
-        icon = {
-            "passed": "✅ passed",
-            "failed": "❌ failed",
-            "skipped": "⏭ skipped",
-        }.get(r.get("status", ""), "? ")
-        versions = r.get("versions") or {}
-        metrics = r.get("metrics") or {}
-        # Show the first declared threshold metric as the headline number.
-        metric_str = "—"
-        if ex.thresholds:
-            mk = next(iter(ex.thresholds))
-            if mk in metrics:
-                metric_str = f"{mk}={metrics[mk]:.4f}"
-        wall = r.get("wall_clock_s")
-        lines.append(
-            f"| `{ex.key}` | {icon} | {r.get('instance_type') or '—'} | "
-            f"{versions.get('neuron_sdk') or '—'} | {versions.get('torch_neuronx') or '—'} | "
-            f"{metric_str} | {f'{wall}s' if wall is not None else '—'} | "
-            f"{r.get('commit') or '—'} | {(r.get('timestamp') or '—')[:10]} |"
-        )
+        # One row per instance the example was validated on (sorted by instance in _load_results).
+        for r in rows:
+            icon = {
+                "passed": "✅ passed",
+                "failed": "❌ failed",
+                "skipped": "⏭ skipped",
+            }.get(r.get("status", ""), "? ")
+            versions = r.get("versions") or {}
+            metrics = r.get("metrics") or {}
+            # Show the first declared threshold metric as the headline number.
+            metric_str = "—"
+            if ex.thresholds:
+                mk = next(iter(ex.thresholds))
+                if mk in metrics:
+                    metric_str = f"{mk}={metrics[mk]:.4f}"
+            wall = r.get("wall_clock_s")
+            lines.append(
+                f"| `{ex.key}` | {icon} | {r.get('instance_type') or '—'} | "
+                f"{versions.get('neuron_sdk') or '—'} | {versions.get('torch_neuronx') or '—'} | "
+                f"{metric_str} | {f'{wall}s' if wall is not None else '—'} | "
+                f"{r.get('commit') or '—'} | {(r.get('timestamp') or '—')[:10]} |"
+            )
 
     # Multi-process (torchrun) examples — validated by manual launch, not the single-device
     # auto-harness, so they carry no results/*.json. Listed separately so the count above stays
@@ -166,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         unvalidated = [
             e.key
             for e in registry.EXAMPLES
-            if results.get(e.module, {}).get("status") != "passed"
+            if not _passed_on_any(results.get(e.module, []))
         ]
         if unvalidated:
             print(f"Unvalidated: {', '.join(unvalidated)}", file=sys.stderr)

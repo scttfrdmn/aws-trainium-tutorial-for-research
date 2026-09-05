@@ -159,10 +159,19 @@ def run_local(args: argparse.Namespace) -> int:
         if args.cache_url
         else ""
     )
+    # After the run, optionally sync the captured artifacts to S3 so a self-terminating instance
+    # hands its results back (the box has no inbound SSH once it's gone). Requires an instance
+    # profile with s3:PutObject on the bucket (see --iam-instance-profile).
+    results_sync = (
+        f" && aws s3 sync validation/results {args.results_s3!r}"
+        if args.results_s3
+        else ""
+    )
     inner = (
         "cd /opt/tutorial 2>/dev/null || cd ~/tutorial 2>/dev/null || cd ~/aws-trainium-tutorial-for-research; "
         f"{cache_env}"
         f"python3 -u -m validation.run_on_hardware --in-instance {example_flag} 2>&1 | tee ~/validate.log"
+        f"{results_sync}"
     )
     remote = (
         "set -e; "
@@ -178,6 +187,7 @@ def run_local(args: argparse.Namespace) -> int:
         max_hours=args.max_hours,
         use_spot=not args.on_demand,
         cost_limit_usd=args.cost_limit,
+        iam_instance_profile=args.iam_instance_profile,
     )
 
     print(plan.describe())
@@ -256,6 +266,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="NEURON_COMPILE_CACHE_URL for the run (e.g. s3://bucket/neuron-cache). On a fresh "
         "cloud instance a local cache is always cold; an s3:// URL persists compiled graphs across "
         "reprovisions so you don't recompile every launch. See best-practices §1b.",
+    )
+    p.add_argument(
+        "--iam-instance-profile",
+        default=None,
+        metavar="NAME",
+        help="Attach this IAM instance profile (awscli launcher) so the in-instance run can push "
+        "artifacts to S3 without SSH. Pair with --results-s3.",
+    )
+    p.add_argument(
+        "--results-s3",
+        default=None,
+        metavar="URL",
+        help="After the run, `aws s3 sync validation/results` to this s3:// URL (artifact hand-back "
+        "from a self-terminating instance). Requires --iam-instance-profile with s3:PutObject.",
     )
     p.add_argument(
         "--yes", action="store_true", help="Actually launch (omit for a dry run)."
