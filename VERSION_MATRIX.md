@@ -2,28 +2,28 @@
 
 This document tracks software versions, dependencies, and the current platform direction for the AWS Trainium & Inferentia tutorial components.
 
-**Last Updated**: 2026-07-08
+**Last Updated**: 2026-08-18
 **Reference**: [AWS Neuron release notes](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/release-notes/index.html)
 **Legend**: ✅ Current/recommended | ⚠️ Legacy/maintenance | ❌ Archived/EOL | 🔬 Preview
 
 > **How to read version claims here.** The versions below reflect the AWS Neuron release notes
-> as of July 2026 (SDK 2.31.0). They are documented compatibility targets, not the result of a fresh
+> as of August 2026 (SDK 2.32.0). They are documented compatibility targets, not the result of a fresh
 > end-to-end hardware run on every cell — re-validate against the live release notes before
-> pinning a production environment. (The examples' captured hardware results were run on **2.30**,
-> the prior release; 2.31 is the same PyTorch 2.9 / XLA stack, so those results carry over.)
+> pinning a production environment. (The examples' captured hardware results were run on **2.30** and
+> **2.31**; 2.32 is the same PyTorch 2.9 / XLA stack, so those results carry over.)
 
-## 🧠 Core Neuron Stack (Neuron SDK 2.31.0 — July 7, 2026)
+## 🧠 Core Neuron Stack (Neuron SDK 2.32.0 — August 17, 2026)
 
 | Component | Version | Status | Notes |
 |-----------|---------|--------|-------|
-| **AWS Neuron SDK** | 2.31.0 | ✅ | Latest release (2026-07-07) |
-| **torch-neuronx** (PyTorch/XLA) | 2.9.x (`2.9.0.2.15.*`) | ✅ | PyTorch 2.9 — **last XLA-based version** (this tutorial's target) |
+| **AWS Neuron SDK** | 2.32.0 | ✅ | Latest release (2026-08-17) |
+| **torch-neuronx** (PyTorch/XLA) | 2.9.x | ✅ | PyTorch 2.9 — **last XLA-based version** (this tutorial's target); resolve exact patch from the Neuron index |
 | **NxD Training** (NeuronX Distributed) | 1.x | ✅ | Recommended path for distributed training |
-| **NxD Inference** (NeuronX Distributed) | 0.x | ✅ | Recommended serving lib; **Trn2+ only since 2.29** (Inf2/Trn1 → pin 2.28) |
-| **vLLM Neuron plugin** | current | ✅ | Standard high-throughput inference serving on Neuron |
+| **NxD Inference** (NeuronX Distributed) | 0.10.x | ✅ ⚠️ | Serving lib; **Trn2+ only since 2.29** (Inf2/Trn1 → pin 2.28). **In maintenance mode as of 2.32** |
+| **vLLM Neuron plugin** | 0.24.x (`0.24.0.1.1.0`) | ✅ | High-throughput inference serving on Neuron (vLLM 0.24.0) |
 | **optimum-neuron** | current | ✅ | Hugging Face integration |
-| **NKI (Neuron Kernel Interface)** | 0.4.0 | ✅ | FP8 matmul, Trn3 support |
-| **jax-neuronx** | 0.10.x | ⚠️ | Beta; research focus |
+| **NKI (Neuron Kernel Interface)** | 0.6.0 | ✅ | Adds `nisa.topk`, variable-length collectives (`all_gather_v`), `fori_loop`/`while_loop`; FP8 matmul, Trn3 support |
+| **jax-neuronx** | 0.10.x | ⚠️ | Beta; research focus (JAX 0.10.0 support added in 2.32) |
 | **tensorflow-neuronx** | — | ❌ | **Archived** — TensorFlow Neuron is no longer developed |
 | **transformers-neuronx** | — | ⚠️ | Being folded into NxD Inference; install via Neuron pip index |
 
@@ -86,7 +86,7 @@ mode**, not the forward-looking platform.
 
 ## 🔥 ML Frameworks
 
-### PyTorch Stack (Neuron 2.31.0)
+### PyTorch Stack (Neuron 2.32.0)
 | Component | Version | Status | Neuron Compatible |
 |-----------|---------|--------|-------------------|
 | **PyTorch** | 2.9 | ✅ | ✅ **Current — last PyTorch/XLA version; this tutorial's target** |
@@ -101,10 +101,10 @@ TensorFlow Neuron (`tensorflow-neuronx` / `tensorflow-neuron`) is **archived** a
 developed. New work should use the PyTorch path. Existing TF deployments can continue on older
 SDKs but will not receive new features or hardware support.
 
-### JAX Stack (Neuron 2.31.0)
+### JAX Stack (Neuron 2.32.0)
 | Component | Version | Status | Neuron Compatible |
 |-----------|---------|--------|-------------------|
-| **JAX-NeuronX** | 0.10.x | ⚠️ | Beta; research focus, not GA |
+| **JAX-NeuronX** | 0.10.x | ⚠️ | Beta; research focus, not GA (2.32 adds JAX 0.10.0 support, up to JAX 0.9.0) |
 | **JAX** | paired w/ 0.10.x plugin | ⚠️ | Follow the JAX-NeuronX release notes for the exact pin |
 
 ## 🏗️ Infrastructure Components
@@ -187,6 +187,8 @@ bandwidth, ~1.3 PFLOPS FP8 per chip. Confirm exact figures on the
 | Issue | Affected Components | Workaround | Status |
 |-------|-------------------|------------|--------|
 | NxD Inference dropped Inf2/Trn1 | NxD Inference ≥ 2.29 | Pin to Neuron 2.28, or move to Trn2+ | Expected (hardware focus shift) |
+| NxD Inference now in maintenance mode | NxD Inference (2.32) | Feature work is slowing; track the release notes | As of Neuron 2.32 |
+| NumPy 2.1 dropped | Neuron 2.32 | Use NumPy 2.2 or 2.3 | As of Neuron 2.32 |
 | JAX path is beta | jax-neuronx 0.10.x | Use PyTorch path for production | Upstream beta |
 
 ## 🔄 Testing
@@ -215,7 +217,7 @@ Boto3: v1.34.0+
 Valid AWS credentials with Neuron permissions
 ```
 
-### Installation (Neuron SDK 2.31.0, PyTorch 2.9 / XLA path)
+### Installation (Neuron SDK 2.32.0, PyTorch 2.9 / XLA path)
 
 > The fastest, most reliable way to get a known-good stack is the **AWS Neuron DLAMI** (Deep
 > Learning AMI) or a Neuron Deep Learning Container — they bundle matched driver + runtime +
@@ -224,7 +226,7 @@ Valid AWS credentials with Neuron permissions
 > [PyTorch Neuron setup guide](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/frameworks/torch/torch-neuronx/setup/pytorch-install.html).
 
 ```bash
-# Core Neuron installation (PyTorch/XLA path — current as of Neuron 2.31.0)
+# Core Neuron installation (PyTorch/XLA path — current as of Neuron 2.32.0)
 # torch-neuronx pulls a matched torch / torch-xla; let the Neuron index resolve the pin.
 python -m pip install --upgrade pip
 pip install torch-neuronx neuronx-cc \
@@ -263,8 +265,8 @@ A current image tag looks like:
 
 ```bash
 # Pattern (resolve the exact current tag from the DLC reference above):
-763104351884.dkr.ecr.<region>.amazonaws.com/pytorch-training-neuronx:<torch>-neuronx-py3xx-sdk2.31.x-ubuntu24.04
-763104351884.dkr.ecr.<region>.amazonaws.com/pytorch-inference-neuronx:<torch>-neuronx-py3xx-sdk2.31.x-ubuntu24.04
+763104351884.dkr.ecr.<region>.amazonaws.com/pytorch-training-neuronx:<torch>-neuronx-py3xx-sdk2.32.x-ubuntu24.04
+763104351884.dkr.ecr.<region>.amazonaws.com/pytorch-inference-neuronx:<torch>-neuronx-py3xx-sdk2.32.x-ubuntu24.04
 # (TensorFlow Neuron containers are no longer produced — the framework is archived.)
 ```
 
@@ -290,9 +292,9 @@ previously appeared here.
 
 ## 📈 Platform Direction (2026)
 
-| Area | Now (July 2026) | Next |
+| Area | Now (August 2026) | Next |
 |------|-----------------|------|
-| **Neuron SDK** | 2.31.0 | Rolling ~monthly releases |
+| **Neuron SDK** | 2.32.0 | Rolling ~monthly releases |
 | **PyTorch backend** | PyTorch/XLA (`torch-neuronx`), PyTorch 2.9 | Public docs note a non-XLA path at PyTorch 2.10+ (separate track, not yet GA) |
 | **Inference serving** | NxD Inference + vLLM plugin (Trn2+) | Continued Trainium focus |
 | **Hardware** | Trn2 GA, Trn3 preview | Trn3 broader availability |
@@ -342,5 +344,5 @@ python -c "import torch_neuronx; print('Neuron version:', torch_neuronx.__versio
 ---
 
 **Sourcing**: Versions and platform direction in this file reflect the AWS Neuron release notes and
-"What's New" page as of **2026-06-16**. Treat performance/cost tables as planning estimates, not
+"What's New" page as of **2026-08-18**. Treat performance/cost tables as planning estimates, not
 measured benchmarks. Re-check the live release notes before pinning a production environment.

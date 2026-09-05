@@ -9,7 +9,7 @@ pharmacovigilance), and NCBI-disease is a standard benchmark for it.
 
 What this demonstrates for Trainium users:
     * The PyTorch/XLA training path on Trainium (`xm.xla_device()`, `xm.optimizer_step`,
-      `xm.mark_step`) -- the supported path as of Neuron SDK 2.31.0 / PyTorch 2.9.
+      `xm.mark_step`) -- the supported path as of Neuron SDK 2.32.0 / PyTorch 2.9.
     * **Build in the form the hardware wants** -- the single most important lesson. Verified on a
       real trn1.2xlarge (re-run on Neuron 2.31.13 / transformers 5.13: eval_f1 0.8467; the bf16
       findings below first reproduced on 2.30):

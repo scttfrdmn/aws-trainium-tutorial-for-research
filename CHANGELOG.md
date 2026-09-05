@@ -10,6 +10,25 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Changed (version refresh → Neuron 2.32.0)
+- **Bumped the tutorial's target to Neuron SDK 2.32.0** (released 2026-08-17) across the README
+  badge/status box, `VERSION_MATRIX.md`, `docs/quick-start.md`, `main_tutorial_doc.md`,
+  `local_setup_guide.md`, the docker-image tags, and the `biomedical_ner` / enterprise example
+  docstrings. Also rolled the tutorial's calendar version `2026.1.0 → 2026.2.0`
+  (`pyproject.toml`, README badge, doc footers).
+- **2.32 is the same PyTorch 2.9 / XLA stack** as 2.30/2.31 — no code or training-path changes; the
+  native (non-XLA) **TorchNeuron** backend is still **Private Preview** (not GA), still slated for
+  PyTorch 2.10+.
+- **Refreshed component-version facts** in `VERSION_MATRIX.md`: **NKI 0.4.0 → 0.6.0** (`nisa.topk`,
+  variable-length collectives `all_gather_v`, `fori_loop`/`while_loop`); **vLLM Neuron plugin
+  0.24.0.1.1.0** (vLLM 0.24.0); **NxD Inference now in maintenance mode** (2.32); **JAX 0.10.0
+  support** added; **NumPy 2.1 dropped** (use 2.2/2.3). neuronx-cc for 2.32 is 2.27.5334.0.
+- **No new hardware run was performed for this bump.** The captured provenance stands unchanged —
+  `ner_biomedical` on **2.31.13** and the other five examples on **2.30.10** in `VALIDATED.md` (and
+  `validation/results/*.json`) — and carries over to 2.32 because the PyTorch 2.9 / XLA stack is
+  unchanged. torch-neuronx's exact 2.32 patch string is intentionally left generic (`2.9.x`, resolve
+  from the Neuron index); only the captured-run rows keep their real pinned versions.
+
 ### Added
 - **Agentic Neuron development side-quest** (`docs/agentic_development_sidequest.md`) — an optional
   capstone pointing at AWS's official [`aws-neuron/neuron-agentic-development`](https://github.com/aws-neuron/neuron-agentic-development)
