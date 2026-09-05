@@ -55,6 +55,7 @@ agent accelerate the repetitive parts.
 | `neuron-nki-profiling`, `neuron-nki-profile-analysis-agent` | Profile NKI kernels on hardware; find bottlenecks | the profiler/Neuron-Explorer section of [tools & debugging](neuron_tools_and_debugging.md) |
 | `neuron-nki-profile-querying` | Query Neuron Explorer profile data (parquet) via SQL / Python | same — turns a profile into queryable data |
 | `neuron-framework-autoport`, `neuron-framework-autoport-agent` | Port a GPU-compatible model to NeuronX Distributed Inference | the CUDA→Neuron migration chapter in the [full tutorial](main_tutorial_doc.md) |
+| `neuron-framework-autoport-vllm-neuron` | Port a GPU-compatible model to the vLLM Neuron serving path (added in Neuron 2.32) | the CUDA→Neuron migration chapter + the vLLM-on-Neuron serving notes in [VERSION_MATRIX.md](../VERSION_MATRIX.md) |
 | `neuron-framework-equivalence` | Verify functional equivalence between two model implementations | our recurring habit: *does the Neuron result match CPU/fp32?* (e.g. the [NER bf16→`nan` fix](../examples/use_cases/biomedical_ner.py)) |
 | `neuron-nki-docs` | Research NKI documentation / APIs on demand | replaces manual doc-diving |
 
