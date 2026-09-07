@@ -124,6 +124,28 @@ def test_render_status_groups_by_instance(tmp_path: Path, monkeypatch):
     assert "more than one instance" in out
 
 
+def test_awscli_user_data_is_valid_bash():
+    """The generated user-data must be syntactically valid bash, even with embedded quotes in the
+    command -- a parse error aborts the whole script (including its self-terminate shutdown), which
+    is exactly how a validation box can leak cost. Guards the shlex.quote (not repr) embedding."""
+    import shutil
+    import subprocess
+
+    from validation.launcher import _awscli_user_data
+
+    bash = shutil.which("bash")
+    if not bash:  # pragma: no cover - CI runners have bash
+        pytest.skip("bash not available")
+    # A command containing single quotes is the case that broke repr-based embedding.
+    ud = _awscli_user_data(
+        "export X='s3://b/c'; echo \"it's fine\" | tee ~/log", max_hours=2.0
+    )
+    proc = subprocess.run([bash, "-n"], input=ud, text=True, capture_output=True)
+    assert proc.returncode == 0, f"user-data failed bash -n:\n{proc.stderr}\n---\n{ud}"
+    # Cost backstop must be present (detached TTL killer) so a broken command can't strand the box.
+    assert "shutdown -h now" in ud and "sleep" in ud
+
+
 def test_capture_environment_is_offline_safe():
     """capture_environment must never raise off-hardware (no EC2, maybe no git)."""
     r = capture_environment(
