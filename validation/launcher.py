@@ -16,6 +16,7 @@ explicit --yes from the operator (never launched implicitly).
 
 from __future__ import annotations
 
+import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -224,11 +225,21 @@ def _drop_empty_flag_pairs(cmd: list[str]) -> list[str]:
 
 
 def _awscli_user_data(remote_command: str, max_hours: float) -> str:
-    """Build user-data that runs the command then terminates, with a hard timeout backstop."""
+    r"""Build user-data that runs the command then terminates, with a hard timeout backstop.
+
+    Two independent cost backstops (a validation box must never outlive its budget):
+      1. A detached killer (`sleep N; shutdown`) armed on the FIRST line, so even if the command is
+         malformed or hangs, the instance still terminates at the TTL.
+      2. `timeout` around the command + a final `shutdown` for prompt teardown on completion.
+    `remote_command` is embedded with shlex.quote (NOT repr) -- repr emits `\\'` inside single quotes,
+    which bash rejects with "unexpected EOF", aborting the whole script (and its shutdown) before it
+    can run. shlex.quote produces POSIX-valid quoting for arbitrary embedded quotes.
+    """
     timeout_s = int(max_hours * 3600)
     return (
         "#!/bin/bash\n"
         "set -x\n"
-        f"timeout {timeout_s} bash -lc {remote_command!r}\n"
+        f"(sleep {timeout_s}; shutdown -h now) &\n"  # armed first: TTL kill even if the rest breaks
+        f"timeout {timeout_s} bash -lc {shlex.quote(remote_command)}\n"
         "shutdown -h now\n"
     )

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import shlex
 import subprocess
 import sys
 import time
@@ -140,6 +141,30 @@ def run_in_instance(keys: list[str], *, smoke: bool, clock: str | None) -> int:
     return 1 if failed else 0
 
 
+# Extra Python deps the six single-device examples import beyond the Neuron DLAMI's preinstalled
+# stack. Deliberately does NOT include torch/torch-neuronx (preinstalled; reinstalling risks
+# clobbering the Neuron build) — none of these pull torch as a hard dependency.
+_EXAMPLE_DEPS = "transformers datasets rasterio pymatgen biopython scikit-learn scipy"
+
+
+def _bootstrap_prefix(repo_url: str, git_ref: str) -> str:
+    """Bash that prepares a bare Neuron DLAMI: activate its venv, clone the repo, install deps.
+
+    Leaves the shell cd'd into the repo so the harness invocation that follows runs in-tree.
+    """
+    repo_dir = repo_url.rstrip("/").rsplit("/", 1)[-1]
+    return (
+        "set -e; "
+        # Activate the DLAMI's preinstalled PyTorch-Neuron venv (name is SDK-versioned; glob it).
+        "for v in /opt/aws_neuronx_venv_pytorch_2_9 /opt/aws_neuronx_venv_pytorch*; do "
+        '[ -f "$v/bin/activate" ] && . "$v/bin/activate" && break; done; '
+        "cd ~; "
+        f"[ -d {repo_dir} ] || git clone --depth 1 --branch {git_ref} {repo_url}; "
+        f"cd {repo_dir}; "
+        f"pip install --no-input {_EXAMPLE_DEPS}; "
+    )
+
+
 def run_local(args: argparse.Namespace) -> int:
     """Build a launch plan and (only with --yes) provision the instance. Returns exit code."""
     keys = args.example or [e.key for e in registry.EXAMPLES]
@@ -155,29 +180,47 @@ def run_local(args: argparse.Namespace) -> int:
     # recompiling from cold every launch. An s3:// URL is what survives reprovisioning (a local dir
     # would be empty on each new box). Exported before the run so every example's compiles hit it.
     cache_env = (
-        f"export NEURON_COMPILE_CACHE_URL={args.cache_url!r}; "
+        f"export NEURON_COMPILE_CACHE_URL={shlex.quote(args.cache_url)}; "
         if args.cache_url
         else ""
     )
-    # After the run, optionally sync the captured artifacts to S3 so a self-terminating instance
-    # hands its results back (the box has no inbound SSH once it's gone). Requires an instance
-    # profile with s3:PutObject on the bucket (see --iam-instance-profile).
-    results_sync = (
-        f" && aws s3 sync validation/results {args.results_s3!r}"
-        if args.results_s3
-        else ""
-    )
+    # After the run, optionally hand artifacts + log back via S3 so a self-terminating instance
+    # doesn't take them to the grave (no inbound SSH once it's gone). Uses `;` (not `&&`) so it runs
+    # even if the harness exits non-zero -- a failed run's log is exactly what you need. Requires an
+    # instance profile with s3:PutObject on the bucket (see --iam-instance-profile).
+    if args.results_s3:
+        base = args.results_s3.rstrip("/")
+        results_sync = (
+            f"; aws s3 sync validation/results {base}/results/ "
+            f"; aws s3 cp ~/validate.log {base}/logs/{keys[0] if len(keys) == 1 else 'all'}.log"
+        )
+    else:
+        results_sync = ""
+
+    # Where the harness runs from: a bootstrap run clones + cds into the repo itself; otherwise assume
+    # the box already has the checkout.
+    if args.bootstrap:
+        setup = _bootstrap_prefix(args.repo_url, args.git_ref)
+    else:
+        setup = "cd /opt/tutorial 2>/dev/null || cd ~/tutorial 2>/dev/null || cd ~/aws-trainium-tutorial-for-research; "
+
     inner = (
-        "cd /opt/tutorial 2>/dev/null || cd ~/tutorial 2>/dev/null || cd ~/aws-trainium-tutorial-for-research; "
+        f"{setup}"
         f"{cache_env}"
         f"python3 -u -m validation.run_on_hardware --in-instance {example_flag} 2>&1 | tee ~/validate.log"
         f"{results_sync}"
     )
-    remote = (
-        "set -e; "
-        f"tmux new-session -d -s validate {inner!r} || {inner}; "
-        "echo 'validation running in tmux session \"validate\" (tmux attach -t validate)'"
-    )
+    # tmux keeps an interactive (spawn/SSH) run alive across disconnects; a headless awscli/user-data
+    # launch has no tty, so run inline there. Either way the harness writes artifacts + the S3 sync.
+    launcher = launcher_mod.choose_launcher(args.instance, args.launcher)
+    if launcher == "awscli":
+        remote = inner
+    else:
+        remote = (
+            "set -e; "
+            f"tmux new-session -d -s validate {shlex.quote(inner)} || {inner}; "
+            "echo 'validation running in tmux session \"validate\" (tmux attach -t validate)'"
+        )
     plan = launcher_mod.build_plan(
         args.instance,
         args.region,
@@ -273,6 +316,23 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="NAME",
         help="Attach this IAM instance profile (awscli launcher) so the in-instance run can push "
         "artifacts to S3 without SSH. Pair with --results-s3.",
+    )
+    p.add_argument(
+        "--bootstrap",
+        action="store_true",
+        help="Prepend repo clone + example-dependency install to the remote command, for a bare "
+        "Neuron DLAMI that doesn't already have the tutorial checked out. Activates the DLAMI's "
+        "preinstalled PyTorch-Neuron venv; does NOT reinstall torch/torch-neuronx.",
+    )
+    p.add_argument(
+        "--repo-url",
+        default="https://github.com/scttfrdmn/aws-trainium-tutorial-for-research",
+        help="Repo to clone when --bootstrap is set.",
+    )
+    p.add_argument(
+        "--git-ref",
+        default="main",
+        help="Branch/tag/SHA to clone when --bootstrap is set.",
     )
     p.add_argument(
         "--results-s3",
