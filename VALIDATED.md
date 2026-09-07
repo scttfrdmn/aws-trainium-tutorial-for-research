@@ -2,18 +2,18 @@
 
 This file is **generated** by `validation/render_status.py` from the provenance artifacts in `validation/results/`. Do not edit by hand. Each row reflects a real run on real Neuron hardware (or marks the example as not-yet-validated).
 
-_Last rendered: 2026-07-09_
+_Last rendered: 2026-09-06_
 
-**Coverage: 6/6 examples validated on hardware.**
+**Coverage: 5/6 examples validated on hardware.**
 
 | Example | Status | Instance | Neuron SDK | torch-neuronx | Key metric | Wall clock | Commit | When |
 |---------|--------|----------|-----------|---------------|-----------|-----------|--------|------|
-| `ner_biomedical` | ✅ passed | trn1.2xlarge | 2.31.13 | 2.9.0.2.15.32035+de43f57c | eval_f1=0.8467 | 1323.88s | — | 2026-07-09 |
-| `satellite_landcover` | ✅ passed | trn1.2xlarge | 2.30.10 | 2.9.0.2.14.27725+e2ff0410 | eval_acc=0.7500 | 94.66s | — | 2026-06-25 |
-| `cv_utilization_spike` | ✅ passed | trn1.2xlarge | 2.30.10 | 2.9.0.2.14.27725+e2ff0410 | vit_over_cnn_tflops=5.1780 | 714.35s | — | 2026-06-24 |
-| `distill_ner_slm` | ✅ passed | trn1.2xlarge | 2.30.10 | 2.9.0.2.14.27725+e2ff0410 | student_f1=0.5732 | 113.49s | — | 2026-06-24 |
-| `antibody_affinity_slm` | ✅ passed | trn1.2xlarge | 2.30.10 | 2.9.0.2.14.27725+e2ff0410 | spearman=0.5420 | 1007.43s | — | 2026-06-24 |
-| `crystal_cif_slm` | ✅ passed | trn1.2xlarge | 2.30.10 | 2.9.0.2.14.27725+e2ff0410 | inv_val_perplexity=0.5764 | 976.55s | — | 2026-06-24 |
+| `ner_biomedical` | ✅ passed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | eval_f1=0.8467 | 1302.75s | 1f72cf3 | 2026-09-05 |
+| `satellite_landcover` | ❌ failed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | — | 2129.97s | 1f72cf3 | 2026-09-05 |
+| `cv_utilization_spike` | ✅ passed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | vit_over_cnn_tflops=4.9870 | 617.96s | 1f72cf3 | 2026-09-05 |
+| `distill_ner_slm` | ✅ passed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | student_f1=0.5859 | 1314.46s | 1f72cf3 | 2026-09-05 |
+| `antibody_affinity_slm` | ✅ passed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | spearman=0.5420 | 928.81s | 1f72cf3 | 2026-09-05 |
+| `crystal_cif_slm` | ✅ passed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | inv_val_perplexity=0.5778 | 682.12s | 1f72cf3 | 2026-09-05 |
 
 ## Multi-process examples (torchrun — validated by manual launch)
 
