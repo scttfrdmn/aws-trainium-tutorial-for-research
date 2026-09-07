@@ -225,7 +225,7 @@ def _drop_empty_flag_pairs(cmd: list[str]) -> list[str]:
 
 
 def _awscli_user_data(remote_command: str, max_hours: float) -> str:
-    """Build user-data that runs the command then terminates, with a hard timeout backstop.
+    r"""Build user-data that runs the command then terminates, with a hard timeout backstop.
 
     Two independent cost backstops (a validation box must never outlive its budget):
       1. A detached killer (`sleep N; shutdown`) armed on the FIRST line, so even if the command is
