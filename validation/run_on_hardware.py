@@ -231,6 +231,7 @@ def run_local(args: argparse.Namespace) -> int:
         use_spot=not args.on_demand,
         cost_limit_usd=args.cost_limit,
         iam_instance_profile=args.iam_instance_profile,
+        image_id=args.image_id,
     )
 
     print(plan.describe())
@@ -316,6 +317,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="NAME",
         help="Attach this IAM instance profile (awscli launcher) so the in-instance run can push "
         "artifacts to S3 without SSH. Pair with --results-s3.",
+    )
+    p.add_argument(
+        "--image-id",
+        default=None,
+        metavar="AMI",
+        help="Pin a specific AMI (e.g. a private/pre-release Neuron image) instead of the public "
+        "DLAMI resolved from SSM. Use to validate an SDK version before AWS publishes its DLAMI.",
     )
     p.add_argument(
         "--bootstrap",

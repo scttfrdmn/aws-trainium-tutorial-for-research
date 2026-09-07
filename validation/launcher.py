@@ -127,6 +127,7 @@ def build_plan(
     use_spot: bool = True,
     cost_limit_usd: float | None = 5.0,
     iam_instance_profile: str | None = None,
+    image_id: str | None = None,
 ) -> LaunchPlan:
     """Construct a LaunchPlan (no side effects beyond read-only AMI resolution).
 
@@ -134,9 +135,11 @@ def build_plan(
     `cost_limit_usd` maps to spawn's --cost-limit (hard $ ceiling); None disables it.
     `iam_instance_profile` (awscli path only) attaches an instance profile so the in-instance run can
     write artifacts to S3 without SSH -- the retrieval mechanism for a self-terminating spot box.
+    `image_id` pins a specific AMI (e.g. a private/pre-release Neuron image) instead of the public
+    DLAMI resolved from SSM -- required to validate an SDK version before AWS publishes its DLAMI.
     """
     launcher = choose_launcher(instance_type, prefer)
-    ami = resolve_neuron_dlami(region)
+    ami = image_id or resolve_neuron_dlami(region)
 
     if launcher == "spawn":
         # spawn owns AMI selection, spot, and auto-terminate via its own flags. Flags verified
@@ -156,6 +159,8 @@ def build_plan(
             "--ttl",
             f"{int(max_hours)}h",  # hard cap even if the command hangs
         ]
+        if image_id:  # pin the same private/pre-release AMI the awscli path would use
+            cmd += ["--ami", image_id]
         if use_spot:
             cmd.append("--spot")
         if cost_limit_usd:
