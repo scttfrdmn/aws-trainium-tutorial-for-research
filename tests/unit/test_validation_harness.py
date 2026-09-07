@@ -146,6 +146,25 @@ def test_awscli_user_data_is_valid_bash():
     assert "shutdown -h now" in ud and "sleep" in ud
 
 
+def test_build_plan_image_id_override():
+    """--image-id pins a specific AMI (e.g. a private/pre-release Neuron image) instead of the
+    SSM-resolved public DLAMI, and it flows into both the plan and the awscli argv."""
+    from validation.launcher import build_plan
+
+    plan = build_plan(
+        "trn1.2xlarge",
+        "sa-east-1",
+        name="t",
+        remote_command="echo hi",
+        prefer="awscli",
+        image_id="ami-0deadbeef0",
+    )
+    assert plan.ami_id == "ami-0deadbeef0"
+    assert (
+        "ami-0deadbeef0" in plan.command
+    )  # appears as --image-id value in run-instances
+
+
 def test_capture_environment_is_offline_safe():
     """capture_environment must never raise off-hardware (no EC2, maybe no git)."""
     r = capture_environment(
