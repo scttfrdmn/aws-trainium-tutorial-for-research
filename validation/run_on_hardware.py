@@ -107,8 +107,32 @@ def _run_one(
     return result
 
 
-def run_in_instance(keys: list[str], *, smoke: bool, clock: str | None) -> int:
-    """Run the selected examples on the current host and write artifacts. Returns exit code."""
+def _run_isolated(ex: registry.Example, *, smoke: bool, clock: str | None) -> bool:
+    """Run one example in a fresh child interpreter; return True if it failed.
+
+    Device memory is per-process: graphs (NEFFs) a finished example loaded onto the NeuronCore stay
+    resident until the process exits. Running every example in one process let earlier examples'
+    NEFFs accumulate (13 GB of DMA-ring spill on a 16 GB core on Neuron 2.33) until later examples
+    failed with NRT_RESOURCE at load. A child per example matches how users run them (one script at
+    a time) and releases the core between examples. The child writes its own artifact.
+    """
+    cmd = [sys.executable, "-u", "-m", "validation.run_on_hardware", "--in-instance"]
+    cmd += ["--example", ex.key]
+    if smoke:
+        cmd.append("--smoke")
+    if clock:
+        cmd += ["--clock", clock]
+    return subprocess.run(cmd, cwd=_REPO_ROOT, check=False).returncode != 0
+
+
+def run_in_instance(
+    keys: list[str], *, smoke: bool, clock: str | None, isolate: bool = True
+) -> int:
+    """Run the selected examples on the current host and write artifacts. Returns exit code.
+
+    With more than one example and ``isolate`` set (the default), each example runs in its own
+    child process (see ``_run_isolated``); a single example always runs in-process.
+    """
     examples = (
         registry.EXAMPLES if not keys else [e for k in keys if (e := registry.get(k))]
     )
@@ -119,6 +143,13 @@ def run_in_instance(keys: list[str], *, smoke: bool, clock: str | None) -> int:
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if isolate and len(examples) > 1:
+        failed = sum(_run_isolated(ex, smoke=smoke, clock=clock) for ex in examples)
+        print(
+            f"\n{len(examples) - failed}/{len(examples)} passed (one process per example)."
+        )
+        return 1 if failed else 0
 
     failed = 0
     for ex in examples:
@@ -333,6 +364,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Specific example key(s) from the registry.",
     )
     p.add_argument(
+        "--no-isolate",
+        action="store_true",
+        help="--in-instance: run all examples in this one process instead of one child process "
+        "each (isolation is the default because loaded graphs hold device memory until exit).",
+    )
+    p.add_argument(
         "--smoke",
         action="store_true",
         help="Tiny CPU smoke run (proves code path; skips thresholds).",
@@ -449,7 +486,9 @@ def main(argv: list[str] | None = None) -> int:
         if not keys and not args.all:
             print("Specify --all or --example KEY for --in-instance.", file=sys.stderr)
             return 2
-        return run_in_instance(keys, smoke=args.smoke, clock=args.clock)
+        return run_in_instance(
+            keys, smoke=args.smoke, clock=args.clock, isolate=not args.no_isolate
+        )
     return run_local(args)
 
 

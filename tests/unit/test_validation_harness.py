@@ -242,6 +242,46 @@ def test_run_local_uploads_logs_from_exit_trap(capsys):
     assert "s3://bucket/run/logs/ner_biomedical-run.log" in out
 
 
+def test_run_in_instance_isolates_each_example(monkeypatch):
+    """Multiple examples run one child process each (device memory is released between them), the
+    exit code reflects child failures, and a single example stays in-process."""
+    import subprocess
+
+    from validation import run_on_hardware as roh
+
+    calls = []
+
+    class Done:
+        def __init__(self, rc):
+            self.returncode = rc
+
+    def fake_run(cmd, cwd=None, check=False):
+        calls.append(cmd)
+        return Done(1 if "antibody_affinity_slm" in cmd else 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    keys = ["ner_biomedical", "antibody_affinity_slm", "crystal_cif_slm"]
+    rc = roh.run_in_instance(keys, smoke=True, clock="2026-10-20T00:00:00Z")
+    assert rc == 1  # one child failed
+    assert [c[c.index("--example") + 1] for c in calls] == keys
+    assert all("--in-instance" in c and "--smoke" in c for c in calls)
+
+    # single example: no child process
+    calls.clear()
+    monkeypatch.setattr(
+        roh,
+        "_run_one",
+        lambda ex, smoke, clock: roh.ValidationResult(
+            example=ex.module, status="passed"
+        ),
+    )
+    monkeypatch.setattr(
+        roh.ValidationResult, "write", lambda self, d: Path(d) / "x.json"
+    )
+    assert roh.run_in_instance(["ner_biomedical"], smoke=True, clock=None) == 0
+    assert calls == []
+
+
 def test_capture_environment_is_offline_safe():
     """capture_environment must never raise off-hardware (no EC2, maybe no git)."""
     r = capture_environment(
