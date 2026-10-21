@@ -24,17 +24,13 @@ Project work (milestones, issues, labels) is tracked on
   host-memory job" guidance). Recorded honestly as failed rather than hidden; fix is to compile on a
   bigger-RAM box, tracked as follow-up.
 
-### Important — Neuron 2.32.0 is a PyTorch 2.11/2.12 jump, NOT the 2.9 stack (supersedes the note below)
-- Investigating the 2.32 hardware target surfaced that **2.32.0 moved past PyTorch 2.9**: the AWS
-  release-content page lists **`torch-xla 2.11.0 / 2.12.0`** + **`neuronx-cc 2.27.5334.0`** for
-  2.32.0 and no `torch-neuronx`; the Neuron pip index confirms `torch-xla` up to **2.12** while
-  **`torch-neuronx` (the PyTorch-2.9/XLA package every example uses) ends at `2.9.0.2.15` = 2.31.15**.
-  So **2.31.15 is the latest coherent `torch-neuronx`/PyTorch-2.9 stack**, and *validating on 2.32 is
-  a framework port to PyTorch 2.11/2.12 (torch-xla), not a rerun.* No public 2.32 DLAMI exists yet
-  (latest is 2.31.15, dated before the 2.32.0 release). **This corrects the "2.32 is the same PyTorch
-  2.9 / XLA stack" framing in the entry below and in the README/VERSION_MATRIX** — those docs still
-  say "2.9 is the last XLA version"; updating that framing (and deciding how to present the
-  PyTorch-2.11/2.12 path) is a tracked follow-up.
+### Fixed — retraction of an incorrect version claim (from #18)
+- #18 claimed "Neuron 2.32.0 is a PyTorch 2.11/2.12 jump, not the 2.9 stack." **That was wrong.** It was
+  inferred from `torch-xla 2.11/2.12` wheels on the Neuron index, which are not a new training path. AWS's
+  per-instance release tables show **2.32.0 and 2.33.0 both ship `torch-neuronx 2.9.0.2.15.32035`** — the
+  PyTorch 2.9 / XLA build this tutorial uses — and AWS states "PyTorch 2.9 is the last version on
+  PyTorch/XLA." So the "2.32 is the same PyTorch 2.9 / XLA stack" framing from #12 was correct, and the
+  2.31.15 runs above used the *identical* torch-neuronx build as 2.32/2.33 (only `neuronx-cc` differs).
 
 ### Changed (version refresh → Neuron 2.32.0)
 - **Bumped the tutorial's target to Neuron SDK 2.32.0** (released 2026-08-17) across the README
