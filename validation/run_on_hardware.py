@@ -147,17 +147,64 @@ def run_in_instance(keys: list[str], *, smoke: bool, clock: str | None) -> int:
 _EXAMPLE_DEPS = "transformers datasets rasterio pymatgen biopython scikit-learn scipy"
 
 
-def _bootstrap_prefix(repo_url: str, git_ref: str) -> str:
-    """Bash that prepares a bare Neuron DLAMI: activate its venv, clone the repo, install deps.
+# Default stack for --create-venv: the PyTorch 2.9 / XLA path every example uses. The CPU torch index
+# keeps pip from pulling multi-GB CUDA torch wheels for `torch==2.9.*`.
+_DEFAULT_VENV_PACKAGES = "torch-neuronx==2.9.* neuronx-cc==2.*"
+_PIP_INDEXES = (
+    "--extra-index-url https://pip.repos.neuron.amazonaws.com "
+    "--extra-index-url https://download.pytorch.org/whl/cpu"
+)
 
-    Leaves the shell cd'd into the repo so the harness invocation that follows runs in-tree.
+# Fail fast if the activated environment isn't the XLA stack. A DLAMI can carry several PyTorch venvs
+# (e.g. the 2.33 multi-framework DLAMI ships TorchNeuron 2.14 and vLLM torch-xla 2.13 venvs but no
+# torch-neuronx 2.9), and running the examples under the wrong one would produce misleading results.
+_XLA_STACK_GUARD = (
+    'python3 -c "import torch, torch_xla, torch_neuronx; '
+    "print('XLA stack OK: torch', torch.__version__, '| torch-neuronx', torch_neuronx.__version__)\"; "
+)
+
+
+def _bootstrap_prefix(
+    repo_url: str,
+    git_ref: str,
+    venv: str | None = None,
+    create_venv: bool = False,
+    venv_packages: str = _DEFAULT_VENV_PACKAGES,
+) -> str:
+    """Bash that prepares a bare Neuron DLAMI: activate a venv, clone the repo, install deps.
+
+    With ``venv`` set, activate exactly that venv (creating it and installing ``venv_packages`` first
+    when ``create_venv`` is set and it doesn't exist). Without it, fall back to globbing the DLAMI's
+    preinstalled PyTorch venv. Either way the XLA-stack guard runs before anything else, so a wrong
+    venv stops the run instead of silently validating the wrong stack. Leaves the shell cd'd into the
+    repo so the harness invocation that follows runs in-tree.
     """
     repo_dir = repo_url.rstrip("/").rsplit("/", 1)[-1]
+    if venv:
+        v = shlex.quote(venv)
+        pkgs = " ".join(shlex.quote(p) for p in venv_packages.split())
+        activate = (
+            (
+                f"if [ ! -f {v}/bin/activate ]; then "
+                f"python3 -m venv {v} || {{ apt-get update -y && apt-get install -y python3-venv "
+                f"&& python3 -m venv {v}; }}; "
+                f". {v}/bin/activate; pip install --no-input --upgrade pip; "
+                f"pip install --no-input {pkgs} {_PIP_INDEXES}; "
+                f"else . {v}/bin/activate; fi; "
+            )
+            if create_venv
+            else f". {v}/bin/activate; "
+        )
+    else:
+        # Activate the DLAMI's preinstalled PyTorch-Neuron venv (name is SDK-versioned; glob it).
+        activate = (
+            "for v in /opt/aws_neuronx_venv_pytorch_2_9 /opt/aws_neuronx_venv_pytorch*; do "
+            '[ -f "$v/bin/activate" ] && . "$v/bin/activate" && break; done; '
+        )
     return (
         "set -e; "
-        # Activate the DLAMI's preinstalled PyTorch-Neuron venv (name is SDK-versioned; glob it).
-        "for v in /opt/aws_neuronx_venv_pytorch_2_9 /opt/aws_neuronx_venv_pytorch*; do "
-        '[ -f "$v/bin/activate" ] && . "$v/bin/activate" && break; done; '
+        f"{activate}"
+        f"{_XLA_STACK_GUARD}"
         "cd ~; "
         f"[ -d {repo_dir} ] || git clone --depth 1 --branch {git_ref} {repo_url}; "
         f"cd {repo_dir}; "
@@ -188,11 +235,20 @@ def run_local(args: argparse.Namespace) -> int:
     # doesn't take them to the grave (no inbound SSH once it's gone). Uses `;` (not `&&`) so it runs
     # even if the harness exits non-zero -- a failed run's log is exactly what you need. Requires an
     # instance profile with s3:PutObject on the bucket (see --iam-instance-profile).
+    # It runs from an EXIT trap so it also fires when a bootstrap step aborts under `set -e` (otherwise
+    # a failed pip install would take its own log down with the instance). ~/run.log captures
+    # everything, bootstrap included.
+    repo_dir = args.repo_url.rstrip("/").rsplit("/", 1)[-1]
     if args.results_s3:
         base = args.results_s3.rstrip("/")
+        tag = keys[0] if len(keys) == 1 else "all"
+        upload = (
+            f"aws s3 sync ~/{repo_dir}/validation/results {base}/results/ ; "
+            f"aws s3 cp ~/validate.log {base}/logs/{tag}.log ; "
+            f"aws s3 cp ~/run.log {base}/logs/{tag}-run.log"
+        )
         results_sync = (
-            f"; aws s3 sync validation/results {base}/results/ "
-            f"; aws s3 cp ~/validate.log {base}/logs/{keys[0] if len(keys) == 1 else 'all'}.log"
+            f"exec > >(tee -a ~/run.log) 2>&1; trap {shlex.quote(upload)} EXIT; "
         )
     else:
         results_sync = ""
@@ -200,15 +256,21 @@ def run_local(args: argparse.Namespace) -> int:
     # Where the harness runs from: a bootstrap run clones + cds into the repo itself; otherwise assume
     # the box already has the checkout.
     if args.bootstrap:
-        setup = _bootstrap_prefix(args.repo_url, args.git_ref)
+        setup = _bootstrap_prefix(
+            args.repo_url,
+            args.git_ref,
+            venv=args.venv,
+            create_venv=args.create_venv,
+            venv_packages=args.venv_packages,
+        )
     else:
         setup = "cd /opt/tutorial 2>/dev/null || cd ~/tutorial 2>/dev/null || cd ~/aws-trainium-tutorial-for-research; "
 
     inner = (
+        f"{results_sync}"
         f"{setup}"
         f"{cache_env}"
         f"python3 -u -m validation.run_on_hardware --in-instance {example_flag} 2>&1 | tee ~/validate.log"
-        f"{results_sync}"
     )
     # tmux keeps an interactive (spawn/SSH) run alive across disconnects; a headless awscli/user-data
     # launch has no tty, so run inline there. Either way the harness writes artifacts + the S3 sync.
@@ -331,6 +393,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Prepend repo clone + example-dependency install to the remote command, for a bare "
         "Neuron DLAMI that doesn't already have the tutorial checked out. Activates the DLAMI's "
         "preinstalled PyTorch-Neuron venv; does NOT reinstall torch/torch-neuronx.",
+    )
+    p.add_argument(
+        "--venv",
+        default=None,
+        metavar="PATH",
+        help="With --bootstrap: activate exactly this venv instead of globbing the DLAMI's "
+        "/opt/aws_neuronx_venv_pytorch*. A guard then checks it imports torch_xla + torch_neuronx.",
+    )
+    p.add_argument(
+        "--create-venv",
+        action="store_true",
+        help="With --venv: create it if missing and install --venv-packages (for DLAMIs that don't "
+        "ship a PyTorch 2.9 / XLA venv, e.g. the 2.33 multi-framework DLAMI).",
+    )
+    p.add_argument(
+        "--venv-packages",
+        default=_DEFAULT_VENV_PACKAGES,
+        metavar="SPECS",
+        help=f"Space-separated pip specs for --create-venv (default: {_DEFAULT_VENV_PACKAGES!r}).",
     )
     p.add_argument(
         "--repo-url",
