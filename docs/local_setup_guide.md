@@ -365,5 +365,5 @@ After completing this setup:
 
 ---
 
-*Last updated: 2026-08-18 (targets Neuron SDK 2.32 / PyTorch 2.9, XLA path)*
+*Last updated: 2026-10-20 (targets Neuron SDK 2.33 / PyTorch 2.9, XLA path)*
 *Tested on: macOS 14, Windows 11, Ubuntu 22.04*

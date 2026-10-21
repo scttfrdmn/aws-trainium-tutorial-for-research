@@ -165,6 +165,123 @@ def test_build_plan_image_id_override():
     )  # appears as --image-id value in run-instances
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        {"venv": "/root/xla29"},
+        {
+            "venv": "/root/xla 29",  # a space must survive quoting
+            "create_venv": True,
+            "venv_packages": "torch-neuronx==2.9.0.2.15.32035 neuronx-cc==2.28.7631.0",
+        },
+    ],
+    ids=["glob", "venv", "create-venv"],
+)
+def test_bootstrap_prefix_guards_stack_and_is_valid_bash(kwargs):
+    """Every bootstrap variant must be valid bash and must run the XLA-stack guard before the harness,
+    so a DLAMI whose venv is TorchNeuron/vLLM (not torch-neuronx 2.9) stops instead of mis-validating."""
+    import shutil
+    import subprocess
+
+    from validation.launcher import _awscli_user_data
+    from validation.run_on_hardware import _XLA_STACK_GUARD, _bootstrap_prefix
+
+    prefix = _bootstrap_prefix("https://github.com/o/r", "main", **kwargs)
+    assert _XLA_STACK_GUARD in prefix
+    assert prefix.index(_XLA_STACK_GUARD) < prefix.index("git clone")
+    if kwargs.get("create_venv"):
+        assert (
+            "python3 -m venv" in prefix and "torch-neuronx==2.9.0.2.15.32035" in prefix
+        )
+        assert "download.pytorch.org/whl/cpu" in prefix  # avoid CUDA torch wheels
+    if kwargs.get("venv"):
+        assert (
+            "aws_neuronx_venv_pytorch*" not in prefix
+        )  # explicit venv replaces the glob
+    bash = shutil.which("bash")
+    if not bash:  # pragma: no cover
+        pytest.skip("bash not available")
+    proc = subprocess.run(
+        [bash, "-n"],
+        input=_awscli_user_data(prefix + "python3 -m x", max_hours=1.0),
+        text=True,
+        capture_output=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_run_local_uploads_logs_from_exit_trap(capsys):
+    """With --results-s3 the upload must run from an EXIT trap (fires even if bootstrap aborts under
+    set -e), and the dry run must not launch anything."""
+    from validation.run_on_hardware import main
+
+    rc = main(
+        [
+            "--instance",
+            "trn1.2xlarge",
+            "--region",
+            "us-east-2",
+            "--example",
+            "ner_biomedical",
+            "--launcher",
+            "awscli",
+            "--image-id",
+            "ami-0test",
+            "--bootstrap",
+            "--venv",
+            "/root/xla29",
+            "--create-venv",
+            "--results-s3",
+            "s3://bucket/run",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert rc == 0 and "DRY RUN" in out
+    assert "trap " in out and "EXIT" in out
+    assert "s3://bucket/run/logs/ner_biomedical-run.log" in out
+
+
+def test_run_in_instance_isolates_each_example(monkeypatch):
+    """Multiple examples run one child process each (device memory is released between them), the
+    exit code reflects child failures, and a single example stays in-process."""
+    import subprocess
+
+    from validation import run_on_hardware as roh
+
+    calls = []
+
+    class Done:
+        def __init__(self, rc):
+            self.returncode = rc
+
+    def fake_run(cmd, cwd=None, check=False):
+        calls.append(cmd)
+        return Done(1 if "antibody_affinity_slm" in cmd else 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    keys = ["ner_biomedical", "antibody_affinity_slm", "crystal_cif_slm"]
+    rc = roh.run_in_instance(keys, smoke=True, clock="2026-10-20T00:00:00Z")
+    assert rc == 1  # one child failed
+    assert [c[c.index("--example") + 1] for c in calls] == keys
+    assert all("--in-instance" in c and "--smoke" in c for c in calls)
+
+    # single example: no child process
+    calls.clear()
+    monkeypatch.setattr(
+        roh,
+        "_run_one",
+        lambda ex, smoke, clock: roh.ValidationResult(
+            example=ex.module, status="passed"
+        ),
+    )
+    monkeypatch.setattr(
+        roh.ValidationResult, "write", lambda self, d: Path(d) / "x.json"
+    )
+    assert roh.run_in_instance(["ner_biomedical"], smoke=True, clock=None) == 0
+    assert calls == []
+
+
 def test_capture_environment_is_offline_safe():
     """capture_environment must never raise off-hardware (no EC2, maybe no git)."""
     r = capture_environment(

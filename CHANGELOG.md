@@ -10,6 +10,32 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Added (Neuron 2.33.0 refresh + hardware re-validation)
+- **Targets Neuron SDK 2.33.0** (2026-10-19). The XLA path is unchanged (`torch-neuronx 2.9.0.2.15`,
+  same build since 2.31.1); the compiler moved to `neuronx-cc 2.28.7631`.
+- **TorchNeuron (public beta, Trn2/Trn3 only) documented**: XLA-vs-TorchNeuron comparison and guidance in
+  `VERSION_MATRIX.md`, plus a clearly-unvalidated "Trying TorchNeuron" subsection in the CUDA→Neuron
+  chapter (commands from AWS's quickstart). The examples stay on XLA, the only path on Trn1.
+- **Serving guidance for 2.34**: NxD Inference APIs and PyTorch/XLA inference end on Trn2/Trn3, so new
+  Trn2/Trn3 serving points to vLLM Neuron / TorchNeuron + `torch.compile`.
+- **6/6 single-device examples pass on real `trn1.2xlarge` / Neuron 2.33.38**, using the 2.33
+  multi-framework DLAMI with a harness-built PyTorch 2.9 / XLA venv: `ner_biomedical` eval_f1 **0.848**,
+  `satellite_landcover` eval_acc **0.75**, `cv_utilization_spike` vit/cnn **4.65**, `distill_ner_slm`
+  student_f1 **0.573**, `antibody_affinity_slm` spearman **0.474** (down from 0.542 on 2.31.15, still
+  above the 0.40 gate), `crystal_cif_slm` inv_val_perplexity **0.576**.
+  - **satellite passes again.** The `neuronx-cc` host-OOM (`F137`) seen on 2.31.15's compiler (2.26) is
+    gone with 2.28.
+- **Harness fixes found while bringing 2.33 up**:
+  - **Per-example process isolation.** The first `--all` run failed the last three examples with
+    `NRT_RESOURCE` at load, because earlier examples' graphs stayed resident on the NeuronCore in the one
+    harness process (13 GB of DMA-ring spill on a 16 GB core). Each example now runs in its own process.
+    The three re-ran isolated and passed (`VALIDATED.md` commit `f6e9475` vs `5351772` marks which run
+    produced each row).
+  - **`--venv` / `--create-venv` + an XLA-stack guard.** The 2.33 multi-framework DLAMI has no PyTorch 2.9
+    venv, and the old glob would have activated its vLLM `torch 2.13` venv.
+  - **Logs always come back.** Results and logs upload from an `EXIT` trap, so a bootstrap failure still
+    returns its log.
+
 ### Added (hardware re-validation on Neuron 2.31.15)
 - **Re-validated the six single-device examples on real `trn1.2xlarge`** via the `validation/`
   harness (bootstrap + S3 hand-back from #15/#16/#17), on the **latest available Neuron DLAMI —
@@ -24,17 +50,14 @@ Project work (milestones, issues, labels) is tracked on
   host-memory job" guidance). Recorded honestly as failed rather than hidden; fix is to compile on a
   bigger-RAM box, tracked as follow-up.
 
-### Important — Neuron 2.32.0 is a PyTorch 2.11/2.12 jump, NOT the 2.9 stack (supersedes the note below)
-- Investigating the 2.32 hardware target surfaced that **2.32.0 moved past PyTorch 2.9**: the AWS
-  release-content page lists **`torch-xla 2.11.0 / 2.12.0`** + **`neuronx-cc 2.27.5334.0`** for
-  2.32.0 and no `torch-neuronx`; the Neuron pip index confirms `torch-xla` up to **2.12** while
-  **`torch-neuronx` (the PyTorch-2.9/XLA package every example uses) ends at `2.9.0.2.15` = 2.31.15**.
-  So **2.31.15 is the latest coherent `torch-neuronx`/PyTorch-2.9 stack**, and *validating on 2.32 is
-  a framework port to PyTorch 2.11/2.12 (torch-xla), not a rerun.* No public 2.32 DLAMI exists yet
-  (latest is 2.31.15, dated before the 2.32.0 release). **This corrects the "2.32 is the same PyTorch
-  2.9 / XLA stack" framing in the entry below and in the README/VERSION_MATRIX** — those docs still
-  say "2.9 is the last XLA version"; updating that framing (and deciding how to present the
-  PyTorch-2.11/2.12 path) is a tracked follow-up.
+### Fixed — retraction of an incorrect version claim (from #18)
+- #18 claimed "Neuron 2.32.0 is a PyTorch 2.11/2.12 jump, not the 2.9 stack." **That was wrong.** It was
+  inferred from `torch-xla 2.11/2.12` wheels on the Neuron index. Those back **vLLM Neuron's XLA path**
+  (the 2.33 DLAMI's vLLM venv pairs `torch 2.13` + `torch-xla 2.13`), not a new training path. AWS's
+  per-instance release tables show **2.32.0 and 2.33.0 both ship `torch-neuronx 2.9.0.2.15.32035`** — the
+  PyTorch 2.9 / XLA build this tutorial uses — and AWS states "PyTorch 2.9 is the last version on
+  PyTorch/XLA." So the "2.32 is the same PyTorch 2.9 / XLA stack" framing from #12 was correct, and the
+  2.31.15 runs above used the *identical* torch-neuronx build as 2.32/2.33 (only `neuronx-cc` differs).
 
 ### Changed (version refresh → Neuron 2.32.0)
 - **Bumped the tutorial's target to Neuron SDK 2.32.0** (released 2026-08-17) across the README

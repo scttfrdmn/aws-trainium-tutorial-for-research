@@ -156,12 +156,12 @@ Create a simple cost tracking dashboard - see `monitoring/` directory for the co
 
 ## 5. Migrating from CUDA to Neuron {#cuda-migration}
 
-> **Note (August 2026):** this chapter teaches the **PyTorch/XLA** path (`torch_xla`,
-> `xm.xla_device()`, lazy graphs + `xm.mark_step()`) — the production path on **PyTorch 2.9**, which
-> AWS's public docs note is the **last XLA-based version**. A future, non-XLA PyTorch path is
-> mentioned for **PyTorch 2.10+** but is not generally available yet, so everything below targets
-> the XLA path you can actually run today. See
-> [VERSION_MATRIX.md](../VERSION_MATRIX.md#-the-pytorch-path-xla-today).
+> **Note (October 2026):** this chapter teaches the **PyTorch/XLA** path (`torch_xla`,
+> `xm.xla_device()`, lazy graphs + `xm.mark_step()`) on **PyTorch 2.9**, the last XLA version. It runs
+> on every Trainium generation, including Trn1. As of Neuron 2.33, AWS also ships **TorchNeuron**, a
+> native eager / `torch.compile` backend, as a **public beta on Trn2/Trn3 only**, and recommends it for
+> new work. See [Trying TorchNeuron](#trying-torchneuron) at the end of this chapter, and
+> [XLA vs TorchNeuron](../VERSION_MATRIX.md#-the-pytorch-path-xla-today).
 
 ### Understanding the Differences (PyTorch/XLA path)
 
@@ -197,28 +197,79 @@ consequences (and how to make the compile a *one-time* cost) are the whole point
 persist the compile cache (S3), pre-compile with `neuron_parallel_compile` (on a cheap CPU box —
 compilation doesn't need a NeuronCore), and keep shapes static so you compile once and reuse.
 
-> **Forward-looking:** the **native (non-XLA) PyTorch backend** announced for Neuron — *TorchNeuron*,
-> targeting **PyTorch 2.10+** — is expected to bring an **eager-style** path that narrows this gap
-> (closer to the GPU experience). As of Neuron 2.32 it is **not generally available** (still private
-> preview), so everything above describes the XLA path you run *today*. Treat the eager backend as a
-> coming improvement, not something to depend on yet. See
-> [VERSION_MATRIX.md](../VERSION_MATRIX.md#-the-pytorch-path-xla-today).
-
 For the deeper migration lessons (lazy execution, `mark_step`, static shapes, bf16 gotchas), see
 the [Trainium development best practices](trainium_development_best_practices.md) chapter and the
 [validated NER example](../examples/use_cases/biomedical_ner.py) — it's a real CUDA-style training
 loop ported to the XLA/Neuron path.
+
+<a id="trying-torchneuron"></a>
+### Trying TorchNeuron (public beta, Trn2/Trn3 only)
+
+> **Honesty box.** Nothing in this subsection has been run by this tutorial's validation harness. The
+> commands come from AWS's [TorchNeuron quickstart](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/get-started/quickstart-torch-neuron.html)
+> as of Neuron 2.33; check it for changes. TorchNeuron is **beta** and runs on **Trn2/Trn3 only**.
+> On Trn1, stay on the XLA path above.
+
+TorchNeuron (`torch-neuronx` 2.13 / 2.14, PyTorch 2.13 / 2.14) is AWS's **native** PyTorch backend:
+Trainium shows up as a regular PyTorch device instead of an XLA device. Relative to the XLA code in
+this tutorial, the changes are:
+
+| PyTorch/XLA (this tutorial) | TorchNeuron |
+|---|---|
+| `import torch_xla.core.xla_model as xm`; `xm.xla_device()` | nothing to import: PyTorch autoloads the backend on `import torch`; use `.to("neuron")` |
+| `xm.mark_step()` to compile and run the recorded graph | eager: ops run as you call them. Or `torch.compile(model, backend="neuron")` |
+| bf16 via the compiler's auto-cast | `torch.autocast(device_type="neuron")` |
+| `xm.optimizer_step(opt)` | the plain `opt.step()` |
+
+(`import torch_neuronx` is only needed for its own APIs, such as running NKI kernels. When moving CUDA
+code, drop CUDA-only `torch.compile` options like `mode="max-autotune-no-cudagraphs"`.)
+
+**Setup** (from the quickstart):
+```bash
+# On a TorchNeuron DLAMI, activate the bundled venv:
+source /opt/aws_neuronx_venv_torch_neuronx_2_14_0/bin/activate
+
+# Or, on a plain Ubuntu 26.04 AMI (after installing the Neuron driver/runtime per the quickstart;
+# standalone wheels support Ubuntu 26.04 only):
+python -m pip install "torch-neuronx==2.14.*" "neuronx-cc==2.*" nki \
+    --extra-index-url https://pip.repos.neuron.amazonaws.com \
+    --extra-index-url https://download.pytorch.org/whl/cpu
+```
+
+**Smoke check** (adapted from the quickstart's verification script):
+```python
+import torch  # autoloads TorchNeuron
+
+assert torch.neuron.is_available()
+x = torch.randn(2, 3)
+expected = x @ x.T
+xn = x.to("neuron")
+torch.testing.assert_close((xn @ xn.T).cpu(), expected, rtol=1e-4, atol=1e-5)
+```
+
+**What still applies from this tutorial.** `torch.compile` compiles a graph on first call and
+recompiles when input shapes change (standard `torch.compile` behavior), so the static-shape and
+compile-cache lessons carry over. The hardware is the same, so bf16 and filling the 128×128 array
+still matter. Eager mode skips the up-front whole-graph compile. This tutorial hasn't measured how eager
+performance compares, so measure on your own workload.
+
+Further reading: [build your first model](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/get-started/quickstart-build-first-model.html)
+(eager + `torch.compile`), [troubleshooting](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/troubleshooting.html),
+and AWS's [training paths](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/training/index.html)
+page (TorchNeuron for new work, PyTorch/XLA as the legacy path).
 
 ---
 
 ## 6. Complete Trainium → Inferentia Workflow {#complete-workflow}
 
 > **📌 2026 framing: "train on Trainium, serve on Inferentia" is now one option, not the default.**
-> AWS has not announced an Inferentia3, and the modern serving stack (NxD Inference) **dropped
-> Inf2/Trn1 support in Neuron 2.29** (pin to 2.28 to keep using it on Inf2). AWS now positions
-> **Trainium2 for both training and inference**. Inferentia2 is still GA and is a fine,
-> cost-optimized target for **smaller, latency-sensitive models** — but for new or large-scale
-> serving, consider keeping inference on **Trn2** with NxD Inference + the vLLM plugin. See the
+> AWS has not announced an Inferentia3, and NxD Inference **dropped Inf2/Trn1 support in Neuron
+> 2.29** (pin to 2.28 to keep using it on Inf2). AWS now positions **Trainium2 for both training and
+> inference**. Inferentia2 is still GA and is a fine, cost-optimized target for **smaller,
+> latency-sensitive models**. For new or large-scale serving on **Trn2/Trn3**, use **vLLM Neuron** (or
+> TorchNeuron + `torch.compile`): in **Neuron 2.34 the NxD Inference APIs and PyTorch/XLA inference end on
+> Trn2/Trn3**. The `torch_neuronx.trace()` flow below is the XLA inference path, so on Trn2/Trn3 treat
+> it as legacy. See the
 > [Inferentia vs Trainium decision guide](../VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference).
 
 ### End-to-End Example: Climate Model Training and Deployment
@@ -545,5 +596,5 @@ The future of academic ML research is cost-efficient, and AWS ML chips provide t
 
 ---
 
-*Last Updated: August 18, 2026*
-*Tutorial Version: 2026.2.0 — targets Neuron SDK 2.32.0 / PyTorch 2.9 (PyTorch/XLA)*
+*Last Updated: October 20, 2026*
+*Tutorial Version: 2026.3.0 — targets Neuron SDK 2.33.0 / PyTorch 2.9 (PyTorch/XLA)*

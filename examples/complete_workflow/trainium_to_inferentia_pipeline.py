@@ -28,12 +28,13 @@ The training loop runs on the **XLA lazy-tensor** path (`xm.xla_device()`, `xm.o
 *frozen inference graph* and saved — you serve that. You cannot backprop through a traced graph;
 `trace()` is for inference only. Getting this boundary right is the whole point of the example.
 
-## Platform note (June 2026)
+## Platform note (October 2026)
 
 AWS positions **Trainium2 for both training and inference**, and NxD Inference dropped Inf2/Trn1
 support in Neuron 2.29. This example serves on **Inf2** for simplicity and to show the classic
-train-Trn/serve-Inf split; for new or large-scale serving, prefer **Trn2 + NxD Inference + the vLLM
-plugin**. See [`../../VERSION_MATRIX.md`](../../VERSION_MATRIX.md) for the decision guide.
+train-Trn/serve-Inf split. `torch_neuronx.trace()` is the PyTorch/XLA inference path, which AWS ends on
+Trn2/Trn3 in Neuron 2.34 (it stays the path on Inf2/Trn1); for new serving on Trn2/Trn3, use **vLLM
+Neuron** or TorchNeuron + `torch.compile`. See [`../../VERSION_MATRIX.md`](../../VERSION_MATRIX.md) for the decision guide.
 
 ## Cost numbers are illustrative
 
@@ -817,7 +818,7 @@ def main() -> None:
             "review the code and supply your own dataset first. Then re-run with, e.g.:\n"
             "    python trainium_to_inferentia_pipeline.py --run \\\n"
             "        --bucket my-ml-bucket --dataset-path s3://my-ml-bucket/data.tar.gz\n\n"
-            "See VERSION_MATRIX.md: for new serving, prefer Trn2 + NxD Inference over Inf2."
+            "See VERSION_MATRIX.md: for new Trn2/Trn3 serving use vLLM Neuron (XLA inference ends there in 2.34)."
         )
         return
 
