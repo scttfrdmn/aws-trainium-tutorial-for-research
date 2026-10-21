@@ -326,7 +326,12 @@ def test_build_plan_az_pin():
     """--az adds --placement AvailabilityZone=... on awscli, and nothing dangling when unset."""
     from validation.launcher import build_plan
 
-    kw = dict(name="t", remote_command="echo hi", prefer="awscli", image_id="ami-0x")
+    kw = {
+        "name": "t",
+        "remote_command": "echo hi",
+        "prefer": "awscli",
+        "image_id": "ami-0x",
+    }
     with_az = build_plan(
         "trn2.3xlarge", "sa-east-1", availability_zone="sa-east-1c", **kw
     )
