@@ -53,9 +53,11 @@ and the comparison report derives every figure from it (no hand-typed savings pe
 rough, region- and time-dependent estimates, **not** quotes or measured results. Confirm current
 pricing at the [AWS pricing pages](https://aws.amazon.com/ec2/pricing/) before budgeting.
 
-## Platform note (July 2026)
+## Platform note (October 2026)
 
 AWS positions **Trainium2 for both training and inference**, and NxD Inference dropped Inf2/Trn1
 support in Neuron 2.29. This example serves on **Inf2** to show the classic train-Trn/serve-Inf
-split; for new or large-scale serving, prefer **Trn2 + NxD Inference + the vLLM plugin**. See the
+split. `torch_neuronx.trace()` is the **PyTorch/XLA inference** path, which AWS ends on **Trn2/Trn3 in
+Neuron 2.34** (it remains the path on Inf2/Trn1). For new or large-scale serving on Trn2/Trn3, use
+**vLLM Neuron** or TorchNeuron + `torch.compile`. See the
 [Inferentia vs Trn2 decision guide](../../VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference).

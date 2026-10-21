@@ -26,7 +26,8 @@ Project work (milestones, issues, labels) is tracked on
 
 ### Fixed — retraction of an incorrect version claim (from #18)
 - #18 claimed "Neuron 2.32.0 is a PyTorch 2.11/2.12 jump, not the 2.9 stack." **That was wrong.** It was
-  inferred from `torch-xla 2.11/2.12` wheels on the Neuron index, which are not a new training path. AWS's
+  inferred from `torch-xla 2.11/2.12` wheels on the Neuron index. Those back **vLLM Neuron's XLA path**
+  (the 2.33 DLAMI's vLLM venv pairs `torch 2.13` + `torch-xla 2.13`), not a new training path. AWS's
   per-instance release tables show **2.32.0 and 2.33.0 both ship `torch-neuronx 2.9.0.2.15.32035`** — the
   PyTorch 2.9 / XLA build this tutorial uses — and AWS states "PyTorch 2.9 is the last version on
   PyTorch/XLA." So the "2.32 is the same PyTorch 2.9 / XLA stack" framing from #12 was correct, and the

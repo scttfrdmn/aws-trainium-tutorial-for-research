@@ -37,7 +37,7 @@ those four adjectives mean:
 | Your workload is mostly… | Fit | Why |
 |---|---|---|
 | **Transformer training / fine-tuning** (LLM, BERT-family, ViT) | ✅ Strong | Dense matmul + attention; static shapes; the mainstream Neuron path. |
-| **Large-batch / high-throughput inference** | ✅ Strong | Throughput-oriented; NxD Inference + vLLM target this. |
+| **Large-batch / high-throughput inference** | ✅ Strong | Throughput-oriented; vLLM Neuron targets this (NxD Inference APIs end on Trn2/Trn3 in Neuron 2.34). |
 | **CNN / dense vision** training | ✅ Runs / 🟡 utilization | It runs cleanly (static shapes, bf16), but a *small* CNN under-fills the 128×128 array — we [measured a ViT at 5× the TFLOP/s](../examples/use_cases/cv_utilization_spike.md). Wider/ViT-shaped vision uses the chip far better. |
 | **Classic dense ML** (MLPs, matrix factorization, big linear algebra) | ✅ Good | Matmul-heavy, regular. |
 | **Scientific compute that's matmul/FFT-heavy with regular tiling** | 🟡 Promising | Possible via NKI; see the novel-kernels chapter — but expect real kernel work. |
