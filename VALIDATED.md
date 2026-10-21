@@ -2,18 +2,18 @@
 
 This file is **generated** by `validation/render_status.py` from the provenance artifacts in `validation/results/`. Do not edit by hand. Each row reflects a real run on real Neuron hardware (or marks the example as not-yet-validated).
 
-_Last rendered: 2026-09-06_
+_Last rendered: 2026-10-21_
 
-**Coverage: 5/6 examples validated on hardware.**
+**Coverage: 6/6 examples validated on hardware.**
 
 | Example | Status | Instance | Neuron SDK | torch-neuronx | Key metric | Wall clock | Commit | When |
 |---------|--------|----------|-----------|---------------|-----------|-----------|--------|------|
-| `ner_biomedical` | ✅ passed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | eval_f1=0.8467 | 1302.75s | 1f72cf3 | 2026-09-05 |
-| `satellite_landcover` | ❌ failed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | — | 2129.97s | 1f72cf3 | 2026-09-05 |
-| `cv_utilization_spike` | ✅ passed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | vit_over_cnn_tflops=4.9870 | 617.96s | 1f72cf3 | 2026-09-05 |
-| `distill_ner_slm` | ✅ passed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | student_f1=0.5859 | 1314.46s | 1f72cf3 | 2026-09-05 |
-| `antibody_affinity_slm` | ✅ passed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | spearman=0.5420 | 928.81s | 1f72cf3 | 2026-09-05 |
-| `crystal_cif_slm` | ✅ passed | trn1.2xlarge | 2.31.15 | 2.9.0.2.15.32035+de43f57c | inv_val_perplexity=0.5778 | 682.12s | 1f72cf3 | 2026-09-05 |
+| `ner_biomedical` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | eval_f1=0.8480 | 1019.17s | 5351772 | 2026-10-21 |
+| `satellite_landcover` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | eval_acc=0.7500 | 2054.31s | 5351772 | 2026-10-21 |
+| `cv_utilization_spike` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | vit_over_cnn_tflops=4.6480 | 450.66s | 5351772 | 2026-10-21 |
+| `distill_ner_slm` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | student_f1=0.5732 | 1027.26s | f6e9475 | 2026-10-21 |
+| `antibody_affinity_slm` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | spearman=0.4738 | 643.46s | f6e9475 | 2026-10-21 |
+| `crystal_cif_slm` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | inv_val_perplexity=0.5764 | 502.98s | f6e9475 | 2026-10-21 |
 
 ## Multi-process examples (torchrun — validated by manual launch)
 

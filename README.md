@@ -10,9 +10,9 @@
 A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This tutorial provides what researchers and organizations need to leverage AWS Neuron hardware for cost-effective ML research and production deployment.
 
 > ✅ **Hardware-validated on real Trainium** (PyTorch 2.9 / XLA): **6 single-device examples
-> auto-validated on `trn1.2xlarge`** (each with a captured provenance artifact — the NER exemplar on
-> **Neuron 2.31.13**, the other five on **2.30.10**; same PyTorch 2.9 stack), **plus 2 multi-process
-> examples** (`qwen3_lora`, `ddp_ner`) validated by manual `torchrun` launch — see
+> auto-validated on `trn1.2xlarge` on Neuron 2.33** (each with a captured provenance artifact; SDK
+> 2.33.38, torch-neuronx 2.9.0.2.15, neuronx-cc 2.28), **plus multi-process examples** (`qwen3_lora`,
+> `ddp_ner`, `tp_full_finetune`, run on earlier 2.30/2.31 SDKs) validated by manual `torchrun` launch — see
 > [`VALIDATED.md`](VALIDATED.md). Every performance number traces to a real run; nothing is hand-typed.
 > (One example, the satellite CNN, is slow to *compile* the first time — Trainium compiles your whole
 > model before running it, unlike a GPU. That first-compile cost and how to make it one-time is a core
