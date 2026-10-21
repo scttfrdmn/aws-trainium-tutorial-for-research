@@ -302,6 +302,7 @@ def run_local(args: argparse.Namespace) -> int:
         f"{setup}"
         f"{cache_env}"
         f"python3 -u -m validation.run_on_hardware --in-instance {example_flag} 2>&1 | tee ~/validate.log"
+        f"{'; ' + args.post_command if args.post_command else ''}"
     )
     # tmux keeps an interactive (spawn/SSH) run alive across disconnects; a headless awscli/user-data
     # launch has no tty, so run inline there. Either way the harness writes artifacts + the S3 sync.
@@ -449,6 +450,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_VENV_PACKAGES,
         metavar="SPECS",
         help=f"Space-separated pip specs for --create-venv (default: {_DEFAULT_VENV_PACKAGES!r}).",
+    )
+    p.add_argument(
+        "--post-command",
+        default=None,
+        metavar="SHELL",
+        help="Shell to run on the instance after the harness, inside the repo checkout (e.g. a "
+        "TorchNeuron smoke check in a different venv). Artifacts it writes under "
+        "validation/results are uploaded with --results-s3.",
     )
     p.add_argument(
         "--repo-url",
