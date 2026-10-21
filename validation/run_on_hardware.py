@@ -326,6 +326,7 @@ def run_local(args: argparse.Namespace) -> int:
         cost_limit_usd=args.cost_limit,
         iam_instance_profile=args.iam_instance_profile,
         image_id=args.image_id,
+        availability_zone=args.az,
     )
 
     print(plan.describe())
@@ -450,6 +451,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_VENV_PACKAGES,
         metavar="SPECS",
         help=f"Space-separated pip specs for --create-venv (default: {_DEFAULT_VENV_PACKAGES!r}).",
+    )
+    p.add_argument(
+        "--az",
+        default=None,
+        metavar="AZ",
+        help="Pin the availability zone (e.g. sa-east-1c); scarce types often fit in one AZ only.",
     )
     p.add_argument(
         "--post-command",

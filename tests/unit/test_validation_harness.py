@@ -322,6 +322,18 @@ def test_post_command_runs_after_harness(capsys):
     )
 
 
+def test_build_plan_az_pin():
+    """--az adds --placement AvailabilityZone=... on awscli, and nothing dangling when unset."""
+    from validation.launcher import build_plan
+
+    kw = dict(name="t", remote_command="echo hi", prefer="awscli", image_id="ami-0x")
+    with_az = build_plan(
+        "trn2.3xlarge", "sa-east-1", availability_zone="sa-east-1c", **kw
+    )
+    assert "AvailabilityZone=sa-east-1c" in with_az.command
+    assert "--placement" not in build_plan("trn2.3xlarge", "sa-east-1", **kw).command
+
+
 def test_capture_environment_is_offline_safe():
     """capture_environment must never raise off-hardware (no EC2, maybe no git)."""
     r = capture_environment(
