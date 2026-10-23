@@ -128,6 +128,7 @@ def build_plan(
     cost_limit_usd: float | None = 5.0,
     iam_instance_profile: str | None = None,
     image_id: str | None = None,
+    availability_zone: str | None = None,
 ) -> LaunchPlan:
     """Construct a LaunchPlan (no side effects beyond read-only AMI resolution).
 
@@ -161,6 +162,8 @@ def build_plan(
         ]
         if image_id:  # pin the same private/pre-release AMI the awscli path would use
             cmd += ["--ami", image_id]
+        if availability_zone:
+            cmd += ["--az", availability_zone]
         if use_spot:
             cmd.append("--spot")
         if cost_limit_usd:
@@ -187,6 +190,9 @@ def build_plan(
             f"ResourceType=instance,Tags=[{{Key=Name,Value={name}}},{{Key=spore,Value=validation}}]",
             "--count",
             "1",
+            # optional AZ pin: scarce types (e.g. trn2) often have capacity in one AZ but not another.
+            "--placement",
+            f"AvailabilityZone={availability_zone}" if availability_zone else "",
             # instance profile (optional): lets the in-instance run push artifacts to S3 without SSH.
             "--iam-instance-profile",
             f"Name={iam_instance_profile}" if iam_instance_profile else "",

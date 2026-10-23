@@ -282,6 +282,63 @@ def test_run_in_instance_isolates_each_example(monkeypatch):
     assert calls == []
 
 
+def test_torchneuron_smoke_records_failure_off_hardware(tmp_path, monkeypatch):
+    """Off Trn2 the smoke check must record a failed artifact (never a fabricated pass)."""
+    from validation import torchneuron_smoke as tn
+
+    monkeypatch.setattr(tn, "RESULTS_DIR", tmp_path)
+    assert tn.main([]) == 1
+    data = json.loads(next(tmp_path.glob("*.json")).read_text())
+    assert data["example"] == "validation.torchneuron_smoke"
+    assert data["status"] == "failed" and data["error"]
+
+
+def test_post_command_runs_after_harness(capsys):
+    """--post-command is appended after the harness invocation in the remote command."""
+    from validation.run_on_hardware import main
+
+    assert (
+        main(
+            [
+                "--instance",
+                "trn2.3xlarge",
+                "--region",
+                "sa-east-1",
+                "--example",
+                "ner_biomedical",
+                "--launcher",
+                "awscli",
+                "--image-id",
+                "ami-0test",
+                "--post-command",
+                "echo POSTCHECK",
+            ]
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert out.index("validation.run_on_hardware --in-instance") < out.index(
+        "POSTCHECK"
+    )
+
+
+def test_build_plan_az_pin():
+    """--az adds --placement AvailabilityZone=... on awscli, and nothing dangling when unset."""
+    from validation.launcher import build_plan
+
+    kw = {
+        "name": "t",
+        "remote_command": "echo hi",
+        "prefer": "awscli",
+        "image_id": "ami-0x",
+    }
+    with_az = build_plan(
+        "trn2.3xlarge", "sa-east-1", availability_zone="sa-east-1c", **kw
+    )
+    assert "AvailabilityZone=sa-east-1c" in with_az.command
+    assert "--placement" not in build_plan("trn2.3xlarge", "sa-east-1", **kw).command
+
+
 def test_capture_environment_is_offline_safe():
     """capture_environment must never raise off-hardware (no EC2, maybe no git)."""
     r = capture_environment(
