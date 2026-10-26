@@ -339,6 +339,35 @@ def test_build_plan_az_pin():
     assert "--placement" not in build_plan("trn2.3xlarge", "sa-east-1", **kw).command
 
 
+def test_build_plan_capacity_block():
+    """A Capacity Block launch uses MarketType=capacity-block + targets the reservation, never spot."""
+    from validation.launcher import build_plan
+
+    plan = build_plan(
+        "trn2.3xlarge",
+        "ap-southeast-4",
+        name="t",
+        remote_command="echo hi",
+        prefer="awscli",
+        image_id="ami-0x",
+        availability_zone="ap-southeast-4c",
+        capacity_reservation_id="cr-0abc",
+    )
+    cmd = plan.command
+    assert "MarketType=capacity-block" in cmd and "MarketType=spot" not in cmd
+    assert "CapacityReservationTarget={CapacityReservationId=cr-0abc}" in cmd
+    assert not plan.use_spot
+    spot = build_plan(
+        "trn2.3xlarge",
+        "ap-southeast-4",
+        name="t",
+        remote_command="x",
+        prefer="awscli",
+        image_id="ami-0x",
+    )
+    assert "--capacity-reservation-specification" not in spot.command
+
+
 def test_capture_environment_is_offline_safe():
     """capture_environment must never raise off-hardware (no EC2, maybe no git)."""
     r = capture_environment(

@@ -327,6 +327,7 @@ def run_local(args: argparse.Namespace) -> int:
         iam_instance_profile=args.iam_instance_profile,
         image_id=args.image_id,
         availability_zone=args.az,
+        capacity_reservation_id=args.capacity_reservation_id,
     )
 
     print(plan.describe())
@@ -457,6 +458,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="AZ",
         help="Pin the availability zone (e.g. sa-east-1c); scarce types often fit in one AZ only.",
+    )
+    p.add_argument(
+        "--capacity-reservation-id",
+        default=None,
+        metavar="CR",
+        help="Launch into a purchased EC2 Capacity Block for ML (cr-...). Overrides spot/on-demand; "
+        "pair with --az set to the block's availability zone.",
     )
     p.add_argument(
         "--post-command",
