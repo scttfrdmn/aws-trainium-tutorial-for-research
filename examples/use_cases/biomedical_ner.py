@@ -273,8 +273,9 @@ def _evaluate(
 
     import torch
 
-    fwd = fwd or model
-    amp = amp or contextlib.nullcontext
+    # `is None`, not `or`: truth-testing a torch.compile'd module falls through to __len__ and raises.
+    fwd = model if fwd is None else fwd
+    amp = contextlib.nullcontext if amp is None else amp
 
     model.eval()
     tp = fp = fn = 0  # true/false positive, false negative at the entity-span level
