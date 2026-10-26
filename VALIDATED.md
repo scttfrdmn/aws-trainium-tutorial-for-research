@@ -15,6 +15,15 @@ _Last rendered: 2026-10-21_
 | `antibody_affinity_slm` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | spearman=0.4738 | 643.46s | f6e9475 | 2026-10-21 |
 | `crystal_cif_slm` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | inv_val_perplexity=0.5764 | 502.98s | f6e9475 | 2026-10-21 |
 
+## TorchNeuron (native backend, public beta; Trn2/Trn3 only)
+
+The same examples run on AWS's native PyTorch backend (`torch-neuronx` 2.13+, `device="neuron"`). Not counted in the coverage line above.
+
+| Example | Status | Instance | Neuron SDK | torch-neuronx | Key metric | Wall clock | Commit | When |
+|---------|--------|----------|-----------|---------------|-----------|-----------|--------|------|
+| `ner_biomedical_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
+| `ner_biomedical_torchneuron_compile` | ⚠️ unvalidated | — | — | — | — | — | — | — |
+
 ## Multi-process examples (torchrun — validated by manual launch)
 
 These need one process per NeuronCore (`torchrun`), which the single-device auto-harness doesn't orchestrate, so they're validated by a manual launch and recorded here rather than in the auto-table above.

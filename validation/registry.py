@@ -256,9 +256,55 @@ TORCHRUN_EXAMPLES: tuple[Example, ...] = (
 )
 
 
+# TorchNeuron (native backend, torch-neuronx 2.13+/2.14+) variants of examples. Trn2/Trn3 only, so
+# they are NOT in EXAMPLES: `--all` and VALIDATED.md's coverage count stay on the XLA path that runs
+# everywhere (incl. Trn1). Run them explicitly (`--example KEY`) inside a TorchNeuron venv.
+_NER_TORCHNEURON_CONFIG = {
+    "epochs": 3,
+    "device": "neuron",
+    "train_batch_size": 32,
+    "eval_batch_size": 32,
+    "max_length": 64,
+}
+TORCHNEURON_EXAMPLES: tuple[Example, ...] = (
+    Example(
+        key="ner_biomedical_torchneuron",
+        module="examples.use_cases.biomedical_ner",
+        instances=("trn2.3xlarge",),
+        thresholds={"eval_f1": 0.75},  # same gate as the XLA run
+        smoke_config={
+            "epochs": 1,
+            "max_train_samples": 64,
+            "max_eval_samples": 64,
+            "device": "cpu",
+        },
+        full_config=dict(
+            _NER_TORCHNEURON_CONFIG
+        ),  # same hyperparameters as ner_biomedical
+        est_runtime_min=20.0,
+        description="NER fine-tune on TorchNeuron, eager mode (device='neuron', bf16 autocast).",
+    ),
+    Example(
+        key="ner_biomedical_torchneuron_compile",
+        module="examples.use_cases.biomedical_ner",
+        instances=("trn2.3xlarge",),
+        thresholds={"eval_f1": 0.75},
+        smoke_config={
+            "epochs": 1,
+            "max_train_samples": 64,
+            "max_eval_samples": 64,
+            "device": "cpu",
+        },
+        full_config={**_NER_TORCHNEURON_CONFIG, "compile": True},
+        est_runtime_min=20.0,
+        description="NER fine-tune on TorchNeuron with torch.compile(backend='neuron').",
+    ),
+)
+
+
 def get(key: str) -> Example | None:
-    """Return the registry entry for `key`, or None if absent."""
-    for ex in EXAMPLES:
+    """Return the registry entry for `key` (XLA or TorchNeuron), or None if absent."""
+    for ex in (*EXAMPLES, *TORCHNEURON_EXAMPLES):
         if ex.key == key:
             return ex
     return None

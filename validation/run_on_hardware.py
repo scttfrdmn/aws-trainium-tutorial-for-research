@@ -59,6 +59,10 @@ def _run_one(
     )
     result = capture_environment(result, clock=clock)
     result.thresholds = dict(example.thresholds)
+    if example in registry.TORCHNEURON_EXAMPLES:
+        result.variant = (
+            example.key
+        )  # same module as the XLA example; keep the artifacts apart
     config = dict(example.smoke_config if smoke else example.full_config)
 
     try:

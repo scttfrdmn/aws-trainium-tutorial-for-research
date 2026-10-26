@@ -157,6 +157,9 @@ class ValidationResult:
     versions: dict[str, str | None] = field(default_factory=dict)
     log_path: str | None = None
     error: str | None = None
+    # Registry key of a non-default variant of `example` (e.g. a TorchNeuron run of the same module).
+    # Kept out of the filename/row for the default (XLA) runs so existing artifacts are unchanged.
+    variant: str | None = None
 
     def to_json(self) -> str:
         """Return a stable, pretty-printed JSON representation."""
@@ -172,6 +175,8 @@ class ValidationResult:
         """
         results_dir.mkdir(parents=True, exist_ok=True)
         slug = self.example.replace("/", "__").removesuffix(".py")
+        if self.variant:
+            slug = f"{slug}+{self.variant}"
         if self.instance_type:
             slug = f"{slug}@{self.instance_type}"
         out = results_dir / f"{slug}.json"

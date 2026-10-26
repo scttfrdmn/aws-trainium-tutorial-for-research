@@ -30,7 +30,7 @@ def test_registry_nonempty_and_unique_keys():
 
 @pytest.mark.parametrize(
     "example",
-    [*registry.EXAMPLES, *registry.TORCHRUN_EXAMPLES],
+    [*registry.EXAMPLES, *registry.TORCHRUN_EXAMPLES, *registry.TORCHNEURON_EXAMPLES],
     ids=lambda e: e.key,
 )
 def test_registered_module_imports_and_has_entrypoint(example):
@@ -366,6 +366,36 @@ def test_build_plan_capacity_block():
         image_id="ami-0x",
     )
     assert "--capacity-reservation-specification" not in spot.command
+
+
+def test_torchneuron_variant_kept_apart_from_xla(tmp_path, monkeypatch):
+    """A TorchNeuron run of the NER module must not overwrite (or count as) the XLA NER result."""
+    from validation import render_status
+
+    xla = registry.get("ner_biomedical")
+    tn = registry.get("ner_biomedical_torchneuron")
+    assert tn is not None and tn.module == xla.module
+    assert tn not in registry.EXAMPLES  # not part of --all / coverage
+    d = tmp_path / "results"
+    d.mkdir()
+    a = ValidationResult(
+        example=xla.module, status="failed", instance_type="trn2.3xlarge"
+    )
+    b = ValidationResult(
+        example=tn.module,
+        status="passed",
+        instance_type="trn2.3xlarge",
+        variant=tn.key,
+        metrics={"eval_f1": 0.8},
+    )
+    assert a.write(d) != b.write(d)
+    monkeypatch.setattr(render_status, "RESULTS_DIR", d)
+    out = render_status.render()
+    assert (
+        "Coverage: 0/" in out
+    )  # the passing TorchNeuron row does not count toward XLA coverage
+    assert "| `ner_biomedical_torchneuron` | ✅ passed | trn2.3xlarge" in out
+    assert "| `ner_biomedical` | ❌ failed | trn2.3xlarge" in out
 
 
 def test_capture_environment_is_offline_safe():

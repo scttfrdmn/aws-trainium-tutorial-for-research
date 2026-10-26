@@ -42,6 +42,48 @@ def _load_results() -> dict[str, list[dict]]:
     return results
 
 
+def _rows_for(
+    results: dict[str, list[dict]], ex, variant: str | None = None
+) -> list[dict]:
+    """Artifacts for one registry entry: same module AND same variant (None = the XLA default)."""
+    return [r for r in results.get(ex.module, []) if r.get("variant") == variant]
+
+
+_TABLE_HEADER = (
+    "| Example | Status | Instance | Neuron SDK | torch-neuronx | Key metric | Wall clock | Commit | When |",
+    "|---------|--------|----------|-----------|---------------|-----------|-----------|--------|------|",
+)
+
+
+def _table_rows(ex, rows: list[dict]) -> list[str]:
+    """One markdown row per artifact (per instance), or a single unvalidated row."""
+    if not rows:
+        return [f"| `{ex.key}` | ⚠️ unvalidated | — | — | — | — | — | — | — |"]
+    out = []
+    for r in rows:
+        icon = {
+            "passed": "✅ passed",
+            "failed": "❌ failed",
+            "skipped": "⏭ skipped",
+        }.get(r.get("status", ""), "? ")
+        versions = r.get("versions") or {}
+        metrics = r.get("metrics") or {}
+        # Show the first declared threshold metric as the headline number.
+        metric_str = "—"
+        if ex.thresholds:
+            mk = next(iter(ex.thresholds))
+            if mk in metrics:
+                metric_str = f"{mk}={metrics[mk]:.4f}"
+        wall = r.get("wall_clock_s")
+        out.append(
+            f"| `{ex.key}` | {icon} | {r.get('instance_type') or '—'} | "
+            f"{versions.get('neuron_sdk') or '—'} | {versions.get('torch_neuronx') or '—'} | "
+            f"{metric_str} | {f'{wall}s' if wall is not None else '—'} | "
+            f"{r.get('commit') or '—'} | {(r.get('timestamp') or '—')[:10]} |"
+        )
+    return out
+
+
 def _passed_on_any(rows: list[dict]) -> bool:
     """True if the example passed on at least one instance."""
     return any(r.get("status") == "passed" for r in rows)
@@ -65,9 +107,9 @@ def render(clock: str | None = None) -> str:
 
     total = len(registry.EXAMPLES)
     passed = sum(
-        1 for ex in registry.EXAMPLES if _passed_on_any(results.get(ex.module, []))
+        1 for ex in registry.EXAMPLES if _passed_on_any(_rows_for(results, ex))
     )
-    multi = sum(1 for ex in registry.EXAMPLES if len(results.get(ex.module, [])) > 1)
+    multi = sum(1 for ex in registry.EXAMPLES if len(_rows_for(results, ex)) > 1)
     coverage = f"**Coverage: {passed}/{total} examples validated on hardware.**"
     if multi:
         coverage += (
@@ -76,39 +118,25 @@ def render(clock: str | None = None) -> str:
     lines.append(coverage)
     lines.append("")
 
-    lines.append(
-        "| Example | Status | Instance | Neuron SDK | torch-neuronx | Key metric | Wall clock | Commit | When |"
-    )
-    lines.append(
-        "|---------|--------|----------|-----------|---------------|-----------|-----------|--------|------|"
-    )
+    lines.extend(_TABLE_HEADER)
     for ex in registry.EXAMPLES:
-        rows = results.get(ex.module, [])
-        if not rows:
-            lines.append(f"| `{ex.key}` | ⚠️ unvalidated | — | — | — | — | — | — | — |")
-            continue
-        # One row per instance the example was validated on (sorted by instance in _load_results).
-        for r in rows:
-            icon = {
-                "passed": "✅ passed",
-                "failed": "❌ failed",
-                "skipped": "⏭ skipped",
-            }.get(r.get("status", ""), "? ")
-            versions = r.get("versions") or {}
-            metrics = r.get("metrics") or {}
-            # Show the first declared threshold metric as the headline number.
-            metric_str = "—"
-            if ex.thresholds:
-                mk = next(iter(ex.thresholds))
-                if mk in metrics:
-                    metric_str = f"{mk}={metrics[mk]:.4f}"
-            wall = r.get("wall_clock_s")
-            lines.append(
-                f"| `{ex.key}` | {icon} | {r.get('instance_type') or '—'} | "
-                f"{versions.get('neuron_sdk') or '—'} | {versions.get('torch_neuronx') or '—'} | "
-                f"{metric_str} | {f'{wall}s' if wall is not None else '—'} | "
-                f"{r.get('commit') or '—'} | {(r.get('timestamp') or '—')[:10]} |"
-            )
+        lines.extend(_table_rows(ex, _rows_for(results, ex)))
+
+    # TorchNeuron variants (native backend, Trn2/Trn3 only) -- listed separately and NOT counted in
+    # the coverage line above, which tracks the XLA path that runs on every Trainium generation.
+    torchneuron = getattr(registry, "TORCHNEURON_EXAMPLES", ())
+    if torchneuron:
+        lines.append("")
+        lines.append("## TorchNeuron (native backend, public beta; Trn2/Trn3 only)")
+        lines.append("")
+        lines.append(
+            "The same examples run on AWS's native PyTorch backend (`torch-neuronx` 2.13+, "
+            '`device="neuron"`). Not counted in the coverage line above.'
+        )
+        lines.append("")
+        lines.extend(_TABLE_HEADER)
+        for ex in torchneuron:
+            lines.extend(_table_rows(ex, _rows_for(results, ex, variant=ex.key)))
 
     # Multi-process (torchrun) examples — validated by manual launch, not the single-device
     # auto-harness, so they carry no results/*.json. Listed separately so the count above stays
@@ -184,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
         unvalidated = [
             e.key
             for e in registry.EXAMPLES
-            if not _passed_on_any(results.get(e.module, []))
+            if not _passed_on_any(_rows_for(results, e))
         ]
         if unvalidated:
             print(f"Unvalidated: {', '.join(unvalidated)}", file=sys.stderr)
