@@ -33,8 +33,11 @@ The training loop runs on the **XLA lazy-tensor** path (`xm.xla_device()`, `xm.o
 AWS positions **Trainium2 for both training and inference**, and NxD Inference dropped Inf2/Trn1
 support in Neuron 2.29. This example serves on **Inf2** for simplicity and to show the classic
 train-Trn/serve-Inf split. `torch_neuronx.trace()` is the PyTorch/XLA inference path, which AWS ends on
-Trn2/Trn3 in Neuron 2.34 (it stays the path on Inf2/Trn1); for new serving on Trn2/Trn3, use **vLLM
-Neuron** or TorchNeuron + `torch.compile`. See [`../../VERSION_MATRIX.md`](../../VERSION_MATRIX.md) for the decision guide.
+Trn2/Trn3 in Neuron 2.34; it remains the serving path on **Inf2/Trn1**, which is what this example
+uses. The Trn2/Trn3 alternative for a model like this BERT classifier is TorchNeuron +
+`torch.compile`, which is still beta and not covered here yet. (vLLM Neuron is for LLM serving,
+not a sequence classifier, so it is not the right tool for this example.) See
+[`../../VERSION_MATRIX.md`](../../VERSION_MATRIX.md) for the decision guide.
 
 ## Cost numbers are illustrative
 
@@ -395,7 +398,9 @@ def train_model():
 
     # --- Compile the trained model for Inferentia (inference) -------------------------------
     # Reload best weights onto CPU, then trace once for inference. Tracing happens on CPU
-    # tensors; torch_neuronx.trace() compiles the inference graph for Inf2/Trn2 serving.
+    # tensors; torch_neuronx.trace() compiles the inference graph for Inf2/Trn1 serving.
+    # (On Trn2/Trn3 the PyTorch/XLA inference path ends in Neuron 2.34; the TorchNeuron +
+    # torch.compile alternative there is beta and not covered by this example yet.)
     print("🔧 Compiling best model for Inferentia inference...")
     best_ckpt = torch.load('/home/ubuntu/results/checkpoint.pt', map_location='cpu')
     cpu_model = AutoModelForSequenceClassification.from_pretrained(
@@ -432,7 +437,12 @@ if __name__ == "__main__":
 """
 
     def _generate_inference_script(self, model_path, config):
-        """Generate inference server script for Inferentia"""
+        """Generate inference server script for Inferentia.
+
+        The serving $/hr is injected from ``ILLUSTRATIVE_HOURLY_USD["inf2.xlarge"]`` so the
+        server's cost stats use the same single source of truth as the rest of the pipeline.
+        """
+        hourly_rate = ILLUSTRATIVE_HOURLY_USD["inf2.xlarge"]
         return """
 from flask import Flask, request, jsonify
 import torch
@@ -444,6 +454,9 @@ import json
 from datetime import datetime
 
 app = Flask(__name__)
+
+# Illustrative inf2.xlarge $/hr, injected from the pipeline's ILLUSTRATIVE_HOURLY_USD table.
+HOURLY_RATE_USD = __INF2_HOURLY_USD__
 
 # Global variables
 model = None
@@ -482,11 +495,12 @@ def predict():
         if not texts:
             return jsonify({'error': 'No texts provided'}), 400
 
-        # Tokenize
+        # Tokenize. Pad every request to exactly 512 tokens: the traced graph was compiled for a
+        # fixed (1, 512) input shape, so dynamic pad-to-longest would not match it.
         encoded = tokenizer(
             texts,
             truncation=True,
-            padding=True,
+            padding="max_length",
             max_length=512,
             return_tensors='pt'
         )
@@ -494,7 +508,9 @@ def predict():
         # Run inference
         with torch.no_grad():
             outputs = model(encoded['input_ids'], encoded['attention_mask'])
-            predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            # A torch.jit-traced HF model returns a tuple, not a ModelOutput, so there is no
+            # `logits` attribute -- the logits are the first element.
+            predictions = torch.nn.functional.softmax(outputs[0], dim=-1)
 
         # Calculate latency
         latency_ms = (time.time() - request_start) * 1000
@@ -505,7 +521,7 @@ def predict():
         avg_latency = total_latency / request_count if request_count > 0 else 0
 
         # Calculate costs (server uptime since process start, not this request)
-        hourly_rate = 0.227  # inf2.xlarge spot price (verify current pricing)
+        hourly_rate = HOURLY_RATE_USD  # inf2.xlarge illustrative rate (verify current pricing)
         runtime_hours = (datetime.now() - start_time).total_seconds() / 3600
         total_cost = runtime_hours * hourly_rate
         cost_per_1k_requests = (total_cost / request_count) * 1000 if request_count > 0 else 0
@@ -538,7 +554,7 @@ def health():
 @app.route('/stats', methods=['GET'])
 def stats():
     runtime_hours = (datetime.now() - start_time).total_seconds() / 3600
-    hourly_rate = 0.227
+    hourly_rate = HOURLY_RATE_USD
     total_cost = runtime_hours * hourly_rate
 
     return jsonify({
@@ -554,7 +570,7 @@ if __name__ == '__main__':
     load_model()
     print("🚀 Starting inference server on port 8080...")
     app.run(host='0.0.0.0', port=8080, debug=False)
-"""
+""".replace("__INF2_HOURLY_USD__", repr(hourly_rate))
 
     def _get_cost_monitor_script(self, instance_type):
         """Generate cost monitoring script"""
@@ -620,7 +636,7 @@ import requests
 class InferenceCostMonitor:
     def __init__(self):
         self.start_time = datetime.now()
-        self.hourly_rate = 0.227  # inf2.xlarge spot price
+        self.hourly_rate = {ILLUSTRATIVE_HOURLY_USD["inf2.xlarge"]!r}  # inf2.xlarge (illustrative)
 
     def run(self):
         while True:
@@ -818,7 +834,9 @@ def main() -> None:
             "review the code and supply your own dataset first. Then re-run with, e.g.:\n"
             "    python trainium_to_inferentia_pipeline.py --run \\\n"
             "        --bucket my-ml-bucket --dataset-path s3://my-ml-bucket/data.tar.gz\n\n"
-            "See VERSION_MATRIX.md: for new Trn2/Trn3 serving use vLLM Neuron (XLA inference ends there in 2.34)."
+            "Note: trace() serving targets Inf2/Trn1. On Trn2/Trn3 the PyTorch/XLA inference path\n"
+            "ends in Neuron 2.34; the TorchNeuron + torch.compile alternative is beta and not\n"
+            "covered here yet. See VERSION_MATRIX.md for the decision guide."
         )
         return
 
