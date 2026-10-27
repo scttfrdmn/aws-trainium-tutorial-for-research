@@ -12,6 +12,7 @@ Run after a validation pass:
 from __future__ import annotations
 
 import json
+import statistics
 import sys
 from pathlib import Path
 
@@ -38,7 +39,14 @@ def _load_results() -> dict[str, list[dict]]:
                 continue
             results.setdefault(data.get("example", path.stem), []).append(data)
     for rows in results.values():
-        rows.sort(key=lambda d: d.get("instance_type") or "")
+        # Seed-sweep artifacts (``seed`` set) order numerically within their instance; artifacts
+        # without the field (all pre-sweep ones) keep their previous order.
+        rows.sort(
+            key=lambda d: (
+                d.get("instance_type") or "",
+                -1 if d.get("seed") is None else d["seed"],
+            )
+        )
     return results
 
 
@@ -55,12 +63,79 @@ _TABLE_HEADER = (
 )
 
 
+def _group_rows(rows: list[dict]) -> list[list[dict]]:
+    """Split one entry's artifacts into display groups, preserving their order.
+
+    Every unseeded artifact is its own group (one row, exactly as before seed sweeps). Seeded
+    artifacts (``seed`` set) on the same instance form a single group, placed where the first of
+    them appears, so a sweep renders as one aggregated row per instance.
+    """
+    groups: list[list[dict]] = []
+    seeded: dict[str | None, list[dict]] = {}
+    for r in rows:
+        if r.get("seed") is None:
+            groups.append([r])
+            continue
+        inst = r.get("instance_type")
+        if inst not in seeded:
+            seeded[inst] = []
+            groups.append(seeded[inst])
+        seeded[inst].append(r)
+    return groups
+
+
+def _joined(values: list[str | None]) -> str:
+    """Distinct non-empty values in first-seen order, joined with ``/`` (``—`` if none)."""
+    seen = list(dict.fromkeys(v for v in values if v))
+    return "/".join(seen) or "—"
+
+
+def _sweep_row(ex, group: list[dict]) -> str:
+    """One aggregated markdown row for a seed sweep (>1 seeded artifacts on one instance).
+
+    The headline metric is ``name=mean±std (n=k)`` (sample std over the seeds that reported it),
+    the wall clock is the mean, and the status is ✅ only if every seed passed.
+    """
+    n = len(group)
+    n_failed = sum(1 for r in group if r.get("status") != "passed")
+    icon = "✅ passed" if not n_failed else f"❌ failed ({n_failed}/{n} seeds)"
+    metric_str = "—"
+    if ex.thresholds:
+        mk = next(iter(ex.thresholds))
+        vals = [
+            float((r.get("metrics") or {})[mk])
+            for r in group
+            if mk in (r.get("metrics") or {})
+        ]
+        if vals:
+            std = statistics.stdev(vals) if len(vals) > 1 else 0.0
+            metric_str = f"{mk}={statistics.fmean(vals):.4f}±{std:.4f} (n={len(vals)})"
+    walls = [r["wall_clock_s"] for r in group if r.get("wall_clock_s") is not None]
+    wall = f"{round(statistics.fmean(walls), 2)}s" if walls else "—"
+    versions = [r.get("versions") or {} for r in group]
+    when = max((r.get("timestamp") or "")[:10] for r in group) or "—"
+    return (
+        f"| `{ex.key}` | {icon} | {group[0].get('instance_type') or '—'} | "
+        f"{_joined([v.get('neuron_sdk') for v in versions])} | "
+        f"{_joined([v.get('torch_neuronx') for v in versions])} | "
+        f"{metric_str} | {wall} | {_joined([r.get('commit') for r in group])} | {when} |"
+    )
+
+
 def _table_rows(ex, rows: list[dict]) -> list[str]:
-    """One markdown row per artifact (per instance), or a single unvalidated row."""
+    """One markdown row per artifact (per instance), or a single unvalidated row.
+
+    A seed sweep (several seeded artifacts on one instance) collapses into one aggregated row
+    (see ``_sweep_row``); unseeded artifacts render one row each, unchanged.
+    """
     if not rows:
         return [f"| `{ex.key}` | ⚠️ unvalidated | — | — | — | — | — | — | — |"]
     out = []
-    for r in rows:
+    for group in _group_rows(rows):
+        if len(group) > 1:
+            out.append(_sweep_row(ex, group))
+            continue
+        r = group[0]
         icon = {
             "passed": "✅ passed",
             "failed": "❌ failed",
@@ -109,7 +184,12 @@ def render(clock: str | None = None) -> str:
     passed = sum(
         1 for ex in registry.EXAMPLES if _passed_on_any(_rows_for(results, ex))
     )
-    multi = sum(1 for ex in registry.EXAMPLES if len(_rows_for(results, ex)) > 1)
+    # Distinct instances, not artifacts: a seed sweep on one instance is not "more than one instance".
+    multi = sum(
+        1
+        for ex in registry.EXAMPLES
+        if len({r.get("instance_type") for r in _rows_for(results, ex)}) > 1
+    )
     coverage = f"**Coverage: {passed}/{total} examples validated on hardware.**"
     if multi:
         coverage += (
