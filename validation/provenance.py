@@ -166,18 +166,32 @@ class ValidationResult:
     # Registry key of a non-default variant of `example` (e.g. a TorchNeuron run of the same module).
     # Kept out of the filename/row for the default (XLA) runs so existing artifacts are unchanged.
     variant: str | None = None
+    # Random seed of one run in a seed sweep (`run_on_hardware --seeds`). None for ordinary
+    # single runs, which keeps their filenames unchanged; artifacts predating the field lack it.
+    seed: int | None = None
 
     def to_json(self) -> str:
         """Return a stable, pretty-printed JSON representation."""
         return json.dumps(asdict(self), indent=2, sort_keys=True)
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ValidationResult:
+        """Rebuild a result from its JSON dict, tolerating older artifacts and unknown keys.
+
+        Fields added after an artifact was written (e.g. ``seed``) take their defaults.
+        """
+        known = set(cls.__dataclass_fields__)
+        return cls(**{k: v for k, v in data.items() if k in known})
+
     def write(self, results_dir: Path) -> Path:
-        """Write this result to results_dir/<example-slug>[@<instance>].json and return the path.
+        """Write this result to results_dir/<example-slug>[@<instance>][#s<seed>].json; return it.
 
         When ``instance_type`` is set, it's appended (``…@trn1.2xlarge.json``) so results for the
         SAME example on DIFFERENT instances coexist instead of overwriting each other -- that's what
         lets VALIDATED.md show, e.g., an example validated on both trn1.2xlarge and trn2.48xlarge.
         Off-hardware (``instance_type`` None, as in unit tests) the name is unqualified, unchanged.
+        A seed-sweep run (``seed`` set) additionally gets ``#s<seed>`` so each seed keeps its own
+        artifact; unseeded runs keep exactly the old name.
         """
         results_dir.mkdir(parents=True, exist_ok=True)
         slug = self.example.replace("/", "__").removesuffix(".py")
@@ -185,6 +199,8 @@ class ValidationResult:
             slug = f"{slug}+{self.variant}"
         if self.instance_type:
             slug = f"{slug}@{self.instance_type}"
+        if self.seed is not None:
+            slug = f"{slug}#s{self.seed}"
         out = results_dir / f"{slug}.json"
         out.write_text(self.to_json())
         return out

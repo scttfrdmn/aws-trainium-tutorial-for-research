@@ -51,11 +51,22 @@ LOGS_DIR = _REPO_ROOT / "validation" / "logs"
 
 
 def _run_one(
-    example: registry.Example, *, smoke: bool, clock: str | None
+    example: registry.Example,
+    *,
+    smoke: bool,
+    clock: str | None,
+    seed: int | None = None,
 ) -> ValidationResult:
-    """Import and run a single example's entrypoint, returning a populated ValidationResult."""
+    """Import and run a single example's entrypoint, returning a populated ValidationResult.
+
+    With ``seed`` set (one run of a ``--seeds`` sweep), the example's config gets ``"seed": seed``
+    and the result records it, so each seed writes its own artifact.
+    """
     result = ValidationResult(
-        example=example.module, status="failed", thresholds=dict(example.thresholds)
+        example=example.module,
+        status="failed",
+        thresholds=dict(example.thresholds),
+        seed=seed,
     )
     result = capture_environment(result, clock=clock)
     result.thresholds = dict(example.thresholds)
@@ -64,6 +75,8 @@ def _run_one(
             example.key
         )  # same module as the XLA example; keep the artifacts apart
     config = dict(example.smoke_config if smoke else example.full_config)
+    if seed is not None:
+        config = {**config, "seed": seed}
 
     try:
         module = importlib.import_module(example.module)
@@ -111,14 +124,21 @@ def _run_one(
     return result
 
 
-def _run_isolated(ex: registry.Example, *, smoke: bool, clock: str | None) -> bool:
+def _run_isolated(
+    ex: registry.Example,
+    *,
+    smoke: bool,
+    clock: str | None,
+    seed: int | None = None,
+) -> bool:
     """Run one example in a fresh child interpreter; return True if it failed.
 
     Device memory is per-process: graphs (NEFFs) a finished example loaded onto the NeuronCore stay
     resident until the process exits. Running every example in one process let earlier examples'
     NEFFs accumulate (13 GB of DMA-ring spill on a 16 GB core on Neuron 2.33) until later examples
     failed with NRT_RESOURCE at load. A child per example matches how users run them (one script at
-    a time) and releases the core between examples. The child writes its own artifact.
+    a time) and releases the core between examples. The child writes its own artifact. In a seed
+    sweep each (example, seed) pair is its own child, which receives that single seed.
     """
     cmd = [sys.executable, "-u", "-m", "validation.run_on_hardware", "--in-instance"]
     cmd += ["--example", ex.key]
@@ -126,16 +146,25 @@ def _run_isolated(ex: registry.Example, *, smoke: bool, clock: str | None) -> bo
         cmd.append("--smoke")
     if clock:
         cmd += ["--clock", clock]
+    if seed is not None:
+        cmd += ["--seeds", str(seed)]
     return subprocess.run(cmd, cwd=_REPO_ROOT, check=False).returncode != 0
 
 
 def run_in_instance(
-    keys: list[str], *, smoke: bool, clock: str | None, isolate: bool = True
+    keys: list[str],
+    *,
+    smoke: bool,
+    clock: str | None,
+    isolate: bool = True,
+    seeds: list[int] | None = None,
 ) -> int:
     """Run the selected examples on the current host and write artifacts. Returns exit code.
 
-    With more than one example and ``isolate`` set (the default), each example runs in its own
-    child process (see ``_run_isolated``); a single example always runs in-process.
+    With more than one run (examples x seeds) and ``isolate`` set (the default), each run gets its
+    own child process (see ``_run_isolated``); a single run always stays in-process. ``seeds``
+    (from ``--seeds``) runs every example once per seed with ``config["seed"]`` overridden; without
+    it each example runs once with its registry config, exactly as before.
     """
     examples = (
         registry.EXAMPLES if not keys else [e for k in keys if (e := registry.get(k))]
@@ -148,18 +177,27 @@ def run_in_instance(
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
-    if isolate and len(examples) > 1:
-        failed = sum(_run_isolated(ex, smoke=smoke, clock=clock) for ex in examples)
-        print(
-            f"\n{len(examples) - failed}/{len(examples)} passed (one process per example)."
+    seed_list: list[int | None] = list(seeds) if seeds else [None]
+    runs = [(ex, s) for ex in examples for s in seed_list]
+
+    if isolate and len(runs) > 1:
+        failed = sum(
+            _run_isolated(ex, smoke=smoke, clock=clock, seed=s) for ex, s in runs
         )
+        unit = "example" if seeds is None else "run"
+        print(f"\n{len(runs) - failed}/{len(runs)} passed (one process per {unit}).")
         return 1 if failed else 0
 
     failed = 0
-    for ex in examples:
+    for ex, s in runs:
         mode = "smoke" if smoke else "full"
-        print(f"▶ validating {ex.key} ({ex.module}) [{mode}] ...", flush=True)
-        result = _run_one(ex, smoke=smoke, clock=clock)
+        seed_note = "" if s is None else f" seed={s}"
+        print(
+            f"▶ validating {ex.key} ({ex.module}) [{mode}{seed_note}] ...", flush=True
+        )
+        # Pass `seed` only when sweeping, so the unseeded call is exactly the pre-sweep one.
+        seed_kw = {} if s is None else {"seed": s}
+        result = _run_one(ex, smoke=smoke, clock=clock, **seed_kw)
         path = result.write(RESULTS_DIR)
         status_icon = {"passed": "✅", "failed": "❌", "skipped": "⏭"}.get(
             result.status, "?"
@@ -172,7 +210,7 @@ def run_in_instance(
         if result.status == "failed":
             failed += 1
 
-    print(f"\n{len(examples) - failed}/{len(examples)} passed.")
+    print(f"\n{len(runs) - failed}/{len(runs)} passed.")
     return 1 if failed else 0
 
 
@@ -377,6 +415,15 @@ def build_parser() -> argparse.ArgumentParser:
         "each (isolation is the default because loaded graphs hold device memory until exit).",
     )
     p.add_argument(
+        "--seeds",
+        nargs="+",
+        type=int,
+        default=None,
+        metavar="N",
+        help="--in-instance: run each example once per seed (config['seed'] overridden), writing "
+        "one artifact per seed (…#s<N>.json); VALIDATED.md aggregates them as mean±std.",
+    )
+    p.add_argument(
         "--smoke",
         action="store_true",
         help="Tiny CPU smoke run (proves code path; skips thresholds).",
@@ -515,7 +562,11 @@ def main(argv: list[str] | None = None) -> int:
             print("Specify --all or --example KEY for --in-instance.", file=sys.stderr)
             return 2
         return run_in_instance(
-            keys, smoke=args.smoke, clock=args.clock, isolate=not args.no_isolate
+            keys,
+            smoke=args.smoke,
+            clock=args.clock,
+            isolate=not args.no_isolate,
+            seeds=args.seeds,
         )
     return run_local(args)
 

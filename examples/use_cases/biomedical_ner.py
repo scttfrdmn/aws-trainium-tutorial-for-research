@@ -92,6 +92,9 @@ class NerConfig:
         1.0  # max grad norm; guards bf16 training against exploding gradients
     )
     seed: int = 42
+    # Training steps excluded from ``steady_throughput_samples_s``: the first step(s) pay graph
+    # compilation (and any recompiles), so steady-state throughput is timed only after these.
+    warmup_steps: int = 3
     # Attention implementation. HF Transformers v5 defaults to "sdpa", whose fused kernel is not
     # reliably handled by the Neuron bf16 compile path (we saw nan at step 0). "eager" uses plain
     # matmul+softmax that the compiler handles correctly. This is the "build in the form the
@@ -411,9 +414,22 @@ def run(config: dict | None = None) -> dict[str, float]:
     #     NOT by the clipping/warmup below -- those are ordinary training-stability hygiene.
     #   * fixed batch shapes (drop_last) -> compile ~once, not per-shape
     #   * accumulate loss ON DEVICE; only fetch with .item() once per epoch (no per-step host sync)
+    def _device_sync(accumulator) -> None:
+        """Block until queued device work has finished (brackets the steady-state timer)."""
+        if backend == "xla":
+            xm.wait_device_ops()
+        elif accumulator is not None:
+            accumulator.item()  # backend-agnostic: fetching the on-device loss forces completion
+
     wall_start = time.time()
     first_step_s = None
     total_steps = 0
+    # Steady-state window: training steps AFTER cfg.warmup_steps (which pay compilation). Only two
+    # host syncs bracket it (window open + close) -- never one per step.
+    warmup_steps = max(0, cfg.warmup_steps)
+    steady_start = time.time() if warmup_steps == 0 else None
+    steady_samples = 0
+    running = None
     for epoch in range(cfg.epochs):
         model.train()
         running = torch.zeros(
@@ -454,6 +470,13 @@ def run(config: dict | None = None) -> dict[str, float]:
                 first_step_s = (
                     time.time() - step_start
                 )  # first step pays the AOT compile cost
+            if total_steps > warmup_steps:
+                steady_samples += input_ids.shape[
+                    0
+                ]  # a shape, not a tensor read: no sync
+            elif total_steps == warmup_steps:
+                _device_sync(running)  # warmup work is done before the window opens
+                steady_start = time.time()
 
         avg_loss = (
             running / max(1, n_batches)
@@ -461,6 +484,13 @@ def run(config: dict | None = None) -> dict[str, float]:
         print(f"   epoch {epoch + 1}/{cfg.epochs}  avg_loss={avg_loss:.4f}")
 
     train_wall = time.time() - wall_start
+    steady_tput = 0.0
+    if steady_start is not None and steady_samples:
+        _device_sync(
+            running
+        )  # close the window only once the last step actually finished
+        steady_wall = time.time() - steady_start
+        steady_tput = round(steady_samples / steady_wall, 2) if steady_wall > 0 else 0.0
 
     # --- Evaluate on validation (gated) and test (reported) ---------------------------------
     val_metrics = _evaluate(model, val_loader, device, backend, label_names, fwd, amp)
@@ -479,10 +509,14 @@ def run(config: dict | None = None) -> dict[str, float]:
         )
         if train_wall > 0
         else 0.0,
+        # Post-warmup samples/s with the window bracketed by device syncs (0.0 if training ran no
+        # more than cfg.warmup_steps steps). Excludes compile cost, unlike the number above.
+        "steady_throughput_samples_s": steady_tput,
     }
     print(
         f"✅ done. eval_f1={metrics['eval_f1']:.4f}  test_f1={metrics['test_f1']:.4f}  "
-        f"train_wall={metrics['train_wall_s']}s  first_step={metrics['first_step_compile_s']}s"
+        f"train_wall={metrics['train_wall_s']}s  first_step={metrics['first_step_compile_s']}s  "
+        f"steady_throughput={metrics['steady_throughput_samples_s']} samples/s"
     )
     return metrics
 
