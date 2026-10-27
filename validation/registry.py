@@ -232,11 +232,14 @@ TORCHRUN_EXAMPLES: tuple[Example, ...] = (
         key="ddp_ner",
         module="examples.distributed.data_parallel_ner",
         entrypoint="run",
-        instances=("trn1.2xlarge",),
+        instances=("trn1.2xlarge", "trn2.3xlarge"),
         thresholds={"eval_f1": 0.75},
         est_runtime_min=20.0,
         description="Data-parallel NER across NeuronCores (torchrun XLA DDP).",
-        validated_note="2-core data-parallel: eval_f1 0.826, gradient all-reduce verified",
+        validated_note=(
+            "2-core data-parallel: eval_f1 0.826, gradient all-reduce verified (trn1.2xlarge); "
+            "trn2.3xlarge / Neuron 2.33, 2 logical cores: eval_f1 0.826, 11.6 samples/s"
+        ),
     ),
     Example(
         key="tp_full_finetune",
