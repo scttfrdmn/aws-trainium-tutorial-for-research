@@ -10,6 +10,7 @@ _Last rendered: 2026-10-27_
 |---------|--------|----------|-----------|---------------|-----------|-----------|--------|------|
 | `ner_biomedical` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | eval_f1=0.8480 | 1019.17s | 5351772 | 2026-10-21 |
 | `ner_biomedical` | ✅ passed | trn2.3xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | eval_f1=0.8465 | 962.6s | 9da6b94 | 2026-10-26 |
+| `ner_biomedical` | ✅ passed | trn2.3xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | eval_f1=0.8526±0.0048 (n=4) | 116.45s | 88b7edc | 2026-10-27 |
 | `satellite_landcover` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | eval_acc=0.7500 | 2054.31s | 5351772 | 2026-10-21 |
 | `satellite_landcover` | ✅ passed | trn2.3xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | eval_acc=0.7500 | 636.46s | 9da6b94 | 2026-10-26 |
 | `cv_utilization_spike` | ✅ passed | trn1.2xlarge | 2.33.38 | 2.9.0.2.15.32035+de43f57c | vit_over_cnn_tflops=4.6480 | 450.66s | 5351772 | 2026-10-21 |
@@ -28,12 +29,14 @@ The same examples run on AWS's native PyTorch backend (`torch-neuronx` 2.13+, `d
 | Example | Status | Instance | Neuron SDK | torch-neuronx | Key metric | Wall clock | Commit | When |
 |---------|--------|----------|-----------|---------------|-----------|-----------|--------|------|
 | `ner_biomedical_torchneuron` | ✅ passed | trn2.3xlarge | — | 2.14.3.0.1+b1b6c66 | eval_f1=0.8491 | 245.01s | 504209b | 2026-10-26 |
+| `ner_biomedical_torchneuron` | ✅ passed | trn2.3xlarge | 2.33.38 | 2.14.3.0.1+b1b6c66 | eval_f1=0.8502±0.0052 (n=4) | 106.48s | 88b7edc | 2026-10-27 |
 | `ner_biomedical_torchneuron_compile` | ✅ passed | trn2.3xlarge | — | 2.14.3.0.1+b1b6c66 | eval_f1=0.8373 | 845.94s | e8f1c90 | 2026-10-26 |
-| `satellite_landcover_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
-| `cv_utilization_spike_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
-| `distill_ner_slm_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
-| `antibody_affinity_slm_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
-| `crystal_cif_slm_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
+| `ner_biomedical_torchneuron_compile` | ✅ passed | trn2.3xlarge | 2.33.38 | 2.14.3.0.1+b1b6c66 | eval_f1=0.8605 | 804.28s | 88b7edc | 2026-10-27 |
+| `satellite_landcover_torchneuron` | ✅ passed | trn2.3xlarge | 2.33.38 | 2.14.3.0.1+b1b6c66 | eval_acc=0.7500 | 108.31s | 88b7edc | 2026-10-27 |
+| `cv_utilization_spike_torchneuron` | ❌ failed | trn2.3xlarge | 2.33.38 | 2.14.3.0.1+b1b6c66 | vit_over_cnn_tflops=0.8350 | 140.32s | 88b7edc | 2026-10-27 |
+| `distill_ner_slm_torchneuron` | ✅ passed | trn2.3xlarge | 2.33.38 | 2.14.3.0.1+b1b6c66 | student_f1=0.5875 | 198.16s | 88b7edc | 2026-10-27 |
+| `antibody_affinity_slm_torchneuron` | ❌ failed | trn2.3xlarge | 2.33.38 | 2.14.3.0.1+b1b6c66 | spearman=0.3332 | 257.04s | 88b7edc | 2026-10-27 |
+| `crystal_cif_slm_torchneuron` | ✅ passed | trn2.3xlarge | 2.33.38 | 2.14.3.0.1+b1b6c66 | inv_val_perplexity=0.5766 | 255.84s | 88b7edc | 2026-10-27 |
 
 ## Multi-process examples (torchrun — validated by manual launch)
 

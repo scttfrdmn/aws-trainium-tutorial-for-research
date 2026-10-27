@@ -274,10 +274,18 @@ def run(config: dict | None = None) -> dict[str, float]:
         if results["CNN"]["achieved_tflops"]
         else float("nan")
     )
-    print(
-        f"\n  → ViT achieves {ratio:.1f}x the CNN's TFLOP/s on the SAME device.\n"
-        f"    The hardware isn't slow — the small CNN just doesn't fill the 128x128 systolic array."
-    )
+    print(f"\n  → ViT achieves {ratio:.1f}x the CNN's TFLOP/s on the SAME device.")
+    # Only draw the conclusion the measurement supports (it held on XLA but not on TorchNeuron
+    # eager on Trn2, where the ratio was ~0.8 -- see issue #33).
+    if ratio >= 2.0:
+        print(
+            "    The hardware isn't slow — the small CNN just doesn't fill the 128x128 systolic array."
+        )
+    else:
+        print(
+            "    The ViT did NOT clearly out-utilize the CNN here, so this run doesn't support the\n"
+            "    'small CNN under-fills the array' explanation on this backend/device."
+        )
     return {
         "cnn_achieved_tflops": results["CNN"]["achieved_tflops"],
         "vit_achieved_tflops": results["ViT"]["achieved_tflops"],

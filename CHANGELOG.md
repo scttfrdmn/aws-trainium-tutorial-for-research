@@ -10,6 +10,38 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Fixed (correction: the "TorchNeuron 4.5× faster than XLA" result was compile time)
+- A seed sweep (#27) on the Trn2 Capacity Block's last hour **overturns the single-run comparison from
+  #22**. Both used NER on one trn2.3xlarge core:
+
+  | Path | Steady-state samples/s (warm cache) | eval_f1 |
+  |---|---|---|
+  | XLA | **228.5 ± 1.3** (n=3; 240.2 alone on the chip) | 0.853 ± 0.005 |
+  | TorchNeuron eager | 199.5 ± 0.1 (199.3 alone) | 0.850 ± 0.005 |
+  | TorchNeuron + `torch.compile` | 31.0 (n=1) | 0.860 |
+
+  - With a warm cache, **XLA is ~15–20% faster**, at the same accuracy.
+  - The earlier "4.5×" came from XLA's first run, which was mostly **cold compilation** (889 s train
+    wall vs 196 s for eager TorchNeuron).
+  - "Trying TorchNeuron" now shows both numbers and says which is which. The cold-cache
+    `torch.compile` number is still open.
+
+### Added (Trn2 validation of the #26 TorchNeuron ports)
+- **TorchNeuron ports on trn2.3xlarge / Neuron 2.33.38:**
+
+  | Example | Result | XLA, same box |
+  |---|---|---|
+  | satellite | ✅ eval_acc 0.75, 108 s | 0.75, 636 s |
+  | crystal | ✅ 0.577 | 0.576 |
+  | distill | ✅ student_f1 0.588 | 0.573 |
+  | antibody | ❌ spearman 0.333 | ❌ 0.387 |
+  | cv spike | ❌ ViT/CNN 0.84 vs gate 2.0 | — |
+
+  - Antibody is below its gate on Trn2 under both backends (#24).
+  - The cv spike's thesis held on XLA but not on TorchNeuron eager (#33). Its script now prints the
+    "small CNN under-fills the array" conclusion only when the measurement supports it.
+- `VALIDATED.md` renders the seed sweeps as `mean±std (n=k)` rows.
+
 ### Changed (TorchNeuron framing: beta until GA)
 - **Policy:** TorchNeuron is treated as **beta** and isn't promoted until AWS declares it GA. XLA stays
   the tutorial's path; TorchNeuron backends are opt-in. Recorded on #26/#28.

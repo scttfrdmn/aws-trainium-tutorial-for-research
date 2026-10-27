@@ -261,25 +261,32 @@ performance compares, so measure on your own workload.
 `torch.compile`. bf16 comes from `torch.autocast(device_type="neuron")`, and the optimizer step is a
 plain `optimizer.step()`.
 
-**Measured on the same `trn2.3xlarge`, one logical NeuronCore each** (Neuron 2.33; NER with 3 epochs,
-batch 32, seq 64; one run per row; wall time includes compilation):
+**Measured on the same `trn2.3xlarge`, one logical NeuronCore per run** (Neuron 2.33; NER with 3
+epochs, batch 32, seq 64). There are two kinds of number, and they tell different stories:
 
-| Path | eval_f1 | Train wall | First step | Samples/s |
-|---|---|---|---|---|
-| PyTorch/XLA (`torch-neuronx` 2.9) | 0.846 | 889 s | 212 s | 18.2 |
-| TorchNeuron, eager | 0.849 | 196 s | 83 s | 83.0 |
-| TorchNeuron, `torch.compile(backend="neuron")` | 0.837 | 778 s | 16 s* | 20.9 |
+| Path | eval_f1 (n=4 seeds) | Steady-state samples/s (warm cache) | First cold run: train wall |
+|---|---|---|---|
+| PyTorch/XLA (`torch-neuronx` 2.9) | 0.853 ± 0.005 | **228.5 ± 1.3** (240.2 alone on the chip) | 889 s |
+| TorchNeuron, eager | 0.850 ± 0.005 | 199.5 ± 0.1 (199.3 alone) | 196 s |
+| TorchNeuron, `torch.compile(backend="neuron")` | 0.860 (n=1) | 31.0 | ~50 min* |
 
-\* The compile cache was already warm from an earlier attempt at the same run (it finished training,
-then crashed in evaluation on a bug in this tutorial, since fixed), so 16 s understates a cold first
-compile.
+- **Steady state, warm compile cache:** XLA was about **15–20% faster** than eager TorchNeuron at the
+  same accuracy. `torch.compile` was several times *slower* than eager on this model. These are
+  post-warmup samples/s with device syncs at both ends of the timing window. Most seeds ran with other
+  jobs sharing the chip; the solo runs (in parentheses) show that cost XLA about 5% and didn't affect
+  TorchNeuron.
+- **First cold run:** XLA spent most of its first run compiling, while eager TorchNeuron starts training
+  almost immediately. That cold-start gap is what made an earlier single run look like "TorchNeuron
+  4.5× faster". It was compile time, not compute. It's also exactly what a persistent compile cache (S3)
+  removes for XLA; see [best-practices §1](trainium_development_best_practices.md).
 
-In this run, eager TorchNeuron had the highest throughput, about 4.5× XLA's (wall time includes
-compilation), at the same accuracy. `torch.compile` did *not* beat eager. That's one model and one run
-per row on a beta backend. It's worth watching, and worth measuring on your own workload, but it isn't a
-reason to move work onto a beta backend; this tutorial stays on XLA until TorchNeuron is GA. Repeated
-runs with separate compile vs steady-state timing are tracked in
-[#27](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/issues/27).
+\* The first `torch.compile` attempt trained for about 50 minutes before crashing in evaluation on a
+bug in this tutorial (since fixed). A cold-cache `torch.compile` number is still open
+([#27](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/issues/27)).
+
+This is one model on a beta backend. It doesn't make a case for moving work off XLA. This tutorial stays
+on XLA until TorchNeuron is GA. Measure your own workload, and compare **warm** steady state, not first
+runs.
 
 Further reading: [build your first model](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/get-started/quickstart-build-first-model.html)
 (eager + `torch.compile`), [troubleshooting](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/troubleshooting.html),
