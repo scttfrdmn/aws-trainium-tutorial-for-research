@@ -43,6 +43,15 @@ Dependencies (beyond the Neuron stack): ``rasterio`` (reads COGs from S3 anonymo
 
 from __future__ import annotations
 
+# Allow `python examples/use_cases/<this>.py` as well as `-m`/the harness: put the repo root on
+# sys.path so the `examples.use_cases.*` imports below resolve when run as a plain script.
+import sys as _sys  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+_ROOT = str(_Path(__file__).resolve().parents[2])
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+
 import math
 import os
 import random
