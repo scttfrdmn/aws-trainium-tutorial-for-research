@@ -121,7 +121,13 @@ def detect_neuron_sdk() -> dict[str, str | None]:
     }
 
     # The umbrella "Neuron SDK" version isn't a pip package; parse it from `neuron-ls` if present.
-    ls = _run(["neuron-ls", "--version"]) or _run(["neuron-ls"])
+    # Fall back to the standard install path: non-login shells (SSM, cron, nohup) often lack
+    # /opt/aws/neuron/bin on PATH, which silently left neuron_sdk empty on some 2.33 trn2 runs.
+    ls = None
+    for exe in ("neuron-ls", "/opt/aws/neuron/bin/neuron-ls"):
+        ls = _run([exe, "--version"]) or _run([exe])
+        if ls:
+            break
     if ls:
         m = re.search(r"(\d+\.\d+\.\d+)", ls)
         if m:
@@ -157,6 +163,9 @@ class ValidationResult:
     versions: dict[str, str | None] = field(default_factory=dict)
     log_path: str | None = None
     error: str | None = None
+    # Registry key of a non-default variant of `example` (e.g. a TorchNeuron run of the same module).
+    # Kept out of the filename/row for the default (XLA) runs so existing artifacts are unchanged.
+    variant: str | None = None
 
     def to_json(self) -> str:
         """Return a stable, pretty-printed JSON representation."""
@@ -172,6 +181,8 @@ class ValidationResult:
         """
         results_dir.mkdir(parents=True, exist_ok=True)
         slug = self.example.replace("/", "__").removesuffix(".py")
+        if self.variant:
+            slug = f"{slug}+{self.variant}"
         if self.instance_type:
             slug = f"{slug}@{self.instance_type}"
         out = results_dir / f"{slug}.json"

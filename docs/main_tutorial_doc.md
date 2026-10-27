@@ -205,10 +205,12 @@ loop ported to the XLA/Neuron path.
 <a id="trying-torchneuron"></a>
 ### Trying TorchNeuron (public beta, Trn2/Trn3 only)
 
-> **Honesty box.** Nothing in this subsection has been run by this tutorial's validation harness. The
-> commands come from AWS's [TorchNeuron quickstart](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/get-started/quickstart-torch-neuron.html)
-> as of Neuron 2.33; check it for changes. TorchNeuron is **beta** and runs on **Trn2/Trn3 only**.
-> On Trn1, stay on the XLA path above.
+> **Validated on Trn2.** The smoke check below (eager and `torch.compile`) and the NER exemplar on
+> TorchNeuron both passed on a real `trn2.3xlarge` (Neuron 2.33, `torch-neuronx 2.14.3.0.1`); see
+> [`VALIDATED.md`](../VALIDATED.md). The setup commands come from AWS's
+> [TorchNeuron quickstart](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/get-started/quickstart-torch-neuron.html)
+> as of 2.33, so check it for changes. TorchNeuron is **beta** and runs on **Trn2/Trn3 only**; on Trn1,
+> stay on the XLA path above.
 
 TorchNeuron (`torch-neuronx` 2.13 / 2.14, PyTorch 2.13 / 2.14) is AWS's **native** PyTorch backend:
 Trainium shows up as a regular PyTorch device instead of an XLA device. Relative to the XLA code in
@@ -252,6 +254,28 @@ recompiles when input shapes change (standard `torch.compile` behavior), so the 
 compile-cache lessons carry over. The hardware is the same, so bf16 and filling the 128×128 array
 still matter. Eager mode skips the up-front whole-graph compile. This tutorial hasn't measured how eager
 performance compares, so measure on your own workload.
+
+**Try it on the NER exemplar.** The same example runs on both backends:
+`NER_DEVICE=neuron python examples/use_cases/biomedical_ner.py` (eager), and add `NER_COMPILE=1` for
+`torch.compile`. bf16 comes from `torch.autocast(device_type="neuron")`, and the optimizer step is a
+plain `optimizer.step()`.
+
+**Measured on the same `trn2.3xlarge`, one logical NeuronCore each** (Neuron 2.33; NER with 3 epochs,
+batch 32, seq 64; one run per row; wall time includes compilation):
+
+| Path | eval_f1 | Train wall | First step | Samples/s |
+|---|---|---|---|---|
+| PyTorch/XLA (`torch-neuronx` 2.9) | 0.846 | 889 s | 212 s | 18.2 |
+| TorchNeuron, eager | 0.849 | 196 s | 83 s | 83.0 |
+| TorchNeuron, `torch.compile(backend="neuron")` | 0.837 | 778 s | 16 s* | 20.9 |
+
+\* The compile cache was already warm from an earlier attempt at the same run (it finished training,
+then crashed in evaluation on a bug in this tutorial, since fixed), so 16 s understates a cold first
+compile.
+
+On this workload, eager TorchNeuron was the fastest of the three, about 4.5× XLA's throughput, with
+the same accuracy, and `torch.compile` did *not* beat eager. That's one model and one run per row on
+a beta backend, so treat it as a reason to measure your own workload rather than as a general rule.
 
 Further reading: [build your first model](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/get-started/quickstart-build-first-model.html)
 (eager + `torch.compile`), [troubleshooting](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/troubleshooting.html),

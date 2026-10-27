@@ -129,6 +129,7 @@ def build_plan(
     iam_instance_profile: str | None = None,
     image_id: str | None = None,
     availability_zone: str | None = None,
+    capacity_reservation_id: str | None = None,
 ) -> LaunchPlan:
     """Construct a LaunchPlan (no side effects beyond read-only AMI resolution).
 
@@ -164,7 +165,9 @@ def build_plan(
             cmd += ["--ami", image_id]
         if availability_zone:
             cmd += ["--az", availability_zone]
-        if use_spot:
+        if capacity_reservation_id:  # a purchased EC2 Capacity Block for ML
+            cmd += ["--capacity-block", "--reservation-id", capacity_reservation_id]
+        if use_spot and not capacity_reservation_id:
             cmd.append("--spot")
         if cost_limit_usd:
             cmd += ["--cost-limit", str(cost_limit_usd)]
@@ -184,8 +187,16 @@ def build_plan(
             ami or "AMI_UNRESOLVED",
             "--instance-initiated-shutdown-behavior",
             "terminate",
+            # Capacity Blocks launch with their own market type and must target the reservation;
+            # spot vs on-demand doesn't apply to them.
             "--instance-market-options",
-            "MarketType=spot" if use_spot else "",
+            "MarketType=capacity-block"
+            if capacity_reservation_id
+            else ("MarketType=spot" if use_spot else ""),
+            "--capacity-reservation-specification",
+            f"CapacityReservationTarget={{CapacityReservationId={capacity_reservation_id}}}"
+            if capacity_reservation_id
+            else "",
             "--tag-specifications",
             f"ResourceType=instance,Tags=[{{Key=Name,Value={name}}},{{Key=spore,Value=validation}}]",
             "--count",
@@ -210,7 +221,7 @@ def build_plan(
         launcher=launcher,
         ami_id=ami,
         max_hours=max_hours,
-        use_spot=use_spot,
+        use_spot=use_spot and not capacity_reservation_id,
         name=name,
         command=cmd,
         cost_limit_usd=cost_limit_usd if launcher == "spawn" else None,

@@ -73,7 +73,13 @@ class NerConfig:
     dataset_revision: str | None = (
         DEFAULT_DATASET_REVISION  # parquet branch; bypasses loader script
     )
-    device: str = "xla"  # "xla" (Trainium) | "cpu" (smoke/laptop) | "cuda"
+    device: str = (
+        "xla"  # "xla" (Trainium) | "neuron" (TorchNeuron, Trn2/Trn3) | "cpu" | "cuda"
+    )
+    # TorchNeuron only (device="neuron"): run the model through torch.compile(backend="neuron")
+    # instead of eager, and autocast to bf16 (the XLA path gets bf16 from the compiler instead).
+    compile: bool = False
+    autocast_bf16: bool = True
     epochs: int = 3
     train_batch_size: int = 16
     eval_batch_size: int = 16
@@ -139,6 +145,14 @@ def _resolve_device(requested: str):
                 "⚠️  torch_xla not available; falling back to CPU (not a hardware run)."
             )
             return torch.device("cpu"), "cpu"
+    if requested == "neuron":
+        # TorchNeuron (torch-neuronx 2.13+): PyTorch autoloads the backend on `import torch`, and
+        # Trainium is an ordinary device named "neuron". Trn2/Trn3 only.
+        neuron = getattr(torch, "neuron", None)
+        if neuron is not None and neuron.is_available():
+            return torch.device("neuron"), "neuron"
+        print("⚠️  TorchNeuron not available; falling back to CPU (not a hardware run).")
+        return torch.device("cpu"), "cpu"
     if requested == "cuda" and torch.cuda.is_available():
         return torch.device("cuda"), "cuda"
     return torch.device("cpu"), "cpu"
@@ -247,9 +261,21 @@ def _extract_spans(tags: list[str]) -> set[tuple[int, int, str]]:
     return spans
 
 
-def _evaluate(model, loader, device, backend, label_names) -> dict[str, float]:
-    """Compute entity-level precision/recall/F1 over IOB2 spans (self-contained, no seqeval)."""
+def _evaluate(
+    model, loader, device, backend, label_names, fwd=None, amp=None
+) -> dict[str, float]:
+    """Compute entity-level precision/recall/F1 over IOB2 spans (self-contained, no seqeval).
+
+    ``fwd`` is the callable to run (the model, or its torch.compile'd wrapper on TorchNeuron) and
+    ``amp`` a factory for the autocast context; both default to the plain eager model.
+    """
+    import contextlib
+
     import torch
+
+    # `is None`, not `or`: truth-testing a torch.compile'd module falls through to __len__ and raises.
+    fwd = model if fwd is None else fwd
+    amp = contextlib.nullcontext if amp is None else amp
 
     model.eval()
     tp = fp = fn = 0  # true/false positive, false negative at the entity-span level
@@ -260,7 +286,8 @@ def _evaluate(model, loader, device, backend, label_names) -> dict[str, float]:
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
             labels = batch["labels"]
-            logits = model(input_ids=input_ids, attention_mask=attention_mask).logits
+            with amp():
+                logits = fwd(input_ids=input_ids, attention_mask=attention_mask).logits
             if backend == "xla":
                 import torch_xla.core.xla_model as xm
 
@@ -306,6 +333,7 @@ def run(config: dict | None = None) -> dict[str, float]:
     Returns a flat dict including ``eval_f1`` (the gated metric), plus precision/recall, throughput,
     and compile/wall timings. Designed to run identically on CPU (smoke) and Trainium (full).
     """
+    import contextlib
     import time
 
     import torch
@@ -339,6 +367,20 @@ def run(config: dict | None = None) -> dict[str, float]:
         label2id={n: i for i, n in enumerate(label_names)},
         attn_implementation=cfg.attn_implementation,  # "eager" for the Neuron-friendly path
     ).to(device)
+
+    # TorchNeuron (device="neuron"): ops run eagerly by default; cfg.compile routes the model through
+    # torch.compile(backend="neuron") instead, which compiles graphs on first call (and on new shapes,
+    # so the static-shape lessons still apply). bf16 comes from autocast here, whereas on the XLA path
+    # the Neuron compiler casts matmuls to bf16 itself.
+    fwd = model
+    amp = contextlib.nullcontext
+    if backend == "neuron":
+        if cfg.compile:
+            fwd = torch.compile(model, backend="neuron")
+        if cfg.autocast_bf16:
+
+            def amp():
+                return torch.autocast(device_type="neuron", dtype=torch.bfloat16)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)
 
@@ -391,9 +433,10 @@ def run(config: dict | None = None) -> dict[str, float]:
                 )
 
             optimizer.zero_grad()
-            out = model(
-                input_ids=input_ids, attention_mask=attention_mask, labels=labels
-            )
+            with amp():
+                out = fwd(
+                    input_ids=input_ids, attention_mask=attention_mask, labels=labels
+                )
             out.loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
 
@@ -420,8 +463,8 @@ def run(config: dict | None = None) -> dict[str, float]:
     train_wall = time.time() - wall_start
 
     # --- Evaluate on validation (gated) and test (reported) ---------------------------------
-    val_metrics = _evaluate(model, val_loader, device, backend, label_names)
-    test_metrics = _evaluate(model, test_loader, device, backend, label_names)
+    val_metrics = _evaluate(model, val_loader, device, backend, label_names, fwd, amp)
+    test_metrics = _evaluate(model, test_loader, device, backend, label_names, fwd, amp)
 
     metrics: dict[str, float] = {
         "eval_f1": val_metrics["eval_f1"],
@@ -430,6 +473,7 @@ def run(config: dict | None = None) -> dict[str, float]:
         "test_f1": test_metrics["eval_f1"],
         "train_wall_s": round(train_wall, 2),
         "first_step_compile_s": round(first_step_s or 0.0, 2),
+        "torch_compile": 1.0 if (backend == "neuron" and cfg.compile) else 0.0,
         "train_throughput_samples_s": round(
             (total_steps * cfg.train_batch_size) / train_wall, 2
         )
@@ -446,6 +490,11 @@ def run(config: dict | None = None) -> dict[str, float]:
 def main() -> None:
     """CLI: run with a sensible default config (override device via env for laptops)."""
     cfg = {}
+    # NER_DEVICE=neuron runs on TorchNeuron (Trn2/Trn3); NER_COMPILE=1 adds torch.compile.
+    if os.environ.get("NER_DEVICE"):
+        cfg["device"] = os.environ["NER_DEVICE"]
+    if os.environ.get("NER_COMPILE"):
+        cfg["compile"] = os.environ["NER_COMPILE"] not in ("", "0")
     if os.environ.get("NER_SMOKE"):
         cfg = {
             "device": "cpu",

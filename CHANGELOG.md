@@ -10,6 +10,34 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Added (Trn2 validation + TorchNeuron NER, via an EC2 Capacity Block)
+- **First Trn2 hardware run** (`trn2.3xlarge`, Neuron 2.33.38, ap-southeast-4). It ran on a prepaid
+  EC2 Capacity Block for ML, after spot and on-demand Trn2 had no capacity in any offered AZ (#21).
+  The launcher gains `--capacity-reservation-id`.
+- **NER on TorchNeuron.** `biomedical_ner` gets a `device="neuron"` backend: eager execution, bf16 via
+  `torch.autocast`, a plain `optimizer.step()`, and optional `torch.compile(backend="neuron")`. The new
+  registry entries (`TORCHNEURON_EXAMPLES`) are kept out of the XLA coverage count, and their
+  artifacts carry a `variant` so they can't overwrite the XLA run from the same box.
+- **Same box, same NER config, one logical core each:**
+
+  | Path | eval_f1 | Samples/s |
+  |---|---|---|
+  | XLA | 0.846 | 18.2 |
+  | TorchNeuron eager | **0.849** | **83.0** |
+  | TorchNeuron + `torch.compile` | 0.837 | 20.9 |
+
+  The `torch.compile` run started with a warm compile cache. The "Trying TorchNeuron" section now
+  reports these numbers instead of "unvalidated".
+- **TorchNeuron smoke check passed on Trn2** (eager + `torch.compile`).
+- **XLA examples on Trn2:** `satellite_landcover` 0.75, `distill_ner_slm` 0.573, `crystal_cif_slm` 0.576,
+  and 2-core `ddp_ner` eval_f1 0.826 (11.6 samples/s). Two failed, and are recorded as failed:
+  - `cv_utilization_spike` ❌: **`neuronx-cc 2.28` segfaults** compiling one of its graphs for Trn2.
+    It reproduced with `--retry_failed_compilation`, and the same example passes on trn1.2xlarge.
+  - `antibody_affinity_slm` ❌: spearman **0.387**, under the 0.40 gate. It was 0.474 on trn1 / 2.33.
+- **Provenance fix.** The `neuron-ls` probe now also tries `/opt/aws/neuron/bin`. Runs launched over
+  SSM lacked it on `PATH`, so a few Trn2 artifacts record `neuron_sdk` as empty. They ran on the same
+  2.33.38 box, but the artifacts are left as captured.
+
 ### Added (Neuron 2.33.0 refresh + hardware re-validation)
 - **Targets Neuron SDK 2.33.0** (2026-10-19). The XLA path is unchanged (`torch-neuronx 2.9.0.2.15`,
   same build since 2.31.1); the compiler moved to `neuronx-cc 2.28.7631`.
