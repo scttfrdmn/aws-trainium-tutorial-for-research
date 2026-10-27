@@ -10,6 +10,20 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Changed (TorchNeuron framing: beta until GA)
+- **Policy:** TorchNeuron is treated as **beta** and isn't promoted until AWS declares it GA. XLA stays
+  the tutorial's path; TorchNeuron backends are opt-in. Recorded on #26/#28.
+  - README status box, the CUDA-chapter note, "Trying TorchNeuron" and VERSION_MATRIX no longer present
+    AWS's "use TorchNeuron for new work" as this tutorial's advice. The measured NER table stays, framed
+    neutrally (one run, includes compile, beta).
+- **Serving on Trn2/Trn3 after 2.34:** the docs now say that both AWS replacements (vLLM Neuron and
+  TorchNeuron + `torch.compile`) are **beta** as of 2.33, and that the `trace()` path stays supported on
+  Inf2/Trn1.
+- **Fixed a contradiction in best-practices §4 (bf16 nan).** It blamed a `-1e9` mask overflow and
+  suggested "SDPA-style masking" as the fix. What was measured is the reverse: HF's default **SDPA**
+  attention gave `nan` at step 0 on the Neuron bf16 path, and `attn_implementation="eager"` fixed it
+  (loss 1.13, bf16 still on). This now matches the NER example and the debugging walkthrough.
+
 ### Added (Trn2 validation + TorchNeuron NER, via an EC2 Capacity Block)
 - **First Trn2 hardware run** (`trn2.3xlarge`, Neuron 2.33.38, ap-southeast-4). It ran on a prepaid
   EC2 Capacity Block for ML, after spot and on-demand Trn2 had no capacity in any offered AZ (#21).

@@ -15,7 +15,7 @@
 > we say "we saw X," it literally happened during validation — including the mistakes. Official AWS
 > Neuron / PyTorch-XLA docs are linked throughout.
 
-Trainium runs PyTorch through **PyTorch/XLA** (`torch-neuronx`): your Python code *traces* a graph,
+This tutorial runs PyTorch on Trainium through **PyTorch/XLA** (`torch-neuronx` 2.9): your Python code *traces* a graph,
 which the Neuron compiler (`neuronx-cc`) compiles **ahead of time** into a hardware binary, which
 then executes. It is **bf16-native** (the compiler casts matmuls to bf16 by default) and wants
 **static shapes**. This is fundamentally different from eager CUDA, and almost every Trainium
@@ -239,13 +239,17 @@ the fix below is never "turn bf16 off."
   and gradient clipping." We added both. **It didn't help**, because the `nan` appeared at *step 0,
   in the forward pass*, before any gradient step. Warmup/clipping treat training dynamics; this
   wasn't a training-dynamics problem.
-- ✅ **Right diagnosis:** a **forward-pass overflow**. Stock BERT implements masking as
-  `scores + (1 - mask) * -1e9` (or `-inf`) before softmax. That huge negative constant is fine in
-  fp32 but **overflows in bf16 → `nan`**. The model is structurally hostile to bf16.
-- ✅ **Right fix:** use a model/attention implementation built for bf16 (boolean/SDPA-style masking
-  that never adds a giant constant, or a Neuron-supported model), so the forward is stable in the
-  hardware's native dtype. **Don't reach for `--auto-cast=none`** — forcing fp32 "fixes" the symptom
-  by switching off the accelerator's whole reason for existing.
+- ✅ **Right diagnosis:** it's the **attention implementation in the forward pass**, not training
+  dynamics. Hugging Face Transformers v5 defaults to **SDPA** (the fused
+  `scaled_dot_product_attention` kernel). On the Neuron bf16 compile path that produced `nan` at step 0,
+  while the same model on CPU/fp32 gave a normal loss (~1.21). We didn't pin down the exact numerical
+  mechanism inside the compiled SDPA graph; what we measured is which implementation works.
+- ✅ **Right fix:** `attn_implementation="eager"` (plain matmul + softmax). That gave a stable loss of
+  **1.13 on Trainium with bf16 still on**. It's the default in the
+  [NER example](../examples/use_cases/biomedical_ner.py), and
+  [the debugging walkthrough](../examples/debugging/diagnose_common_failures.py) reproduces both outcomes.
+  **Don't reach for `--auto-cast=none`.** Forcing fp32 "fixes" the symptom by switching off the
+  accelerator's whole reason for existing.
 
 **Still good practice once the model is bf16-sane:** LR warmup and gradient clipping help *training
 stability* generally, and **stochastic rounding** improves bf16 accuracy. They're just not a cure

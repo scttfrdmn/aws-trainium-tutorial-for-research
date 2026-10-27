@@ -159,8 +159,9 @@ Create a simple cost tracking dashboard - see `monitoring/` directory for the co
 > **Note (October 2026):** this chapter teaches the **PyTorch/XLA** path (`torch_xla`,
 > `xm.xla_device()`, lazy graphs + `xm.mark_step()`) on **PyTorch 2.9**, the last XLA version. It runs
 > on every Trainium generation, including Trn1. As of Neuron 2.33, AWS also ships **TorchNeuron**, a
-> native eager / `torch.compile` backend, as a **public beta on Trn2/Trn3 only**, and recommends it for
-> new work. See [Trying TorchNeuron](#trying-torchneuron) at the end of this chapter, and
+> native eager / `torch.compile` backend, as a **public beta on Trn2/Trn3 only**. This tutorial treats it
+> as beta and keeps XLA as its path until TorchNeuron is GA. [Trying TorchNeuron](#trying-torchneuron),
+> at the end of this chapter, covers it as an optional experiment. See also
 > [XLA vs TorchNeuron](../VERSION_MATRIX.md#-the-pytorch-path-xla-today).
 
 ### Understanding the Differences (PyTorch/XLA path)
@@ -273,14 +274,17 @@ batch 32, seq 64; one run per row; wall time includes compilation):
 then crashed in evaluation on a bug in this tutorial, since fixed), so 16 s understates a cold first
 compile.
 
-On this workload, eager TorchNeuron was the fastest of the three, about 4.5× XLA's throughput, with
-the same accuracy, and `torch.compile` did *not* beat eager. That's one model and one run per row on
-a beta backend, so treat it as a reason to measure your own workload rather than as a general rule.
+In this run, eager TorchNeuron had the highest throughput, about 4.5× XLA's (wall time includes
+compilation), at the same accuracy. `torch.compile` did *not* beat eager. That's one model and one run
+per row on a beta backend. It's worth watching, and worth measuring on your own workload, but it isn't a
+reason to move work onto a beta backend; this tutorial stays on XLA until TorchNeuron is GA. Repeated
+runs with separate compile vs steady-state timing are tracked in
+[#27](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/issues/27).
 
 Further reading: [build your first model](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/get-started/quickstart-build-first-model.html)
 (eager + `torch.compile`), [troubleshooting](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/torch/troubleshooting.html),
 and AWS's [training paths](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/training/index.html)
-page (TorchNeuron for new work, PyTorch/XLA as the legacy path).
+page (AWS's own positioning of the two paths).
 
 ---
 
@@ -290,10 +294,10 @@ page (TorchNeuron for new work, PyTorch/XLA as the legacy path).
 > AWS has not announced an Inferentia3, and NxD Inference **dropped Inf2/Trn1 support in Neuron
 > 2.29** (pin to 2.28 to keep using it on Inf2). AWS now positions **Trainium2 for both training and
 > inference**. Inferentia2 is still GA and is a fine, cost-optimized target for **smaller,
-> latency-sensitive models**. For new or large-scale serving on **Trn2/Trn3**, use **vLLM Neuron** (or
-> TorchNeuron + `torch.compile`): in **Neuron 2.34 the NxD Inference APIs and PyTorch/XLA inference end on
-> Trn2/Trn3**. The `torch_neuronx.trace()` flow below is the XLA inference path, so on Trn2/Trn3 treat
-> it as legacy. See the
+> latency-sensitive models**. In **Neuron 2.34 the NxD Inference APIs and PyTorch/XLA inference end on
+> Trn2/Trn3**. AWS's replacements there (**vLLM Neuron** for LLM serving, TorchNeuron + `torch.compile`)
+> are both still **beta** as of 2.33. The `torch_neuronx.trace()` flow below is the XLA inference path:
+> it stays supported on **Inf2/Trn1**, which is where this example serves. See the
 > [Inferentia vs Trainium decision guide](../VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference).
 
 ### End-to-End Example: Climate Model Training and Deployment
