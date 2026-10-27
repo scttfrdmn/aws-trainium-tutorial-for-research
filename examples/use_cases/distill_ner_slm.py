@@ -46,6 +46,14 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
+from examples.use_cases._device import (
+    device_loader,
+    optimizer_step,
+    resolve_device,
+    to_device,
+    wrap_model,
+)
+
 # We reuse the validated NER building blocks verbatim: dataset/label loading, subword-label
 # alignment, dataloaders (fixed shapes + drop_last), and entity-level span F1. This keeps the
 # example focused on distillation and guarantees the metric matches the teacher's.
@@ -54,7 +62,6 @@ from examples.use_cases.biomedical_ner import (
     DEFAULT_DATASET_REVISION,
     _build_dataloaders,
     _evaluate,
-    _resolve_device,
     _set_seed,
 )
 
@@ -71,7 +78,12 @@ class DistillConfig:
     )
     dataset_name: str = DEFAULT_DATASET
     dataset_revision: str | None = DEFAULT_DATASET_REVISION
-    device: str = "xla"  # "xla" (Trainium) | "cpu" (smoke) | "cuda"
+    # "xla" (Trainium, default) | "neuron" (TorchNeuron beta, Trn2/Trn3, opt-in) | "cpu" | "cuda"
+    device: str = "xla"
+    # TorchNeuron only (device="neuron"): torch.compile(backend="neuron") on teacher and student,
+    # and bf16 autocast around both forwards.
+    compile: bool = False
+    autocast_bf16: bool = True
 
     # Student architecture (a small BERT). These are the knobs that make it an SLM.
     # By default the student is initialized from a PRETRAINED small BERT (real distillation practice —
@@ -158,8 +170,19 @@ def _build_student(cfg: DistillConfig, num_labels: int, label_names: list[str]):
     return BertForTokenClassification(student_config)
 
 
+def _wrap(model, cfg: DistillConfig, backend):
+    """(fwd, amp) for a model -- only device="neuron" changes anything (see _device.wrap_model)."""
+    return wrap_model(
+        model, backend, compile=cfg.compile, autocast_bf16=cfg.autocast_bf16
+    )
+
+
 def _train_teacher(cfg: DistillConfig, train_loader, device, backend, label_names):
-    """Fine-tune the teacher inline (so the example is self-contained). Mirrors biomedical_ner.py."""
+    """Fine-tune the teacher inline (so the example is self-contained). Mirrors biomedical_ner.py.
+
+    Returns ``(teacher, teacher_fwd)``: the module and the callable to run it with (the module
+    itself, or its torch.compile'd wrapper on TorchNeuron).
+    """
     import torch
     from transformers import (
         AutoModelForTokenClassification,
@@ -174,6 +197,7 @@ def _train_teacher(cfg: DistillConfig, train_loader, device, backend, label_name
         label2id={n: i for i, n in enumerate(label_names)},
         attn_implementation=cfg.attn_implementation,
     ).to(device)
+    fwd, amp = _wrap(teacher, cfg, backend)
     optimizer = torch.optim.AdamW(teacher.parameters(), lr=3e-5)
     total = max(1, len(train_loader) * cfg.teacher_epochs)
     scheduler = get_linear_schedule_with_warmup(
@@ -182,7 +206,7 @@ def _train_teacher(cfg: DistillConfig, train_loader, device, backend, label_name
 
     from examples.use_cases._progress import StepProgress
 
-    loader = _device_loader(train_loader, device, backend)
+    loader = device_loader(train_loader, device, backend)
     progress = StepProgress(
         "teacher", len(train_loader) * cfg.teacher_epochs, cfg.log_every, backend
     )
@@ -195,10 +219,11 @@ def _train_teacher(cfg: DistillConfig, train_loader, device, backend, label_name
         for batch in loader:
             ids, mask, labels = _batch_to_device(batch, device, backend)
             optimizer.zero_grad()
-            out = teacher(input_ids=ids, attention_mask=mask, labels=labels)
+            with amp():
+                out = fwd(input_ids=ids, attention_mask=mask, labels=labels)
             out.loss.backward()
             torch.nn.utils.clip_grad_norm_(teacher.parameters(), cfg.grad_clip)
-            _step(optimizer, backend)
+            optimizer_step(optimizer, backend)
             scheduler.step()
             running += out.loss.detach()
             n += 1
@@ -207,35 +232,13 @@ def _train_teacher(cfg: DistillConfig, train_loader, device, backend, label_name
         print(
             f"   teacher epoch {epoch + 1}/{cfg.teacher_epochs}  avg_loss={(running / max(1, n)).item():.4f}"
         )
-    return teacher
-
-
-def _device_loader(train_loader, device, backend):
-    """Wrap in MpDeviceLoader on XLA (overlap H2D copy + compute, mark_step per batch)."""
-    if backend == "xla":
-        import torch_xla.distributed.parallel_loader as pl
-
-        return pl.MpDeviceLoader(train_loader, device)
-    return train_loader
+    return teacher, fwd
 
 
 def _batch_to_device(batch, device, backend):
     """Return (input_ids, attention_mask, labels) on device. MpDeviceLoader pre-places on XLA."""
     ids, mask, labels = batch["input_ids"], batch["attention_mask"], batch["labels"]
-    if backend != "xla":
-        ids, mask, labels = ids.to(device), mask.to(device), labels.to(device)
-    return ids, mask, labels
-
-
-def _step(optimizer, backend):
-    """One optimizer step on the right backend (XLA materializes the graph with mark_step)."""
-    if backend == "xla":
-        import torch_xla.core.xla_model as xm
-
-        xm.optimizer_step(optimizer)
-        xm.mark_step()
-    else:
-        optimizer.step()
+    return to_device((ids, mask, labels), device, backend)
 
 
 def _distillation_loss(student_logits, teacher_logits, labels, cfg: DistillConfig):
@@ -291,7 +294,7 @@ def run(config: dict | None = None) -> dict[str, float]:
 
     cfg = DistillConfig.from_dict(config)
     _set_seed(cfg.seed)
-    device, backend = _resolve_device(cfg.device)
+    device, backend = resolve_device(cfg.device)
     print(
         f"🧪 NER distillation | teacher={cfg.teacher_name} | "
         f"student={cfg.student_layers}L/{cfg.student_hidden}H | device={backend}"
@@ -320,15 +323,23 @@ def run(config: dict | None = None) -> dict[str, float]:
         teacher = AutoModelForTokenClassification.from_pretrained(
             cfg.teacher_ckpt, attn_implementation=cfg.attn_implementation
         ).to(device)
+        teacher_fwd, _ = _wrap(teacher, cfg, backend)
     else:
-        teacher = _train_teacher(cfg, train_loader, device, backend, label_names)
+        teacher, teacher_fwd = _train_teacher(
+            cfg, train_loader, device, backend, label_names
+        )
+    # One autocast factory serves both models (it depends only on backend + autocast_bf16).
+    _, amp = wrap_model(teacher, backend, autocast_bf16=cfg.autocast_bf16)
     teacher.eval()
-    teacher_metrics = _evaluate(teacher, val_loader, device, backend, label_names)
+    teacher_metrics = _evaluate(
+        teacher, val_loader, device, backend, label_names, teacher_fwd, amp
+    )
     teacher_f1 = teacher_metrics["eval_f1"]
     print(f"   teacher eval_f1={teacher_f1:.4f}")
 
     # --- Student: distill from the (frozen) teacher -----------------------------------------
     student = _build_student(cfg, len(label_names), label_names).to(device)
+    student_fwd, _ = _wrap(student, cfg, backend)
     teacher_params = sum(p.numel() for p in teacher.parameters())
     student_params = sum(p.numel() for p in student.parameters())
     compression = teacher_params / student_params if student_params else 0.0
@@ -347,7 +358,7 @@ def run(config: dict | None = None) -> dict[str, float]:
 
     from examples.use_cases._progress import StepProgress
 
-    loader = _device_loader(train_loader, device, backend)
+    loader = device_loader(train_loader, device, backend)
     progress = StepProgress(
         "distill", len(train_loader) * cfg.distill_epochs, cfg.log_every, backend
     )
@@ -363,15 +374,20 @@ def run(config: dict | None = None) -> dict[str, float]:
             step_start = time.time()
             ids, mask, labels = _batch_to_device(batch, device, backend)
             optimizer.zero_grad()
-            with torch.no_grad():  # teacher provides soft labels only — no backward
-                teacher_logits = teacher(input_ids=ids, attention_mask=mask).logits
-            student_logits = student(input_ids=ids, attention_mask=mask).logits
+            with (
+                torch.no_grad(),
+                amp(),
+            ):  # teacher provides soft labels only — no backward
+                teacher_logits = teacher_fwd(input_ids=ids, attention_mask=mask).logits
+            with amp():
+                student_logits = student_fwd(input_ids=ids, attention_mask=mask).logits
+            # Loss in fp32 (.float() is a no-op unless bf16 autocast produced bf16 logits).
             loss, _ce, _kl = _distillation_loss(
-                student_logits, teacher_logits, labels, cfg
+                student_logits.float(), teacher_logits.float(), labels, cfg
             )
             loss.backward()
             torch.nn.utils.clip_grad_norm_(student.parameters(), cfg.grad_clip)
-            _step(optimizer, backend)
+            optimizer_step(optimizer, backend)
             scheduler.step()
             running += loss.detach()
             n += 1
@@ -384,7 +400,9 @@ def run(config: dict | None = None) -> dict[str, float]:
         )
     train_wall = time.time() - wall_start
 
-    student_metrics = _evaluate(student, val_loader, device, backend, label_names)
+    student_metrics = _evaluate(
+        student, val_loader, device, backend, label_names, student_fwd, amp
+    )
     student_f1 = student_metrics["eval_f1"]
     retention = (student_f1 / teacher_f1) if teacher_f1 else 0.0
 
@@ -397,6 +415,7 @@ def run(config: dict | None = None) -> dict[str, float]:
         "teacher_params_m": float(round(teacher_params / 1e6, 2)),
         "train_wall_s": round(train_wall, 2),
         "first_step_compile_s": round(first_step_s or 0.0, 2),
+        "torch_compile": 1.0 if (backend == "neuron" and cfg.compile) else 0.0,
     }
     print(
         f"✅ done. student_f1={student_f1:.4f} (teacher {teacher_f1:.4f}, "
@@ -425,7 +444,11 @@ class _NerLike:
 
 
 def main() -> None:
-    """CLI entrypoint; DISTILL_SMOKE runs a tiny CPU configuration."""
+    """CLI entrypoint; DISTILL_SMOKE runs a tiny CPU configuration.
+
+    DISTILL_DEVICE=neuron opts into TorchNeuron (beta, Trn2/Trn3); DISTILL_COMPILE=1 adds
+    torch.compile. Both apply on top of DISTILL_SMOKE.
+    """
     cfg: dict[str, Any] = {}
     if os.environ.get("DISTILL_SMOKE") or os.environ.get("NER_SMOKE"):
         cfg = {
@@ -441,6 +464,10 @@ def main() -> None:
             "student_heads": 2,
             "student_intermediate": 256,
         }
+    if os.environ.get("DISTILL_DEVICE"):
+        cfg["device"] = os.environ["DISTILL_DEVICE"]
+    if os.environ.get("DISTILL_COMPILE"):
+        cfg["compile"] = os.environ["DISTILL_COMPILE"] not in ("", "0")
     run(cfg)
 
 

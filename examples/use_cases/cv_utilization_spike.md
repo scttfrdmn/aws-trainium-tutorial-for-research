@@ -34,6 +34,8 @@ python examples/use_cases/cv_utilization_spike.py
 CV_SMOKE=1 python examples/use_cases/cv_utilization_spike.py
 ```
 
+> **Opt-in, beta:** a TorchNeuron backend also exists (`device="neuron"` / `CV_DEVICE=neuron`; Trn2/Trn3 only; not validated on hardware yet). The XLA path above is the default.
+
 ## ✅ Result (measured on real hardware)
 
 **trn1.2xlarge**, 1 NeuronCore, Neuron 2.30 (`neuronx-cc 2.25.3371`, torch 2.9.1), batch=64:

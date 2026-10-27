@@ -43,6 +43,8 @@ DISTILL_SMOKE=1 python examples/use_cases/distill_ner_slm.py
 python examples/use_cases/distill_ner_slm.py
 ```
 
+> **Opt-in, beta:** a TorchNeuron backend also exists (`device="neuron"` / `DISTILL_DEVICE=neuron`; Trn2/Trn3 only; not validated on hardware yet). The XLA path above is the default.
+
 The teacher is fine-tuned inline so the example is self-contained; point `teacher_ckpt` at a saved
 teacher to skip that and distill directly.
 

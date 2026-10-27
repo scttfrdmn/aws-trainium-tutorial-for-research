@@ -61,7 +61,11 @@ class CrystalConfig:
     dataset_name: str = DEFAULT_DATASET
     formula_column: str = "Reduced Formula"
     cif_column: str = "CIF"
-    device: str = "xla"  # "xla" (Trainium) | "cpu" (smoke) | "cuda"
+    # "xla" (Trainium, default) | "neuron" (TorchNeuron beta, Trn2/Trn3, opt-in) | "cpu" | "cuda"
+    device: str = "xla"
+    # TorchNeuron only (device="neuron"): torch.compile(backend="neuron") + bf16 autocast.
+    compile: bool = False
+    autocast_bf16: bool = True
 
     # GPT architecture (small by design — this is an SLM).
     n_layer: int = 6
@@ -99,22 +103,6 @@ def _set_seed(seed: int) -> None:
 
     np.random.seed(seed)
     torch.manual_seed(seed)
-
-
-def _resolve_device(requested: str):
-    import torch
-
-    if requested == "xla":
-        try:
-            import torch_xla.core.xla_model as xm
-
-            return xm.xla_device(), "xla"
-        except ImportError:
-            print("⚠️  torch_xla not available; using CPU (not a hardware run).")
-            return torch.device("cpu"), "cpu"
-    if requested == "cuda" and torch.cuda.is_available():
-        return torch.device("cuda"), "cuda"
-    return torch.device("cpu"), "cpu"
 
 
 # A tiny prompt/answer separator so the model learns "composition → CIF". Kept as printable chars so
@@ -213,7 +201,9 @@ def _build_model(cfg: CrystalConfig, vocab_size: int, pad_id: int):
             # Neuron path, -inf in the masked positions produces `0 * -inf = nan` in the softmax
             # BACKWARD pass (we hit loss=nan at step ~25 on a trn1.2xlarge). A large finite value
             # (-1e9) softmaxes to ~0 just the same but keeps gradients finite. (Same family of bf16
-            # attention gotcha as the SDPA→nan lesson in the NER example.)
+            # attention gotcha as the SDPA→nan lesson in the NER example.) -1e9 is also safe under
+            # TorchNeuron's bf16 autocast: bf16 keeps fp32's exponent range (max ~3.4e38), so the
+            # value is representable (fp16, max 65504, would overflow -- not used here).
             att = att.masked_fill(self.mask[:, :, :t, :t] == 0, -1e9)
             att = torch.softmax(att.float(), dim=-1).to(
                 v.dtype
@@ -261,8 +251,9 @@ def _build_model(cfg: CrystalConfig, vocab_size: int, pad_id: int):
             logits = self.head(self.ln_f(x))
             loss = None
             if targets is not None:
+                # .float(): loss in fp32 even under bf16 autocast (a no-op when already fp32).
                 loss = nn.functional.cross_entropy(
-                    logits.reshape(-1, logits.size(-1)),
+                    logits.float().reshape(-1, logits.size(-1)),
                     targets.reshape(-1),
                     ignore_index=self.pad_id,  # don't train on padding
                 )
@@ -279,6 +270,7 @@ def _generate(model, prompt_ids, stoi, itos, cfg: CrystalConfig, device):
     range" on the XLA backend (hit on a trn1.2xlarge). Generation is a tiny, one-off qualitative
     demo, so we move the model to CPU and use an explicit non-negative slice start — robust and
     backend-independent. (Training/eval stay on the device; only this demo decode is on CPU.)
+    Pass the plain module, never a torch.compile'd wrapper (that would recompile per length).
     """
     import torch
 
@@ -350,9 +342,17 @@ def run(config: dict | None = None) -> dict[str, float]:
     import torch
     from transformers import get_linear_schedule_with_warmup
 
+    from examples.use_cases._device import (
+        device_loader,
+        optimizer_step,
+        resolve_device,
+        to_device,
+        wrap_model,
+    )
+
     cfg = CrystalConfig.from_dict(config)
     _set_seed(cfg.seed)
-    device, backend = _resolve_device(cfg.device)
+    device, backend = resolve_device(cfg.device)
     print(
         f"🔬 Crystal-CIF GPT (CrystaLLM-style) | {cfg.n_layer}L/{cfg.n_embd}d | "
         f"block={cfg.block_size} | device={backend}"
@@ -368,6 +368,10 @@ def run(config: dict | None = None) -> dict[str, float]:
     model = _build_model(cfg, len(chars), pad_id).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"   model params: {n_params / 1e6:.1f}M")
+    # Only device="neuron" (TorchNeuron, beta) changes fwd/amp; on XLA fwd is the model itself.
+    fwd, amp = wrap_model(
+        model, backend, compile=cfg.compile, autocast_bf16=cfg.autocast_bf16
+    )
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)
     total = max(1, len(train_loader) * cfg.epochs)
@@ -375,13 +379,7 @@ def run(config: dict | None = None) -> dict[str, float]:
         optimizer, int(cfg.warmup_ratio * total), total
     )
 
-    if backend == "xla":
-        import torch_xla.core.xla_model as xm
-        import torch_xla.distributed.parallel_loader as pl
-
-        device_loader = pl.MpDeviceLoader(train_loader, device)
-    else:
-        device_loader = train_loader
+    train_batches = device_loader(train_loader, device, backend)
 
     from examples.use_cases._progress import StepProgress
 
@@ -396,20 +394,16 @@ def run(config: dict | None = None) -> dict[str, float]:
         model.train()
         running = torch.zeros((), device=device)
         n = 0
-        for (block,) in device_loader:
+        for (block,) in train_batches:
             step_start = time.time()
-            if backend != "xla":
-                block = block.to(device)
+            block = to_device(block, device, backend)
             inputs, targets = block[:, :-1], block[:, 1:]  # next-char prediction
             optimizer.zero_grad()
-            _logits, loss = model(inputs, targets)
+            with amp():
+                _logits, loss = fwd(inputs, targets)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
-            if backend == "xla":
-                xm.optimizer_step(optimizer)
-                xm.mark_step()
-            else:
-                optimizer.step()
+            optimizer_step(optimizer, backend)
             scheduler.step()
             running += loss.detach()
             n += 1
@@ -430,8 +424,11 @@ def run(config: dict | None = None) -> dict[str, float]:
         for (block,) in val_loader:
             block = block.to(device)
             inputs, targets = block[:, :-1], block[:, 1:]
-            _logits, loss = model(inputs, targets)
+            with amp():
+                _logits, loss = fwd(inputs, targets)
             if backend == "xla":
+                import torch_xla.core.xla_model as xm
+
                 xm.mark_step()
             val_running += loss.detach()
             vn += 1
@@ -447,6 +444,7 @@ def run(config: dict | None = None) -> dict[str, float]:
     for formula in prompts:
         prompt = f"{formula}{PROMPT_SEP}"
         prompt_ids = [stoi.get(c, pad_id) for c in prompt][: cfg.block_size]
+        # The plain `model` (not `fwd`): decode runs eagerly on CPU, see _generate.
         generated.append(_generate(model, prompt_ids, stoi, itos, cfg, device))
 
     print(f"   sample generation for composition '{prompts[0]}':")
@@ -471,6 +469,7 @@ def run(config: dict | None = None) -> dict[str, float]:
         "params_m": float(round(n_params / 1e6, 2)),
         "train_wall_s": round(train_wall, 2),
         "first_step_compile_s": round(first_step_s or 0.0, 2),
+        "torch_compile": 1.0 if (backend == "neuron" and cfg.compile) else 0.0,
     }
     print(
         f"✅ done. val_perplexity={metrics['val_perplexity']:.3f}  "
@@ -480,7 +479,11 @@ def run(config: dict | None = None) -> dict[str, float]:
 
 
 def main() -> None:
-    """CLI entrypoint; CRYSTAL_SMOKE runs a tiny CPU configuration."""
+    """CLI entrypoint; CRYSTAL_SMOKE runs a tiny CPU configuration.
+
+    CRYSTAL_DEVICE=neuron opts into TorchNeuron (beta, Trn2/Trn3); CRYSTAL_COMPILE=1 adds
+    torch.compile. Both apply on top of CRYSTAL_SMOKE.
+    """
     cfg: dict[str, Any] = {}
     if os.environ.get("CRYSTAL_SMOKE") or os.environ.get("NER_SMOKE"):
         cfg = {
@@ -495,6 +498,10 @@ def main() -> None:
             "sample_tokens": 64,
             "validity_samples": 4,  # tiny for the smoke (untrained → likely 0% valid)
         }
+    if os.environ.get("CRYSTAL_DEVICE"):
+        cfg["device"] = os.environ["CRYSTAL_DEVICE"]
+    if os.environ.get("CRYSTAL_COMPILE"):
+        cfg["compile"] = os.environ["CRYSTAL_COMPILE"] not in ("", "0")
     run(cfg)
 
 
