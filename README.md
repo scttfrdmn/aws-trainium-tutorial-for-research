@@ -25,13 +25,14 @@ A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This
 > `torch-neuronx 2.9.0.2.15` build from 2.31 through 2.33, runs on every Trainium generation including
 > Trn1, and is what every example here uses. Things to keep in mind:
 >
-> - **TorchNeuron is now in public beta.** In 2.33 AWS shipped its native PyTorch backend (`torch-neuronx`
->   2.13 / 2.14: eager `.to("neuron")` and `torch.compile(backend="neuron")`) as a **public beta on Trn2/Trn3
->   only**. AWS now recommends it for new work and calls PyTorch/XLA the *legacy* path; PyTorch 2.9 is the
->   last XLA version. This tutorial stays on XLA because it's the only path on Trn1 and TorchNeuron is
->   still beta. See [XLA vs TorchNeuron](VERSION_MATRIX.md#-the-pytorch-path-xla-today) and
->   [Trying TorchNeuron](docs/main_tutorial_doc.md#trying-torchneuron).
-> - **Trainium is now the path for both training and inference.** AWS has not announced an Inferentia3. NxD Inference **dropped Inf2/Trn1 in Neuron 2.29**, and in **2.34 the NxD Inference APIs and PyTorch/XLA inference end on Trn2/Trn3**: new Trn2/Trn3 serving should use **vLLM Neuron** or TorchNeuron + `torch.compile`. Inferentia2 remains GA and useful for cost-optimized, latency-sensitive, smaller-model inference, but new work should generally target **Trainium2 (Trn2)**. See the [Inferentia decision guide](VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference).
+> - **TorchNeuron is in public beta.** In 2.33 AWS shipped a native PyTorch backend (`torch-neuronx`
+>   2.13 / 2.14: eager `.to("neuron")` and `torch.compile(backend="neuron")`) as a **public beta on
+>   Trn2/Trn3 only**. AWS's docs present it as the future path and call PyTorch/XLA *legacy*, and PyTorch
+>   2.9 is the last XLA version. **This tutorial treats TorchNeuron as beta and keeps XLA as its path
+>   until TorchNeuron is GA.** XLA is also the only path on Trn1. Some examples have an opt-in
+>   TorchNeuron backend for experimenting; see [XLA vs TorchNeuron](VERSION_MATRIX.md#-the-pytorch-path-xla-today)
+>   and [Trying TorchNeuron](docs/main_tutorial_doc.md#trying-torchneuron).
+> - **Trainium is now the path for both training and inference.** AWS has not announced an Inferentia3. NxD Inference **dropped Inf2/Trn1 in Neuron 2.29**, and in **2.34 the NxD Inference APIs and PyTorch/XLA inference end on Trn2/Trn3**: AWS's replacements for Trn2/Trn3 serving (**vLLM Neuron** for LLMs, TorchNeuron + `torch.compile`) are both still **beta** as of 2.33. Inferentia2 remains GA and useful for cost-optimized, latency-sensitive, smaller-model inference, but new work should generally target **Trainium2 (Trn2)**. See the [Inferentia decision guide](VERSION_MATRIX.md#-when-to-use-inferentia2-vs-trainium2-for-inference).
 
 ## Key Features
 

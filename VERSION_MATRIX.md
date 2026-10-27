@@ -57,8 +57,9 @@ package name:
 - **Trn1:** XLA is the only option, and that's what this tutorial teaches.
 - **Existing XLA code on Trn2/Trn3:** training keeps working (AWS has announced no end date for XLA
   *training*), but serving on the XLA path ends in 2.34, so plan a migration.
-- **New work on Trn2/Trn3:** AWS recommends TorchNeuron. It's beta, so validate it on your workload
-  before depending on it; see [Trying TorchNeuron](docs/main_tutorial_doc.md#trying-torchneuron).
+- **New work on Trn2/Trn3:** AWS's docs point new work at TorchNeuron, but it's **beta**. This tutorial
+  keeps XLA as its path until TorchNeuron is GA. If you experiment with it, validate it on your workload
+  first; see [Trying TorchNeuron](docs/main_tutorial_doc.md#trying-torchneuron).
 
 The concepts this tutorial teaches (compile cost, static shapes, bf16, filling the 128×128 array)
 apply to both backends: `torch.compile` on TorchNeuron still compiles a graph on first call and
@@ -207,7 +208,7 @@ bandwidth, ~1.3 PFLOPS FP8 per chip. Confirm exact figures on the
 | NxD Inference dropped Inf2/Trn1 | NxD Inference ≥ 2.29 | Pin to Neuron 2.28, or move to Trn2+ | Expected (hardware focus shift) |
 | NxD Inference now in maintenance mode | NxD Inference (2.32) | Feature work is slowing; track the release notes | As of Neuron 2.32 |
 | NumPy 2.1 dropped | Neuron 2.32 | Use NumPy 2.2 or 2.3 | As of Neuron 2.32 |
-| NxD Inference APIs + PyTorch/XLA inference end on Trn2/Trn3 | Neuron 2.34 | Move serving to vLLM Neuron / TorchNeuron (`torch.compile`) | Announced in 2.33 |
+| NxD Inference APIs + PyTorch/XLA inference end on Trn2/Trn3 | Neuron 2.34 | Move serving to vLLM Neuron / TorchNeuron (`torch.compile`); both beta as of 2.33 | Announced in 2.33 |
 | TorchNeuron is Trn2/Trn3-only | `torch-neuronx` 2.13/2.14 | Stay on XLA `torch-neuronx` 2.9 on Trn1 | Beta scope |
 | Amazon Linux 2 dropped | Neuron 2.33 | Use Ubuntu 24.04/26.04 or AL2023 | As of Neuron 2.33 |
 | JAX path is beta | jax-neuronx 0.10.x | Use PyTorch path for production | Upstream beta |
@@ -326,7 +327,7 @@ previously appeared here.
 | **TensorFlow Neuron** | Archived | Move to PyTorch path |
 | **`torch-neuron` (Inf1)** | Archived | Use `torch-neuronx` on Trn/Inf2 |
 | **NxD Inference on Inf2/Trn1** | Dropped in 2.29 | Pin Neuron 2.28, or move to Trn2+ |
-| **NxD Inference APIs / PyTorch/XLA inference on Trn2/Trn3** | Ends in 2.34 | vLLM Neuron or TorchNeuron + `torch.compile` |
+| **NxD Inference APIs / PyTorch/XLA inference on Trn2/Trn3** | Ends in 2.34 | vLLM Neuron or TorchNeuron + `torch.compile` (both beta as of 2.33) |
 | **Amazon Linux 2** | Dropped in 2.33 | Ubuntu 24.04/26.04 or AL2023 |
 
 ## 🛠️ Development Environment Setup
