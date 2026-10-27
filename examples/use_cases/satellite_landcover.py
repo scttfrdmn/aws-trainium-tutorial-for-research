@@ -43,6 +43,15 @@ Dependencies (beyond the Neuron stack): ``rasterio`` (reads COGs from S3 anonymo
 
 from __future__ import annotations
 
+# Allow `python examples/use_cases/<this>.py` as well as `-m`/the harness: put the repo root on
+# sys.path so the `examples.use_cases.*` imports below resolve when run as a plain script.
+import sys as _sys  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+_ROOT = str(_Path(__file__).resolve().parents[2])
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+
 import math
 import os
 import random
@@ -87,7 +96,12 @@ WORLDCOVER_CLASSES = {
 class CVConfig:
     """Configuration for the land-cover CNN trained on RODA Sentinel-2 + WorldCover."""
 
-    device: str = "xla"  # "xla" (Trainium) | "cpu" (smoke) | "cuda"
+    # "xla" (Trainium, default) | "neuron" (TorchNeuron beta, Trn2/Trn3, opt-in; single-process
+    # only) | "cpu" | "cuda"
+    device: str = "xla"
+    # TorchNeuron only (device="neuron"): torch.compile(backend="neuron") + bf16 autocast.
+    compile: bool = False
+    autocast_bf16: bool = True
     epochs: int = 5
     train_batch_size: int = 64
     eval_batch_size: int = 64
@@ -125,23 +139,6 @@ def _set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-
-
-def _resolve_device(requested: str):
-    """Return a torch device; fall back to CPU off-hardware (so the smoke path still runs)."""
-    import torch
-
-    if requested == "xla":
-        try:
-            import torch_xla.core.xla_model as xm
-
-            return xm.xla_device(), "xla"
-        except ImportError:
-            print("⚠️  torch_xla not available; using CPU (not a hardware run).")
-            return torch.device("cpu"), "cpu"
-    if requested == "cuda" and torch.cuda.is_available():
-        return torch.device("cuda"), "cuda"
-    return torch.device("cpu"), "cpu"
 
 
 def _worldcover_tile(center_lat: float, center_lon: float) -> str:
@@ -349,15 +346,25 @@ def _build_model(num_classes: int):
     )
 
 
-def _evaluate(model, loader, device, backend) -> float:
-    """Return top-1 accuracy on the validation split."""
+def _evaluate(model, loader, device, backend, fwd=None, amp=None) -> float:
+    """Return top-1 accuracy on the validation split.
+
+    ``fwd``/``amp`` are the forward callable and autocast factory from ``wrap_model`` (default:
+    the plain eager model, no autocast).
+    """
+    import contextlib
+
     import torch
 
+    # `is None`, not `or`: truth-testing a torch.compile'd module raises.
+    fwd = model if fwd is None else fwd
+    amp = contextlib.nullcontext if amp is None else amp
     model.eval()
     correct = total = 0
     with torch.no_grad():
         for x, y in loader:
-            logits = model(x.to(device))
+            with amp():
+                logits = fwd(x.to(device))
             if backend == "xla":
                 import torch_xla.core.xla_model as xm
 
@@ -380,9 +387,22 @@ def run(config: dict | None = None) -> dict[str, float]:
 
     import torch
 
+    from examples.use_cases._device import (
+        device_loader,
+        optimizer_step,
+        resolve_device,
+        to_device,
+        wrap_model,
+    )
+
     cfg = CVConfig.from_dict(config)
+    if cfg.device == "neuron" and "RANK" in os.environ:
+        raise RuntimeError(
+            "satellite_landcover: device='neuron' (TorchNeuron, beta) is single-process only; "
+            "the torchrun data-parallel path is XLA-only. Use device='xla' under torchrun."
+        )
     _set_seed(cfg.seed)
-    device, backend = _resolve_device(cfg.device)
+    device, backend = resolve_device(cfg.device)
 
     distributed = backend == "xla" and "RANK" in os.environ
     world_size, rank = 1, 0
@@ -407,14 +427,12 @@ def run(config: dict | None = None) -> dict[str, float]:
     model = _build_model(len(label_names)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)
     criterion = torch.nn.CrossEntropyLoss()
+    # Only device="neuron" (TorchNeuron, beta) changes fwd/amp; on XLA fwd is the model itself.
+    fwd, amp = wrap_model(
+        model, backend, compile=cfg.compile, autocast_bf16=cfg.autocast_bf16
+    )
 
-    if backend == "xla":
-        import torch_xla.core.xla_model as xm
-        import torch_xla.distributed.parallel_loader as pl
-
-        device_loader = pl.MpDeviceLoader(train_loader, device)
-    else:
-        device_loader = train_loader
+    train_batches = device_loader(train_loader, device, backend)
 
     from examples.use_cases._progress import StepProgress
 
@@ -434,18 +452,17 @@ def run(config: dict | None = None) -> dict[str, float]:
             sampler.set_epoch(epoch)
         running = torch.zeros((), device=device)
         n = 0
-        for x, y in device_loader:
+        for x, y in train_batches:
             t0 = time.time()
-            if backend != "xla":
-                x, y = x.to(device), y.to(device)
+            x, y = to_device((x, y), device, backend)
             optimizer.zero_grad()
-            loss = criterion(model(x), y)
+            with amp():
+                logits = fwd(x)
+            # Loss in fp32 (.float() is a no-op unless bf16 autocast produced bf16 logits).
+            loss = criterion(logits.float(), y)
             loss.backward()
-            if backend == "xla":
-                xm.optimizer_step(optimizer)  # applies grads + all-reduces across cores
-                xm.mark_step()
-            else:
-                optimizer.step()
+            # On XLA this is xm.optimizer_step (applies grads + all-reduces across cores) + mark_step.
+            optimizer_step(optimizer, backend)
             running += loss.detach()
             n += 1
             gstep += 1
@@ -462,19 +479,24 @@ def run(config: dict | None = None) -> dict[str, float]:
     # running stats) so it compiles once; with the persistent compile cache that cost amortizes.
     if rank != 0:
         return {}
-    acc = _evaluate(model, val_loader, device, backend)
+    acc = _evaluate(model, val_loader, device, backend, fwd, amp)
     metrics = {
         "eval_acc": float(acc),
         "num_classes": float(len(label_names)),
         "train_wall_s": round(time.time() - wall, 2),
         "first_step_compile_s": round(first_step_s or 0.0, 2),
+        "torch_compile": 1.0 if (backend == "neuron" and cfg.compile) else 0.0,
     }
     print(f"✅ done. eval_acc={acc:.4f}  train_wall={metrics['train_wall_s']}s")
     return metrics
 
 
 def main() -> None:
-    """CLI entrypoint; CV_SMOKE-style env enables a tiny CPU smoke run (still reads real RODA)."""
+    """CLI entrypoint; CV_SMOKE-style env enables a tiny CPU smoke run (still reads real RODA).
+
+    SATELLITE_DEVICE=neuron opts into TorchNeuron (beta, Trn2/Trn3, single-process only);
+    SATELLITE_COMPILE=1 adds torch.compile. Both apply on top of CV_SMOKE.
+    """
     cfg: dict[str, Any] = {}
     if os.environ.get("CV_SMOKE") or os.environ.get("NER_SMOKE"):
         cfg = {
@@ -485,6 +507,10 @@ def main() -> None:
             "train_batch_size": 16,
             "eval_batch_size": 16,
         }
+    if os.environ.get("SATELLITE_DEVICE"):
+        cfg["device"] = os.environ["SATELLITE_DEVICE"]
+    if os.environ.get("SATELLITE_COMPILE"):
+        cfg["compile"] = os.environ["SATELLITE_COMPILE"] not in ("", "0")
     run(cfg)
 
 

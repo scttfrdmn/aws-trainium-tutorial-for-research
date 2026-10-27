@@ -39,6 +39,8 @@ CRYSTAL_SMOKE=1 python examples/use_cases/crystal_cif_slm.py
 python examples/use_cases/crystal_cif_slm.py
 ```
 
+> **Opt-in, beta:** a TorchNeuron backend also exists (`device="neuron"` / `CRYSTAL_DEVICE=neuron`; Trn2/Trn3 only; not validated on hardware yet). The XLA path above is the default.
+
 At the end it prints a **sampled CIF** for a held-out composition so you can eyeball what the model
 writes.
 

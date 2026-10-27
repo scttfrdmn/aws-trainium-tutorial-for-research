@@ -80,6 +80,8 @@ python -m validation.run_on_hardware --instance trn1.2xlarge --region us-east-2 
     --example satellite_landcover --yes
 ```
 
+> **Opt-in, beta:** a TorchNeuron backend also exists (`device="neuron"` / `SATELLITE_DEVICE=neuron`; Trn2/Trn3 only, single-process only; not validated on hardware yet). The XLA path above is the default.
+
 ## Prerequisites
 
 - A Neuron instance (`trn1.2xlarge`) or any CPU box for the smoke run; **network access** (it reads

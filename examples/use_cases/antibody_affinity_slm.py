@@ -38,6 +38,15 @@ Bump `model_name` to `facebook/esm2_t12_35M_UR50D` for a stronger (still small) 
 
 from __future__ import annotations
 
+# Allow `python examples/use_cases/<this>.py` as well as `-m`/the harness: put the repo root on
+# sys.path so the `examples.use_cases.*` imports below resolve when run as a plain script.
+import sys as _sys  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+_ROOT = str(_Path(__file__).resolve().parents[2])
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+
 import os
 from dataclasses import dataclass, field
 from typing import Any
@@ -60,7 +69,11 @@ class AntibodyConfig:
         "heavy_chain_seq"  # the chain we model (dominant binding determinant)
     )
     label_column: str = "binding_score"
-    device: str = "xla"  # "xla" (Trainium) | "cpu" (smoke) | "cuda"
+    # "xla" (Trainium, default) | "neuron" (TorchNeuron beta, Trn2/Trn3, opt-in) | "cpu" | "cuda"
+    device: str = "xla"
+    # TorchNeuron only (device="neuron"): torch.compile(backend="neuron") + bf16 autocast.
+    compile: bool = False
+    autocast_bf16: bool = True
     epochs: int = 8
     train_batch_size: int = 16
     eval_batch_size: int = 16
@@ -96,23 +109,6 @@ def _set_seed(seed: int) -> None:
 
     np.random.seed(seed)
     torch.manual_seed(seed)
-
-
-def _resolve_device(requested: str):
-    """Return (device, backend); fall back to CPU off-hardware so the smoke path runs."""
-    import torch
-
-    if requested == "xla":
-        try:
-            import torch_xla.core.xla_model as xm
-
-            return xm.xla_device(), "xla"
-        except ImportError:
-            print("⚠️  torch_xla not available; using CPU (not a hardware run).")
-            return torch.device("cpu"), "cpu"
-    if requested == "cuda" and torch.cuda.is_available():
-        return torch.device("cuda"), "cuda"
-    return torch.device("cpu"), "cpu"
 
 
 def _load_dataframe(cfg: AntibodyConfig):
@@ -219,23 +215,33 @@ def _spearman(pred, gold) -> float:
     return float((rp * rg).sum() / denom) if denom else 0.0
 
 
-def _evaluate(model, loader, device, backend) -> dict[str, float]:
-    """Return Spearman + Pearson + MSE on the held-out split."""
+def _evaluate(model, loader, device, backend, fwd=None, amp=None) -> dict[str, float]:
+    """Return Spearman + Pearson + MSE on the held-out split.
+
+    ``fwd``/``amp`` are the forward callable and autocast factory from ``wrap_model`` (default:
+    the plain eager model, no autocast).
+    """
+    import contextlib
+
     import numpy as np
     import torch
 
+    # `is None`, not `or`: truth-testing a torch.compile'd module raises.
+    fwd = model if fwd is None else fwd
+    amp = contextlib.nullcontext if amp is None else amp
     model.eval()
     preds, golds = [], []
     with torch.no_grad():
         for input_ids, attention_mask, y in loader:
             input_ids = input_ids.to(device)
             attention_mask = attention_mask.to(device)
-            out = model(input_ids=input_ids, attention_mask=attention_mask)
+            with amp():
+                out = fwd(input_ids=input_ids, attention_mask=attention_mask)
             if backend == "xla":
                 import torch_xla.core.xla_model as xm
 
                 xm.mark_step()
-            preds.extend(out.cpu().numpy().tolist())
+            preds.extend(out.float().cpu().numpy().tolist())
             golds.extend(y.numpy().tolist())
     preds_a, golds_a = np.asarray(preds), np.asarray(golds)
     mse = float(((preds_a - golds_a) ** 2).mean()) if len(preds_a) else 0.0
@@ -261,9 +267,17 @@ def run(config: dict | None = None) -> dict[str, float]:
     import torch
     from transformers import AutoTokenizer, get_linear_schedule_with_warmup
 
+    from examples.use_cases._device import (
+        device_loader,
+        optimizer_step,
+        resolve_device,
+        to_device,
+        wrap_model,
+    )
+
     cfg = AntibodyConfig.from_dict(config)
     _set_seed(cfg.seed)
-    device, backend = _resolve_device(cfg.device)
+    device, backend = resolve_device(cfg.device)
     print(
         f"🧬 Antibody affinity SLM | model={cfg.model_name} | "
         f"data={cfg.data_file.split('/')[-1]} | device={backend}"
@@ -276,6 +290,10 @@ def run(config: dict | None = None) -> dict[str, float]:
     model = _build_model(cfg).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"   model params: {n_params / 1e6:.1f}M (encoder + regression head)")
+    # Only device="neuron" (TorchNeuron, beta) changes fwd/amp; on XLA fwd is the model itself.
+    fwd, amp = wrap_model(
+        model, backend, compile=cfg.compile, autocast_bf16=cfg.autocast_bf16
+    )
 
     optimizer = torch.optim.AdamW(
         (p for p in model.parameters() if p.requires_grad), lr=cfg.learning_rate
@@ -286,13 +304,7 @@ def run(config: dict | None = None) -> dict[str, float]:
     )
     loss_fn = torch.nn.MSELoss()
 
-    if backend == "xla":
-        import torch_xla.core.xla_model as xm
-        import torch_xla.distributed.parallel_loader as pl
-
-        device_loader = pl.MpDeviceLoader(train_loader, device)
-    else:
-        device_loader = train_loader
+    train_batches = device_loader(train_loader, device, backend)
 
     from examples.use_cases._progress import StepProgress
 
@@ -307,24 +319,17 @@ def run(config: dict | None = None) -> dict[str, float]:
         model.train()
         running = torch.zeros((), device=device)
         n = 0
-        for input_ids, attention_mask, y in device_loader:
+        for batch in train_batches:
             step_start = time.time()
-            if backend != "xla":
-                input_ids, attention_mask, y = (
-                    input_ids.to(device),
-                    attention_mask.to(device),
-                    y.to(device),
-                )
+            input_ids, attention_mask, y = to_device(batch, device, backend)
             optimizer.zero_grad()
-            pred = model(input_ids=input_ids, attention_mask=attention_mask)
-            loss = loss_fn(pred, y)
+            with amp():
+                pred = fwd(input_ids=input_ids, attention_mask=attention_mask)
+            # Loss in fp32: under bf16 autocast the head's output is bf16 (a no-op cast otherwise).
+            loss = loss_fn(pred.float(), y)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
-            if backend == "xla":
-                xm.optimizer_step(optimizer)
-                xm.mark_step()
-            else:
-                optimizer.step()
+            optimizer_step(optimizer, backend)
             scheduler.step()
             running += loss.detach()
             n += 1
@@ -337,7 +342,7 @@ def run(config: dict | None = None) -> dict[str, float]:
         )
     train_wall = time.time() - wall_start
 
-    eval_metrics = _evaluate(model, eval_loader, device, backend)
+    eval_metrics = _evaluate(model, eval_loader, device, backend, fwd, amp)
     metrics = {
         "spearman": float(eval_metrics["spearman"]),
         "pearson": float(eval_metrics["pearson"]),
@@ -345,6 +350,7 @@ def run(config: dict | None = None) -> dict[str, float]:
         "params_m": float(round(n_params / 1e6, 2)),
         "train_wall_s": round(train_wall, 2),
         "first_step_compile_s": round(first_step_s or 0.0, 2),
+        "torch_compile": 1.0 if (backend == "neuron" and cfg.compile) else 0.0,
     }
     print(
         f"✅ done. spearman={metrics['spearman']:.4f}  pearson={metrics['pearson']:.4f}  "
@@ -354,7 +360,11 @@ def run(config: dict | None = None) -> dict[str, float]:
 
 
 def main() -> None:
-    """CLI entrypoint; ANTIBODY_SMOKE runs a tiny CPU configuration."""
+    """CLI entrypoint; ANTIBODY_SMOKE runs a tiny CPU configuration.
+
+    ANTIBODY_DEVICE=neuron opts into TorchNeuron (beta, Trn2/Trn3); ANTIBODY_COMPILE=1 adds
+    torch.compile. Both apply on top of ANTIBODY_SMOKE.
+    """
     cfg: dict[str, Any] = {}
     if os.environ.get("ANTIBODY_SMOKE") or os.environ.get("NER_SMOKE"):
         cfg = {
@@ -364,6 +374,10 @@ def main() -> None:
             "max_eval_samples": 32,
             "max_length": 160,
         }
+    if os.environ.get("ANTIBODY_DEVICE"):
+        cfg["device"] = os.environ["ANTIBODY_DEVICE"]
+    if os.environ.get("ANTIBODY_COMPILE"):
+        cfg["compile"] = os.environ["ANTIBODY_COMPILE"] not in ("", "0")
     run(cfg)
 
 

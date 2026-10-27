@@ -13,7 +13,7 @@ it, and checks the returned metrics against `thresholds` (metric >= min).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 
 @dataclass(frozen=True)
@@ -302,6 +302,33 @@ TORCHNEURON_EXAMPLES: tuple[Example, ...] = (
         est_runtime_min=20.0,
         description="NER fine-tune on TorchNeuron with torch.compile(backend='neuron').",
     ),
+)
+
+
+# Opt-in TorchNeuron ports of the other single-process examples (beta; not yet hardware-validated).
+# Each reuses its XLA entry's module, thresholds, and smoke_config; only full_config's device
+# changes to "neuron" (and the baseline instance to Trn2). Deriving them keeps the gates in lockstep.
+def _torchneuron_variant(xla_key: str, what: str) -> Example:
+    """Derive a `<xla_key>_torchneuron` entry from the XLA entry (same module/gates/smoke)."""
+    base = next(ex for ex in EXAMPLES if ex.key == xla_key)
+    return replace(
+        base,
+        key=f"{xla_key}_torchneuron",
+        instances=("trn2.3xlarge",),
+        thresholds=dict(base.thresholds),
+        smoke_config=dict(base.smoke_config),
+        full_config={**base.full_config, "device": "neuron"},
+        description=f"{what} on TorchNeuron (beta, opt-in; device='neuron', bf16 autocast).",
+        validated_note="",
+    )
+
+
+TORCHNEURON_EXAMPLES += (
+    _torchneuron_variant("satellite_landcover", "Satellite land-cover CNN"),
+    _torchneuron_variant("cv_utilization_spike", "CNN vs ViT utilization spike"),
+    _torchneuron_variant("distill_ner_slm", "NER distillation into a student SLM"),
+    _torchneuron_variant("antibody_affinity_slm", "ESM-2 antibody-affinity regression"),
+    _torchneuron_variant("crystal_cif_slm", "Crystal-CIF char GPT"),
 )
 
 

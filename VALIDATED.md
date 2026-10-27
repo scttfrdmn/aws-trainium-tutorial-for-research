@@ -29,6 +29,11 @@ The same examples run on AWS's native PyTorch backend (`torch-neuronx` 2.13+, `d
 |---------|--------|----------|-----------|---------------|-----------|-----------|--------|------|
 | `ner_biomedical_torchneuron` | ✅ passed | trn2.3xlarge | — | 2.14.3.0.1+b1b6c66 | eval_f1=0.8491 | 245.01s | 504209b | 2026-10-26 |
 | `ner_biomedical_torchneuron_compile` | ✅ passed | trn2.3xlarge | — | 2.14.3.0.1+b1b6c66 | eval_f1=0.8373 | 845.94s | e8f1c90 | 2026-10-26 |
+| `satellite_landcover_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
+| `cv_utilization_spike_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
+| `distill_ner_slm_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
+| `antibody_affinity_slm_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
+| `crystal_cif_slm_torchneuron` | ⚠️ unvalidated | — | — | — | — | — | — | — |
 
 ## Multi-process examples (torchrun — validated by manual launch)
 

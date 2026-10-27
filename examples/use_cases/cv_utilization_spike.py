@@ -36,6 +36,15 @@ portable, runnable proxy this spike uses.)
 
 from __future__ import annotations
 
+# Allow `python examples/use_cases/<this>.py` as well as `-m`/the harness: put the repo root on
+# sys.path so the `examples.use_cases.*` imports below resolve when run as a plain script.
+import sys as _sys  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+_ROOT = str(_Path(__file__).resolve().parents[2])
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+
 import math
 import os
 import time
@@ -51,7 +60,11 @@ IN_CHANS = 3
 class SpikeConfig:
     """Knobs for the utilization spike."""
 
-    device: str = "xla"  # "xla" (Trainium) | "cpu" (smoke) | "cuda"
+    # "xla" (Trainium, default) | "neuron" (TorchNeuron beta, Trn2/Trn3, opt-in) | "cpu" | "cuda"
+    device: str = "xla"
+    # TorchNeuron only (device="neuron"): torch.compile(backend="neuron") + bf16 autocast.
+    compile: bool = False
+    autocast_bf16: bool = True
     batch_size: int = 64
     warmup_steps: int = 5  # compile + reach steady state before timing
     timed_steps: int = 20  # steps to average over
@@ -172,10 +185,16 @@ def count_forward_flops(model, sample) -> int:
 
 
 def measure_step_time(model, cfg: SpikeConfig, device, backend) -> float:
-    """Return median steady-state train step time (s) after warmup."""
+    """Return mean steady-state train step time (s) after warmup."""
     import torch
 
+    from examples.use_cases._device import sync, wrap_model
+
     model = model.to(device).train()
+    # Only device="neuron" (TorchNeuron, beta) changes fwd/amp; on XLA fwd is the model itself.
+    fwd, amp = wrap_model(
+        model, backend, compile=cfg.compile, autocast_bf16=cfg.autocast_bf16
+    )
     opt = torch.optim.SGD(model.parameters(), lr=1e-3)
     loss_fn = torch.nn.CrossEntropyLoss()
 
@@ -183,7 +202,9 @@ def measure_step_time(model, cfg: SpikeConfig, device, backend) -> float:
         x = torch.randn(cfg.batch_size, IN_CHANS, IMAGE_SIZE, IMAGE_SIZE, device=device)
         y = torch.randint(0, cfg.num_classes, (cfg.batch_size,), device=device)
         opt.zero_grad()
-        loss = loss_fn(model(x), y)
+        with amp():
+            logits = fwd(x)
+        loss = loss_fn(logits.float(), y)  # fp32 loss (no-op cast unless bf16 autocast)
         loss.backward()
         if backend == "xla":
             import torch_xla.core.xla_model as xm
@@ -191,48 +212,33 @@ def measure_step_time(model, cfg: SpikeConfig, device, backend) -> float:
             xm.optimizer_step(opt, barrier=True)
         else:
             opt.step()
+        return loss
 
+    # Timing fences: sync() waits for queued device work (xm.wait_device_ops() on XLA; forcing the
+    # last loss on eager devices such as TorchNeuron/CUDA) so the clock measures real compute.
     for _ in range(cfg.warmup_steps):  # compile + warm
-        one_step()
-    if backend == "xla":
-        import torch_xla.core.xla_model as xm
-
-        xm.wait_device_ops()
+        loss = one_step()
+    sync(backend, loss)
 
     t0 = time.time()
     for _ in range(cfg.timed_steps):
-        one_step()
-    if backend == "xla":
-        import torch_xla.core.xla_model as xm
-
-        xm.wait_device_ops()
+        loss = one_step()
+    sync(backend, loss)
     return (time.time() - t0) / cfg.timed_steps
-
-
-def _resolve_device(requested: str):
-    import torch
-
-    if requested == "xla":
-        try:
-            import torch_xla.core.xla_model as xm
-
-            return xm.xla_device(), "xla"
-        except ImportError:
-            print("⚠️  torch_xla not available; using CPU (timings NOT meaningful).")
-            return torch.device("cpu"), "cpu"
-    if requested == "cuda" and torch.cuda.is_available():
-        return torch.device("cuda"), "cuda"
-    return torch.device("cpu"), "cpu"
 
 
 def run(config: dict | None = None) -> dict[str, float]:
     """Run the CNN-vs-ViT utilization spike and return a flat metrics dict."""
     import torch
 
+    from examples.use_cases._device import resolve_device
+
     cfg = SpikeConfig(
         **{k: v for k, v in (config or {}).items() if hasattr(SpikeConfig, k)}
     )
-    device, backend = _resolve_device(cfg.device)
+    device, backend = resolve_device(cfg.device)
+    if backend == "cpu":
+        print("   (CPU run: FLOP counts are exact, timings are NOT meaningful.)")
     sample = torch.randn(cfg.batch_size, IN_CHANS, IMAGE_SIZE, IMAGE_SIZE)
 
     print(f"🔬 CV utilization spike | device={backend} | batch={cfg.batch_size}")
@@ -278,10 +284,16 @@ def run(config: dict | None = None) -> dict[str, float]:
         "vit_over_cnn_tflops": round(ratio, 3) if not math.isnan(ratio) else 0.0,
         "cnn_step_ms": results["CNN"]["step_ms"],
         "vit_step_ms": results["ViT"]["step_ms"],
+        "torch_compile": 1.0 if (backend == "neuron" and cfg.compile) else 0.0,
     }
 
 
 def main() -> None:
+    """CLI entrypoint; CV_SMOKE runs a tiny CPU configuration.
+
+    CV_DEVICE=neuron opts into TorchNeuron (beta, Trn2/Trn3); CV_COMPILE=1 adds torch.compile.
+    Both apply on top of CV_SMOKE.
+    """
     cfg = {}
     if os.environ.get("CV_SMOKE") or os.environ.get("NER_SMOKE"):
         cfg = {
@@ -291,6 +303,10 @@ def main() -> None:
             "batch_size": 8,
             "depth": 2,
         }
+    if os.environ.get("CV_DEVICE"):
+        cfg["device"] = os.environ["CV_DEVICE"]
+    if os.environ.get("CV_COMPILE"):
+        cfg["compile"] = os.environ["CV_COMPILE"] not in ("", "0")
     run(cfg)
 
 
