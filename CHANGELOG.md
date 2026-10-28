@@ -10,6 +10,32 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Changed (cleanup batch: #28, #35–#38)
+- **Cost dashboard no longer takes AWS credentials (#36).**
+  - `scripts/cost_monitor.py --json` builds a report using the normal credential chain (profile/SSO).
+  - `monitoring/cost_monitoring_dashboard.html` is now a static viewer of that report: no AWS SDK and
+    no key inputs.
+  - The docs now recommend `aws configure sso` / `aws sso login` over long-lived access keys.
+- **Debugging walkthrough runs on a laptop (#28).**
+  - The recompile and CPU-fallback demos now run code on CPU via `torch.compile(backend="eager")`:
+    1 vs 4 graphs for fixed vs ragged shapes, and a graph break for `.nonzero()` vs none for
+    `torch.where`.
+  - Adds an opt-in `--device neuron` (beta) mode, plus beta sidebars in the debugging chapters that
+    list what isn't verified on Trn2.
+- **Trn2 docs (#38).** A new "Using Trn2" section covers sizes, sparse regions, the lack of
+  spot/on-demand capacity, and EC2 Capacity Blocks. Trn1 stays the default. The README validation box
+  now matches VALIDATED.md.
+- **Removed empty directories and stale links (#37).**
+- **Tooling (#35).**
+  - Removed the dead `test_suite.py` and `test_runner.py`.
+  - ruff and mypy now target Python 3.12.
+  - **mypy is blocking in CI**, and `scripts/` passes `--strict`. Fixing the types surfaced three real
+    bugs in `aws_environment_checker.py`: `--auto-fix` crashed on a missing method, now implemented;
+    VPC problems are now reported rather than auto-repaired; and 17 prompts printed a literal `\n`.
+  - `pre-commit run --all-files` now passes cleanly.
+  - The unreachable 85% coverage gate is dropped; coverage is reported only.
+- **Project status:** GitHub project board #82 tracks all open issues.
+
 ### Fixed (correction: the "TorchNeuron 4.5× faster than XLA" result was compile time)
 - A seed sweep (#27) on the Trn2 Capacity Block's last hour **overturns the single-run comparison from
   #22**. Both used NER on one trn2.3xlarge core:
