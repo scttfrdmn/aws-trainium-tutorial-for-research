@@ -7,7 +7,7 @@ Use when you need to immediately stop all running experiments.
 import boto3
 
 
-def emergency_shutdown_all():
+def emergency_shutdown_all() -> None:
     """EMERGENCY: Stop all running ML instances."""
     ec2 = boto3.client("ec2")
 

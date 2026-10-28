@@ -1,13 +1,19 @@
-.PHONY: install install-dev install-neuron test test-unit test-integration test-fast lint format pre-commit clean build help
+.PHONY: install install-dev install-neuron test test-unit test-integration test-fast coverage lint format pre-commit clean build help
 
 # Use uv when available, falling back to python3 -m pip. uv is the recommended workflow.
 PYTHON := python3
 UV := $(shell command -v uv 2>/dev/null)
+# Tool runner: `uv run --extra dev <tool>` under uv, else `python3 -m <tool>` (dev deps installed).
+ifeq ($(UV),)
+RUN := $(PYTHON) -m
+else
+RUN := uv run --extra dev
+endif
 
 help: ## Show this help message
 	@echo "AWS Trainium & Inferentia Tutorial - Available Commands:"
 	@echo "======================================================="
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \\033[36m%-20s\\033[0m %s\\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install package in development mode
 ifeq ($(UV),)
@@ -34,32 +40,35 @@ else
 endif
 	@echo "✅ Neuron SDK installed"
 
-test: ## Run all tests
-	$(PYTHON) -m pytest tests/ -v --cov=scripts --cov=examples --cov=advanced --cov-report=html --cov-report=term
+test: ## Run the test suite off-hardware (same selection as CI)
+	$(RUN) pytest -m "not aws and not neuron"
 
 test-unit: ## Run unit tests only
-	$(PYTHON) -m pytest tests/unit/ -v -m "not aws and not neuron"
+	$(RUN) pytest tests/unit/ -v -m "not aws and not neuron"
 
 test-integration: ## Run integration tests (requires AWS)
-	$(PYTHON) -m pytest tests/integration/ -v -m "aws"
+	$(RUN) pytest tests/integration/ -v -m "aws"
 
 test-fast: ## Run fast tests only
-	$(PYTHON) -m pytest tests/ -v -m "not slow and not aws"
+	$(RUN) pytest -m "not slow and not aws and not neuron"
 
-lint: ## Run all linting checks (ruff + mypy)
-	$(PYTHON) -m ruff check scripts/ examples/ advanced/ tests/
-	$(PYTHON) -m ruff format --check scripts/ examples/ advanced/ tests/
-	$(PYTHON) -m mypy scripts/ --ignore-missing-imports
+coverage: ## Coverage report (HTML + terminal); informational, not gated
+	$(RUN) pytest -m "not aws and not neuron" --cov=scripts --cov=examples --cov=advanced --cov=validation --cov-report=html --cov-report=term --cov-fail-under=0
+
+lint: ## Run all linting checks (same as CI: ruff + ruff format + mypy)
+	$(RUN) ruff check .
+	$(RUN) ruff format --check .
+	$(RUN) mypy scripts/ --ignore-missing-imports
 
 format: ## Format all code and auto-fix lint issues (ruff)
-	$(PYTHON) -m ruff check --fix scripts/ examples/ advanced/ tests/
-	$(PYTHON) -m ruff format scripts/ examples/ advanced/ tests/
+	$(RUN) ruff check --fix .
+	$(RUN) ruff format .
 
 pre-commit: ## Run pre-commit hooks on all files
 	pre-commit run --all-files
 
-setup-aws: ## Set up AWS environment
-	$(PYTHON) scripts/setup_aws_environment.py
+setup-aws: ## Check (read-only) the AWS environment; pass ARGS=--auto-fix to fix issues
+	$(PYTHON) scripts/aws_environment_checker.py $(ARGS)
 
 monitor-costs: ## Monitor current AWS costs
 	$(PYTHON) scripts/cost_monitor.py

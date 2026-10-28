@@ -33,13 +33,14 @@ Note:
 """
 
 import argparse
+from typing import Any
 
 import boto3
 
 
 def create_research_budget(
     monthly_limit: int = 100, email: str = "your-email@university.edu"
-) -> dict:
+) -> dict[str, Any] | None:
     """Create a comprehensive budget with progressive alerts for ML research.
 
     Sets up an AWS budget specifically designed for machine learning research with
@@ -55,7 +56,7 @@ def create_research_budget(
             as alerts are time-sensitive for cost control.
 
     Returns:
-        dict: AWS budget creation response containing budget metadata and status.
+        dict | None: AWS budget creation response containing budget metadata and status.
             Returns None if budget creation fails or if budget already exists.
 
     Raises:
@@ -125,7 +126,8 @@ def create_research_budget(
         print(
             f"✅ Budget created! You'll get alerts at ${monthly_limit * 0.5:.0f}, ${monthly_limit * 0.8:.0f}, and ${monthly_limit}"
         )
-        return response
+        result: dict[str, Any] = response
+        return result
     except Exception as e:
         # A budget that already exists surfaces as a DuplicateRecordException. We detect it by name
         # rather than catching client.exceptions.DuplicateRecordException directly: under a mocked
