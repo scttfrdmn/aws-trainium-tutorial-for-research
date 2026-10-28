@@ -41,6 +41,35 @@ launcher for torch-neuronx/XLA training.
 | **Overlap + mark_step** | `pl.MpDeviceLoader` |
 | **Neuron-correct checkpointing** | rank 0 only: `xm._maybe_convert_to_cpu(state_dict)` → `torch.save` (don't `torch.save` raw XLA tensors) |
 
+## Native PyTorch DDP (opt-in; TorchNeuron beta)
+
+Everything above is the default, documented path (PyTorch/XLA). The same script also has an
+**opt-in** native-PyTorch DDP path, selected with `DDP_DEVICE`: `dist.init_process_group(backend=DDP_PG_BACKEND)`,
+`torch.nn.parallel.DistributedDataParallel` (gradients all-reduce during `backward()`), plain
+`optimizer.step()`, `dist.barrier()`, and a rank-0 checkpoint from a CPU copy of the `state_dict`.
+On `DDP_DEVICE=neuron` it adds bf16 `torch.autocast` (and `torch.compile(backend="neuron")` with
+`DDP_COMPILE=1`).
+
+Prove the DDP code path on a laptop with 2 CPU processes over gloo:
+
+```bash
+DDP_DEVICE=cpu DDP_PG_BACKEND=gloo DDP_SMOKE=1 \
+    torchrun --nproc_per_node=2 examples/distributed/data_parallel_ner.py
+```
+
+Each rank prints a parameter checksum after training. The ranks see different data shards, so
+matching checksums show the gradient all-reduce kept the replicas in sync. Rank 0 then reports
+`eval_f1`. `DDP_SMOKE=1` means 1 epoch on 64 train/eval samples; any other `DDP_*` knob you set
+still applies.
+
+**TorchNeuron (`DDP_DEVICE=neuron`, Trn2/Trn3) is beta and unverified here.** The process-group
+backend name for TorchNeuron hasn't been confirmed on hardware, so the script won't guess it. You
+have to set `DDP_PG_BACKEND=<name>` yourself, or list names to probe in `DDP_PG_BACKEND_CANDIDATES`
+(only names that `torch.distributed` reports as available are used). Find the name on a Trn2
+instance first: `validation/torchneuron_facts.py` records which backends are available. Per-process
+device selection (`LOCAL_RANK`, and `NEURON_RT_VISIBLE_CORES` limiting each process to one core) is
+also unverified.
+
 ## Does the second core pay off? (measured)
 
 The point of DDP is throughput: two cores should train faster than one. Here's the **same job**
