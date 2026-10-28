@@ -331,6 +331,23 @@ TORCHNEURON_EXAMPLES += (
     _torchneuron_variant("crystal_cif_slm", "Crystal-CIF char GPT"),
 )
 
+# The CV comparison again through torch.compile(backend="neuron") (cfg.compile), mirroring the
+# ner_biomedical_torchneuron / _compile pair: same model, gates, and smoke; only "compile" differs.
+_CV_TORCHNEURON = next(
+    ex for ex in TORCHNEURON_EXAMPLES if ex.key == "cv_utilization_spike_torchneuron"
+)
+TORCHNEURON_EXAMPLES += (
+    replace(
+        _CV_TORCHNEURON,
+        key="cv_utilization_spike_torchneuron_compile",
+        full_config={**_CV_TORCHNEURON.full_config, "compile": True},
+        description=(
+            "CNN vs ViT utilization spike on TorchNeuron with torch.compile(backend='neuron') "
+            "(beta, opt-in; bf16 autocast)."
+        ),
+    ),
+)
+
 
 def get(key: str) -> Example | None:
     """Return the registry entry for `key` (XLA or TorchNeuron), or None if absent."""
