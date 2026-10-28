@@ -49,7 +49,7 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +64,7 @@ NO_INSTANCE_TYPE = "NoInstanceType"
 
 def generate_cost_report(
     days_back: int = 30, output_file: str = "ml_costs.png"
-) -> dict:
+) -> dict[str, Any]:
     """Generate comprehensive visual cost report for ML experiments.
 
     Creates a detailed cost analysis report covering the specified time period,
@@ -321,7 +321,7 @@ def _running_ml_instances(ec2: Any, now: datetime) -> list[dict[str, Any]]:
                 tags = {t["Key"]: t["Value"] for t in instance.get("Tags", [])}
                 launch: datetime = instance["LaunchTime"]
                 if launch.tzinfo is None:
-                    launch = launch.replace(tzinfo=timezone.utc)
+                    launch = launch.replace(tzinfo=UTC)
                 uptime_hours = (now - launch).total_seconds() / 3600
                 instances.append(
                     {
@@ -362,7 +362,7 @@ def build_cost_report(
         ``generated_at``, ``region``, ``currency``, ``month_to_date``,
         ``daily_costs``, ``running_instances``, and ``summary``.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     today = now.date()
     region = region or boto3.session.Session().region_name or "us-east-1"
 

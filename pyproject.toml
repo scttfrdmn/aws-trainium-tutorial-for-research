@@ -88,7 +88,7 @@ py-modules = []
 [tool.ruff]
 # Ruff replaces black (formatting), isort (imports), and flake8 + flake8-docstrings (linting).
 line-length = 88
-target-version = "py310"
+target-version = "py312"
 extend-exclude = [
     ".git",
     "__pycache__",
@@ -129,13 +129,13 @@ convention = "google"
 "advanced/**" = ["D", "F401"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["aws_trainium_tutorial", "scripts", "examples", "advanced"]
+known-first-party = ["scripts", "examples", "advanced"]
 
 [tool.ruff.format]
 docstring-code-format = true
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -209,7 +209,8 @@ exclude_lines = [
     "except NoCredentialsError:",
     "# Placeholder for actual implementation",
 ]
-fail_under = 85
+# No fail_under: measured coverage is ~20-30% (most example code only runs on Trainium hardware), so
+# an 85% gate could never pass. `make coverage` reports without gating.
 show_missing = true
 
 [tool.coverage.html]

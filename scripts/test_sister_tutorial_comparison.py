@@ -40,6 +40,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 # Configure logging
 logging.basicConfig(
@@ -58,17 +59,19 @@ class SisterTutorialTester:
     ):
         """Initialize sister tutorial tester."""
         # Set default paths
-        if neuron_tutorial_root is None:
-            neuron_tutorial_root = Path(__file__).parent.parent
-        if gpu_tutorial_root is None:
-            gpu_tutorial_root = (
-                Path(__file__).parent.parent.parent / "nvidia-gpu-tutorial-for-research"
-            )
+        self.neuron_root = (
+            Path(neuron_tutorial_root)
+            if neuron_tutorial_root is not None
+            else Path(__file__).parent.parent
+        )
+        self.gpu_root = (
+            Path(gpu_tutorial_root)
+            if gpu_tutorial_root is not None
+            else Path(__file__).parent.parent.parent
+            / "nvidia-gpu-tutorial-for-research"
+        )
 
-        self.neuron_root = Path(neuron_tutorial_root)
-        self.gpu_root = Path(gpu_tutorial_root)
-
-        self.test_results = {
+        self.test_results: dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
             "neuron_tutorial_root": str(self.neuron_root),
             "gpu_tutorial_root": str(self.gpu_root),
@@ -108,11 +111,11 @@ class SisterTutorialTester:
         logger.info(f"   Neuron tutorial: {self.neuron_root}")
         logger.info(f"   GPU tutorial: {self.gpu_root}")
 
-    def test_tutorial_availability(self) -> dict:
+    def test_tutorial_availability(self) -> dict[str, Any]:
         """Test that both tutorials are available and accessible."""
         logger.info("📂 Testing tutorial availability...")
 
-        availability_results = {
+        availability_results: dict[str, Any] = {
             "neuron_tutorial": {
                 "exists": self.neuron_root.exists(),
                 "readable": False,
@@ -185,11 +188,11 @@ class SisterTutorialTester:
 
         return availability_results
 
-    def test_structure_compatibility(self) -> dict:
+    def test_structure_compatibility(self) -> dict[str, Any]:
         """Test directory structure and organization compatibility."""
         logger.info("🏗️ Testing structure compatibility...")
 
-        structure_results = {
+        structure_results: dict[str, Any] = {
             "directory_comparison": {},
             "file_comparison": {},
             "missing_in_gpu": [],
@@ -265,11 +268,11 @@ class SisterTutorialTester:
 
         return structure_results
 
-    def test_model_consistency(self) -> dict:
+    def test_model_consistency(self) -> dict[str, Any]:
         """Test that model architectures are identical between tutorials."""
         logger.info("🧠 Testing model consistency...")
 
-        model_results = {
+        model_results: dict[str, Any] = {
             "model_definitions": {},
             "parameter_counts": {},
             "architecture_hashes": {},
@@ -392,11 +395,11 @@ class SisterTutorialTester:
 
         return model_results
 
-    def test_dataset_compatibility(self) -> dict:
+    def test_dataset_compatibility(self) -> dict[str, Any]:
         """Test dataset format and structure compatibility."""
         logger.info("📊 Testing dataset compatibility...")
 
-        dataset_results = {
+        dataset_results: dict[str, Any] = {
             "dataset_managers": {},
             "dataset_formats": {},
             "data_samples": {},
@@ -521,11 +524,11 @@ class SisterTutorialTester:
 
         return dataset_results
 
-    def test_benchmarking_framework(self) -> dict:
+    def test_benchmarking_framework(self) -> dict[str, Any]:
         """Test benchmarking framework compatibility and synchronization."""
         logger.info("⚡ Testing benchmarking framework...")
 
-        benchmark_results = {
+        benchmark_results: dict[str, Any] = {
             "config_compatibility": {},
             "result_format_compatibility": {},
             "benchmark_methods": {},
@@ -640,11 +643,11 @@ class SisterTutorialTester:
 
         return benchmark_results
 
-    def test_version_alignment(self) -> dict:
+    def test_version_alignment(self) -> dict[str, Any]:
         """Test software version alignment between tutorials."""
         logger.info("📋 Testing version alignment...")
 
-        version_results = {
+        version_results: dict[str, Any] = {
             "version_matrices": {},
             "framework_versions": {},
             "alignment_score": 0,
@@ -744,7 +747,7 @@ class SisterTutorialTester:
         except Exception:
             return False
 
-    def run_full_comparison_test(self) -> dict:
+    def run_full_comparison_test(self) -> dict[str, Any]:
         """Run complete sister tutorial comparison test suite."""
         logger.info("🚀 Running full sister tutorial comparison test...")
 
@@ -780,7 +783,7 @@ class SisterTutorialTester:
         )
         return self.test_results
 
-    def run_quick_comparison_test(self) -> dict:
+    def run_quick_comparison_test(self) -> dict[str, Any]:
         """Run quick sister tutorial compatibility check."""
         logger.info("⚡ Running quick sister tutorial comparison...")
 
@@ -801,7 +804,7 @@ class SisterTutorialTester:
 
         return self.test_results
 
-    def _calculate_overall_status(self):
+    def _calculate_overall_status(self) -> None:
         """Calculate overall comparison test status."""
         critical_tests = [
             name for name, info in self.comparison_tests.items() if info["critical"]
@@ -967,7 +970,7 @@ class SisterTutorialTester:
         return "\n".join(report_lines)
 
 
-def main():
+def main() -> None:
     """Main comparison testing entry point."""
     parser = argparse.ArgumentParser(description="Sister Tutorial Comparison Testing")
     parser.add_argument(

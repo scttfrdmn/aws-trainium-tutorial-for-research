@@ -216,7 +216,7 @@ bandwidth, ~1.3 PFLOPS FP8 per chip. Confirm exact figures on the
 
 ## 🔄 Testing
 
-The repo ships a `pytest` suite (`tests/`, `test_suite.py`) that runs in CI on commit. These tests
+The repo ships a `pytest` suite (`tests/`) that runs in CI on every push and PR. These tests
 exercise the cost/budget/ephemeral-instance logic and example imports with **mocked AWS calls** —
 they do **not** run workloads on live Neuron hardware. Coverage numbers should be read from the CI
 run, not from a static table here.

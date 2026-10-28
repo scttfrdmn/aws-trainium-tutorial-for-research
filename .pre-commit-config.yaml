@@ -15,50 +15,32 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.6  # keep in sync with the ruff==0.16.6 pin in pyproject.toml / requirements.txt
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.5.1
+    rev: v2.1.0  # matches the mypy version in uv.lock
     hooks:
       - id: mypy
+        # Same scope as CI (`mypy scripts/`). examples/, advanced/, validation/ and tests/ are
+        # not type-checked; running --strict over them would fail on every commit. scripts/
+        # passes --strict; per-module overrides (e.g. cost_monitor, #36) come from pyproject.toml.
+        files: ^scripts/
         args: [--ignore-missing-imports, --strict]
         additional_dependencies: [types-requests, types-PyYAML]
 
-  # Custom hooks for testing and coverage
+  # Custom hooks for testing
   # (Docstring coverage is now enforced by ruff's pydocstyle "D" rules — see pyproject.toml.)
   - repo: local
     hooks:
-      - id: pytest-with-coverage
-        name: Run tests with coverage
-        entry: python
+      # Same selection as CI. No coverage gate here: coverage is informational (`make coverage`).
+      - id: pytest
+        name: Run tests (no AWS / no Neuron hardware)
+        # uv (the repo's supported workflow) resolves the project venv; a bare `python` entry
+        # picks up whatever interpreter pre-commit runs under, which usually lacks pytest.
+        entry: uv run --extra dev pytest
         language: system
-        args: [-m, pytest, tests/, --cov=scripts, --cov=examples, --cov=advanced, --cov-report=term-missing, --cov-fail-under=85, -v, --tb=short]
-        pass_filenames: false
-        always_run: true
-
-      - id: test-examples-syntax
-        name: Test example scripts syntax
-        entry: python
-        language: system
-        args: [-c, "
-import sys;
-import subprocess;
-import os;
-examples = ['scripts/setup_budget.py', 'scripts/ephemeral_instance.py', 'scripts/cost_monitor.py'];
-failed = [];
-for example in examples:
-    if os.path.exists(example):
-        try:
-            subprocess.run([sys.executable, '-m', 'py_compile', example], check=True, capture_output=True);
-            print(f'✅ {example} compiles successfully');
-        except subprocess.CalledProcessError as e:
-            failed.append(example);
-            print(f'❌ {example} failed to compile: {e.stderr.decode()}');
-if failed:
-    sys.exit(1);
-print('✅ All example scripts compile successfully')
-"]
+        args: [-m, "not aws and not neuron", --tb=short]
         pass_filenames: false
         always_run: true

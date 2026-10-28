@@ -44,8 +44,8 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Mypy (scripts)
+        # Blocking. Config (strictness, per-module overrides) lives in [tool.mypy] in pyproject.toml.
         run: uv run mypy scripts/ --ignore-missing-imports
-        continue-on-error: true  # type coverage is a work in progress; do not block CI yet
 
   test:
     name: Tests (Python ${{ matrix.python-version }})

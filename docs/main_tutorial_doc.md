@@ -28,7 +28,7 @@ and scripts linked below — those topics live in dedicated, maintained files ra
 ### Who This Tutorial Is For
 This tutorial is designed for academic researchers who:
 - Are new to AWS but familiar with deep learning concepts
-- Currently use NVIDIA GPUs (local or HPC clusters) 
+- Currently use NVIDIA GPUs (local or HPC clusters)
 - Want to minimize cloud costs while maximizing research output
 - Need to run experiments without breaking the budget
 
@@ -47,7 +47,7 @@ This tutorial is designed for academic researchers who:
 
 **The Cost Reality Check:**
 - NVIDIA A100 (p4d.24xlarge): $32.77/hour
-- NVIDIA H100 (p5.48xlarge): $98.32/hour  
+- NVIDIA H100 (p5.48xlarge): $98.32/hour
 - AWS Trainium2 (trn2.48xlarge): ~$40/hour (est.)
 - AWS Inferentia2 (inf2.48xlarge): $12.98/hour
 
