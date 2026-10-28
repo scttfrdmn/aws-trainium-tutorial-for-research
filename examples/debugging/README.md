@@ -6,19 +6,22 @@ each. All were hit for real while building the [validated NER example](../use_ca
 
 > **Assumed knowledge:** you can run a Python script and have read the
 > [best-practices chapter](../../docs/trainium_development_best_practices.md).
-> Running the `nan` demo locally needs `pip install torch transformers` (the CPU "free" mode still
-> imports them); the recompile and fallback demos short-circuit before any hardware call.
+> The CPU mode needs `pip install torch transformers` (stock CPU PyTorch; `transformers` only for
+> the `nan` demo). All three demos actually *run* on CPU — no Neuron SDK or compiler toolchain.
 > **What you'll get:** hands-on recognition of (1) the bf16 SDPA→`nan` forward-pass failure,
 > (2) the variable-shape recompile storm, and (3) the silent CPU fallback — and the fix for each.
 
 ## Run it
 
 ```bash
-# CPU walkthrough (free; explains what you'd see on hardware):
+# CPU walkthrough (free; every demo runs with stock PyTorch):
 python examples/debugging/diagnose_common_failures.py
 
-# On a Neuron instance — also counts real compilations:
+# On a Neuron instance (PyTorch/XLA, the lead path) — real compile counts + aten:: counters:
 python examples/debugging/diagnose_common_failures.py --device xla
+
+# TorchNeuron (beta, opt-in, Trn2/Trn3) — falls back to CPU with a warning if absent:
+python examples/debugging/diagnose_common_failures.py --device neuron
 
 # Just one demo:
 python examples/debugging/diagnose_common_failures.py --only nan
@@ -28,11 +31,25 @@ python examples/debugging/diagnose_common_failures.py --only fallback
 
 ## What it teaches
 
-| Failure | Symptom | Diagnosis | Fix |
-|---------|---------|-----------|-----|
-| **bf16 SDPA → nan** | `nan` loss at **step 0** (forward) | Same model+data on CPU/fp32 is finite ⇒ it's the bf16 path, not your LR | `attn_implementation="eager"` (keeps bf16; **not** `--auto-cast=none`) |
-| **Recompile storm** | "stuck", host CPU busy, cores idle, no step progress | `grep -c "Compilation Successfully Completed"` ≫ a handful | fixed shapes: `drop_last=True` + fixed `max_length` |
-| **Silent CPU fallback** | slow; no error; device underused | `torch_xla.debug.metrics.metrics_report()` → any **`aten::`** counter = an op ran on CPU | vectorize to a fixed-shape op (`torch.where`, masking); avoid `.item()`/`.nonzero()` in the hot loop |
+| Failure | Symptom | Diagnosis (`--device xla`, Trainium) | Same lesson on your laptop (CPU) | Fix |
+|---------|---------|-----------|-----------|-----|
+| **bf16 SDPA → nan** | `nan` loss at **step 0** (forward) | Same model+data on CPU/fp32 is finite ⇒ it's the bf16 path, not your LR | Runs bert-tiny SDPA vs eager on CPU/fp32 (both finite — that *is* the CPU half of the diagnosis) | `attn_implementation="eager"` (keeps bf16; **not** `--auto-cast=none`) |
+| **Recompile storm** | "stuck", host CPU busy, cores idle, no step progress | `grep -c "Compilation Successfully Completed"` ≫ a handful | `torch.compile(backend="eager")` graph count (`torch._dynamo` counters): fixed → **1**, ragged `dynamic=False` → **4**, ragged default → **2** | fixed shapes: `drop_last=True` + fixed `max_length` |
+| **Silent CPU fallback** | slow; no error; device underused | `torch_xla.debug.metrics.metrics_report()` → any **`aten::`** counter = an op ran on CPU | `torch._dynamo.explain`: `.nonzero()` mask → 2 graphs / **1 graph break**; `torch.where` → 1 graph / **0 breaks** | vectorize to a fixed-shape op (`torch.where`, masking); avoid `.item()`/`.nonzero()` in the hot loop |
+
+**About the CPU column.** Those counts were measured with CPU PyTorch 2.14 and are torch.compile
+*analogues*, not the XLA mechanism itself:
+
+- **Recompiles.** By default Dynamo recompiles once on the 2nd distinct shape and then marks the
+  dimension dynamic ("automatic dynamic shapes"), so ragged gives 2 graphs, not 4.
+  `dynamic=False` gives one graph per shape, which is closer to PyTorch/XLA on Neuron (a new static
+  graph for every new shape). Live signal: `TORCH_LOGS=recompiles`.
+- **Fallback vs graph break.** XLA runs an op it can't lower on the host and records an `aten::`
+  counter. Dynamo instead *breaks the graph* at a data-dependent op and runs that part eagerly.
+  It's the same lesson (data-dependent shapes and host reads split the compiled region), but a
+  different mechanism. Live signal: `TORCH_LOGS=graph_breaks`.
+- **`--device neuron`** (TorchNeuron, beta) runs the same torch.compile demos with
+  `backend="neuron"`. This walkthrough has **not** verified that mode on Trn2 hardware.
 
 The first two aren't toys: on real `trn1.2xlarge` we measured SDPA→`nan` vs eager→loss 1.13, and
 ragged shapes → 7+ compiles vs fixed → ~2; the validated example bakes in both fixes.

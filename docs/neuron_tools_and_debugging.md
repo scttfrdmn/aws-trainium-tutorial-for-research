@@ -148,6 +148,15 @@ grep -c "Compilation Successfully Completed" run.log
 More than a handful for a fixed-shape training loop ⇒ you have a shape-stability problem (go fix
 shapes; see best-practices §1).
 
+> **TorchNeuron (beta) note.** Everything above is the PyTorch/XLA path, which stays the lead path.
+> Under the opt-in TorchNeuron backend (`device="neuron"`, `torch.compile(backend="neuron")`,
+> Trn2/Trn3) there's no `mark_step`, and recompiles are tracked the stock `torch.compile` way:
+> `TORCH_LOGS=recompiles`, or count graphs with `torch._dynamo.utils.counters["stats"]["unique_graphs"]`.
+> The walkthrough's CPU mode demonstrates this with `backend="eager"`: fixed shapes give 1 graph,
+> ragged shapes with `dynamic=False` give 4. **Not yet verified on Trn2 hardware:** whether eager
+> TorchNeuron compiles per op or per shape, whether the `Compilation Successfully Completed` log line
+> appears (so the `grep` count may not apply), and whether `NEURON_COMPILE_CACHE_URL` applies.
+
 > Some additional flags (`NEURON_CC_FLAGS` verbosity, `NEURON_RT_LOG_LEVEL`, `XLA_IR_DEBUG`,
 > `XLA_HLO_DEBUG`) exist; their exact accepted values aren't all in the public docs. Check
 > `neuronx-cc --help` on your DLAMI before relying on a specific flag.
@@ -210,6 +219,15 @@ The [debugging walkthrough](../examples/debugging/diagnose_common_failures.py) d
 three outcomes (`--only fallback`): discover the `aten::` counter, fix it with `torch.where`, and
 recognize the unavoidable case.
 
+> **TorchNeuron (beta) note.** `metrics_report()` and its `aten::` counters belong to PyTorch/XLA.
+> Under `torch.compile` the closest equivalent is a **graph break**: Dynamo stops the compiled graph
+> at a data-dependent op (`.nonzero()`, `x[mask]`, `.item()`) and runs that part eagerly. It's the
+> same lesson by a different mechanism. Find breaks with `TORCH_LOGS=graph_breaks` or
+> `torch._dynamo.explain(fn)(*args)` (`graph_count`, `graph_break_count`, `break_reasons`). On CPU,
+> `--only fallback` shows the `.nonzero()` mask at 2 graphs / 1 break and `torch.where` at 1 graph /
+> 0 breaks. **Not yet verified on Trn2 hardware:** how TorchNeuron handles an op it can't lower
+> (error, CPU fallback, or something else) and whether that shows up in any counter.
+
 ---
 
 ## A worked debugging example
@@ -221,6 +239,12 @@ It reproduces (1) the bf16 SDPA→`nan` forward-pass failure and the eager fix, 
 variable-shape recompile storm vs. the `drop_last` fix — counting compilations so you can *see* the
 difference — and (3) the silent CPU fallback (`aten::` counters) and how to vectorize it away. Read
 its companion notes in [`examples/debugging/README.md`](../examples/debugging/README.md).
+
+All three demos also **run on a laptop** (the default `--device cpu`, stock PyTorch). There, demos 2
+and 3 show the same lessons through `torch.compile(backend="eager")`: Dynamo graph counts for ragged
+vs fixed shapes, and `torch._dynamo.explain` graph breaks for `.nonzero()` vs `torch.where`.
+`--device xla` is the hardware path. `--device neuron` is the opt-in TorchNeuron beta mode; it falls
+back to CPU when TorchNeuron isn't installed and hasn't been hardware-verified.
 
 ---
 
