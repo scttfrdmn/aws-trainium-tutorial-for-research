@@ -27,6 +27,20 @@ Key XLA-DDP pieces (vs. single-core training):
   * Checkpoint from rank 0 only, via `xm._maybe_convert_to_cpu` then `torch.save` (the
     Neuron-correct way to serialize XLA tensors).
 
+Native PyTorch DDP (opt-in; TorchNeuron is BETA). PyTorch/XLA above is the default, documented
+path. Setting ``DDP_DEVICE`` to ``"cpu"`` or ``"neuron"`` switches to plain PyTorch distributed:
+``dist.init_process_group(backend=DDP_PG_BACKEND)``, ``torch.nn.parallel.DistributedDataParallel``
+(gradient all-reduce happens in ``backward``), plain ``optimizer.step()``, ``dist.barrier()``.
+
+    # Laptop, 2 CPU processes over gloo (proves the DDP code path end to end):
+    DDP_DEVICE=cpu DDP_PG_BACKEND=gloo DDP_SMOKE=1 \\
+        torchrun --nproc_per_node=2 examples/distributed/data_parallel_ner.py
+
+    # TorchNeuron (Trn2/Trn3, beta). The process-group backend name is UNVERIFIED -- discover it on
+    # hardware (validation/torchneuron_facts.py records the available backends) and pass it in:
+    DDP_DEVICE=neuron DDP_PG_BACKEND=<name> \\
+        torchrun --nproc_per_node=2 examples/distributed/data_parallel_ner.py
+
 Sources (public): the torch-neuronx DDP BERT tutorial (torchrun + `_mp_fn`, MpDeviceLoader,
 `xm._maybe_convert_to_cpu` + torch.save) and PyTorch/XLA distributed docs. See
 docs/trainium_development_best_practices.md.
@@ -34,7 +48,17 @@ docs/trainium_development_best_practices.md.
 
 from __future__ import annotations
 
+# Allow `torchrun examples/distributed/<this>.py` (a plain script) as well as `-m`/the harness: put
+# the repo root on sys.path so the `examples.use_cases.*` imports below resolve.
+import sys as _sys  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+_ROOT = str(_Path(__file__).resolve().parents[2])
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+
 import os
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -65,6 +89,14 @@ class DDPConfig:
     seed: int = 42
     max_train_samples: int | None = None
     max_eval_samples: int | None = None
+    # "xla" (default, documented: PyTorch/XLA DDP) | "neuron" (TorchNeuron native DDP, BETA,
+    # Trn2/Trn3) | "cpu" (native DDP over gloo -- laptop proof of the code path).
+    device: str = "xla"
+    # Process-group backend for the native path (the "xla" path always uses "xla").
+    # None => "gloo" on cpu; REQUIRED for "neuron" (the TorchNeuron name is unverified).
+    pg_backend: str | None = None
+    # Native path, device="neuron" only: route the forward through torch.compile(backend="neuron").
+    compile: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -73,6 +105,60 @@ class DDPConfig:
         cfg = dict(cfg or {})
         known = {f.name for f in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
         return cls(**{k: v for k, v in cfg.items() if k in known})
+
+
+NATIVE_DEVICES = ("cpu", "neuron")
+# Comma-separated candidate names to probe for device="neuron" when DDP_PG_BACKEND isn't set. There
+# is deliberately NO built-in default list: the TorchNeuron process-group backend name has not been
+# verified on hardware, and silently picking a guessed name would turn a config error into a hang
+# or a confusing c10d failure. Only names the running torch reports as available are accepted.
+PG_BACKEND_CANDIDATES_ENV = "DDP_PG_BACKEND_CANDIDATES"
+
+
+def resolve_pg_backend(
+    device: str,
+    pg_backend: str | None = None,
+    candidates: Sequence[str] | None = None,
+    is_available: Callable[[str], bool] | None = None,
+) -> str:
+    """Pick the ``torch.distributed`` process-group backend for ``device``. Pure (no torch import).
+
+    * ``"xla"`` -> ``"xla"`` (the default, documented path; unchanged).
+    * ``"cpu"`` -> ``pg_backend`` if given, else ``"gloo"``.
+    * ``"neuron"`` -> ``pg_backend`` if given (honored verbatim). Otherwise the first of
+      ``candidates`` that ``is_available`` accepts; with no explicit name and no available
+      candidate, raise -- the name must be discovered on hardware, never guessed.
+    """
+    if device == "xla":
+        if pg_backend and pg_backend != "xla":
+            raise ValueError(
+                f"DDP_PG_BACKEND={pg_backend!r} conflicts with device='xla' (which always uses "
+                "the 'xla' backend). Set DDP_DEVICE=cpu|neuron for the native path."
+            )
+        return "xla"
+    if device not in NATIVE_DEVICES:
+        raise ValueError(
+            f"Unknown DDP device {device!r}; expected 'xla' (default), 'neuron' (beta), or 'cpu'."
+        )
+    if pg_backend:
+        return pg_backend
+    if device == "cpu":
+        return "gloo"
+    # device == "neuron" with no explicit name: probe candidates, never guess.
+    tried = [c.strip() for c in (candidates or []) if c and c.strip()]
+    if is_available is not None:
+        for name in tried:
+            if is_available(name):
+                return name
+    raise ValueError(
+        "DDP_DEVICE=neuron needs an explicit process-group backend: set DDP_PG_BACKEND=<name>. "
+        "The TorchNeuron (native backend, beta) collective backend name is UNVERIFIED in this "
+        "tutorial and is not guessed. Discover it on a Trn2/Trn3 instance -- "
+        "validation/torchneuron_facts.py records the process-group backends torch reports there -- "
+        f"or list names to probe in {PG_BACKEND_CANDIDATES_ENV} (comma-separated; only names "
+        "torch.distributed reports as available are used)."
+        + (f" Probed and unavailable: {tried}." if tried else "")
+    )
 
 
 def _build_sharded_loaders(cfg: DDPConfig, tokenizer, label_names, world_size, rank):
@@ -124,7 +210,20 @@ def _build_sharded_loaders(cfg: DDPConfig, tokenizer, label_names, world_size, r
 
 
 def train_ddp(cfg: DDPConfig) -> dict[str, float]:
-    """The per-process training function (one process per NeuronCore). Returns rank-0 metrics."""
+    """The per-process training function (one process per core). Returns rank-0 metrics.
+
+    ``cfg.device == "xla"`` (default) runs the PyTorch/XLA path; ``"cpu"``/``"neuron"`` run the
+    opt-in native-PyTorch DDP path.
+    """
+    if cfg.device == "xla":
+        # Reject a conflicting DDP_PG_BACKEND early; the XLA path itself is unchanged.
+        resolve_pg_backend("xla", cfg.pg_backend)
+        return _train_ddp_xla(cfg)
+    return _train_ddp_native(cfg)
+
+
+def _train_ddp_xla(cfg: DDPConfig) -> dict[str, float]:
+    """PyTorch/XLA DDP (the default, documented path)."""
     import time
 
     import torch
@@ -235,6 +334,175 @@ def train_ddp(cfg: DDPConfig) -> dict[str, float]:
     return metrics
 
 
+def _params_checksum(model) -> float:
+    """Sum of all parameters in float64 -- identical across ranks iff DDP kept replicas in sync."""
+    import torch
+
+    with torch.no_grad():
+        return float(
+            sum(p.detach().to("cpu", torch.float64).sum() for p in model.parameters())
+        )
+
+
+def _native_device(device: str, local_rank: int):
+    """The per-process torch.device for the native path."""
+    import torch
+
+    if device == "cpu":
+        return torch.device("cpu")
+    # device == "neuron" (BETA, UNVERIFIED on hardware): one process per NeuronCore, indexed by
+    # LOCAL_RANK. If NEURON_RT_VISIBLE_CORES scopes each process to a single core, that process
+    # sees only index 0 -- so fall back to the bare "neuron" device when the index is out of range.
+    neuron = getattr(torch, "neuron", None)
+    if neuron is None or not neuron.is_available():
+        raise RuntimeError(
+            "DDP_DEVICE=neuron but TorchNeuron isn't available (torch.neuron missing or no "
+            "devices). It's a beta backend for Trn2/Trn3; use the default XLA path otherwise."
+        )
+    count = getattr(neuron, "device_count", lambda: 0)()
+    if count and local_rank < count:
+        return torch.device("neuron", local_rank)
+    return torch.device("neuron")
+
+
+def _train_ddp_native(cfg: DDPConfig) -> dict[str, float]:
+    """Native PyTorch DDP: cpu (gloo, laptop) or TorchNeuron (beta). Opt-in only."""
+    import time
+
+    import torch
+    import torch.distributed as dist
+    from torch.nn.parallel import DistributedDataParallel as DDP
+    from transformers import (
+        AutoModelForTokenClassification,
+        AutoTokenizer,
+        get_linear_schedule_with_warmup,
+    )
+
+    from examples.use_cases._device import wrap_model
+
+    candidates = os.environ.get(PG_BACKEND_CANDIDATES_ENV, "").split(",")
+    pg_backend = resolve_pg_backend(
+        cfg.device,
+        cfg.pg_backend,
+        candidates=candidates,
+        is_available=getattr(dist, "is_backend_available", None),
+    )
+
+    torch.manual_seed(cfg.seed)
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    device = _native_device(cfg.device, local_rank)
+    backend = cfg.device  # "cpu" | "neuron" -- the _device/_evaluate backend string
+    dist.init_process_group(backend=pg_backend)
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+    if rank == 0:
+        print(
+            f"🧬 DDP NER (native) | device={cfg.device} pg_backend={pg_backend} | "
+            f"world_size={world_size} | model={cfg.model_name} | attn={cfg.attn_implementation}"
+        )
+
+    from datasets import load_dataset
+
+    label_names = (
+        load_dataset(cfg.dataset_name, revision=cfg.dataset_revision, split="train")
+        .features["ner_tags"]
+        .feature.names
+    )
+    tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
+    train_loader, eval_loader, sampler = _build_sharded_loaders(
+        cfg, tokenizer, label_names, world_size, rank
+    )
+
+    model = AutoModelForTokenClassification.from_pretrained(
+        cfg.model_name,
+        num_labels=len(label_names),
+        id2label=dict(enumerate(label_names)),
+        label2id={n: i for i, n in enumerate(label_names)},
+        attn_implementation=cfg.attn_implementation,
+    ).to(device)
+    # device_ids is only meaningful for single-device CUDA modules: None for cpu and (unverified)
+    # neuron. DDP broadcasts rank 0's weights at construction and all-reduces grads in backward().
+    ddp_model = DDP(model, device_ids=None)
+    # bf16 autocast (+ optional torch.compile) on neuron; a no-op pair on cpu.
+    fwd, amp = wrap_model(ddp_model, backend, compile=cfg.compile)
+
+    optimizer = torch.optim.AdamW(ddp_model.parameters(), lr=cfg.learning_rate)
+    total_steps = max(1, len(train_loader) * cfg.epochs)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, int(0.1 * total_steps), total_steps
+    )
+
+    dist.barrier()  # align all ranks before timing (native stand-in for xm.rendezvous)
+    wall_start = time.time()
+    steps_per_core = 0
+    running = torch.zeros((), device=device)
+    for epoch in range(cfg.epochs):
+        ddp_model.train()
+        sampler.set_epoch(epoch)
+        running = torch.zeros((), device=device)
+        n = 0
+        for batch in train_loader:
+            batch = {k: v.to(device) for k, v in batch.items()}
+            optimizer.zero_grad()
+            with amp():
+                out = fwd(
+                    input_ids=batch["input_ids"],
+                    attention_mask=batch["attention_mask"],
+                    labels=batch["labels"],
+                )
+            out.loss.backward()  # DDP all-reduces (averages) gradients here
+            torch.nn.utils.clip_grad_norm_(ddp_model.parameters(), cfg.grad_clip)
+            optimizer.step()
+            scheduler.step()
+            running += out.loss.detach()
+            n += 1
+            steps_per_core += 1
+        if rank == 0:
+            print(
+                f"   epoch {epoch + 1}/{cfg.epochs}  rank0 avg_loss={(running / max(1, n)).item():.4f}"
+            )
+    running.item()  # fence: force queued device work before stopping the clock
+    train_wall = time.time() - wall_start
+    total_samples = steps_per_core * cfg.per_core_batch_size * world_size
+
+    # Replica-sync check: every rank trained on a different shard, so identical parameter
+    # checksums after training mean the gradient all-reduce kept the replicas in lockstep.
+    checksum = _params_checksum(model)
+    print(f"   rank {rank}: steps={steps_per_core} param_checksum={checksum:.10f}")
+    gathered: list[Any] = [None] * world_size
+    dist.all_gather_object(gathered, checksum)
+
+    metrics: dict[str, float] = {}
+    if rank == 0:
+        tol = 1e-6 * max(1.0, abs(gathered[0]))
+        in_sync = all(abs(c - gathered[0]) <= tol for c in gathered)
+        print(f"   replicas in sync across {world_size} ranks: {in_sync}")
+        # Evaluate the unwrapped module on rank 0 alone (DDP's forward may issue collectives the
+        # other ranks wouldn't join).
+        eval_fwd, eval_amp = wrap_model(model, backend, compile=cfg.compile)
+        metrics = _evaluate(
+            model, eval_loader, device, backend, label_names, eval_fwd, eval_amp
+        )
+        metrics["world_size"] = float(world_size)
+        metrics["replicas_in_sync"] = float(in_sync)
+        metrics["train_wall_s"] = round(train_wall, 2)
+        metrics["train_throughput_samples_s"] = (
+            round(total_samples / train_wall, 2) if train_wall > 0 else 0.0
+        )
+        os.makedirs("/tmp/ddp_ner_ckpt", exist_ok=True)
+        cpu_state = {k: v.detach().cpu() for k, v in model.state_dict().items()}
+        torch.save(cpu_state, "/tmp/ddp_ner_ckpt/model.pt")
+        print(
+            f"✅ DDP (native, {cfg.device}/{pg_backend}) done. "
+            f"eval_f1={metrics.get('eval_f1', float('nan')):.4f} on {world_size} ranks; "
+            f"throughput={metrics['train_throughput_samples_s']} samples/s; checkpoint saved."
+        )
+
+    dist.barrier()
+    dist.destroy_process_group()
+    return metrics
+
+
 def run(config: dict | None = None) -> dict[str, float]:
     """Harness entrypoint.
 
@@ -247,7 +515,10 @@ def run(config: dict | None = None) -> dict[str, float]:
         print(
             "This is a distributed example. Launch it with torchrun on a Neuron instance:\n"
             "    torchrun --nproc_per_node=2 examples/distributed/data_parallel_ner.py\n"
-            "(--nproc_per_node = number of NeuronCores; see `neuron-ls`)."
+            "(--nproc_per_node = number of NeuronCores; see `neuron-ls`).\n"
+            "Laptop proof of the native-DDP path (2 CPU processes over gloo):\n"
+            "    DDP_DEVICE=cpu DDP_PG_BACKEND=gloo DDP_SMOKE=1 torchrun --nproc_per_node=2 "
+            "examples/distributed/data_parallel_ner.py"
         )
         return {}
     return train_ddp(cfg)
@@ -259,8 +530,29 @@ def main() -> None:
     A few knobs are read from the environment so a benchmark harness can match a single-core run's
     config without editing code: DDP_EPOCHS, DDP_PER_CORE_BATCH, DDP_MAX_TRAIN, DDP_MAX_EVAL,
     DDP_MAX_LENGTH.
+
+    Native-DDP knobs (opt-in; XLA stays the default): DDP_DEVICE ("xla" | "neuron" | "cpu"),
+    DDP_PG_BACKEND (process-group backend; default "gloo" on cpu, required for neuron),
+    DDP_PG_BACKEND_CANDIDATES (neuron only: comma-separated names to probe), DDP_COMPILE=1
+    (neuron only: torch.compile). DDP_SMOKE=1 shrinks the run like NER_SMOKE (1 epoch, 64
+    train/eval samples) and defaults the device to cpu; explicit DDP_* values still win.
     """
     cfg: dict[str, Any] = {}
+    if os.environ.get("DDP_SMOKE") not in (None, "", "0"):
+        cfg.update(
+            {
+                "device": "cpu",
+                "epochs": 1,
+                "max_train_samples": 64,
+                "max_eval_samples": 64,
+            }
+        )
+    if os.environ.get("DDP_DEVICE"):
+        cfg["device"] = os.environ["DDP_DEVICE"]
+    if os.environ.get("DDP_PG_BACKEND"):
+        cfg["pg_backend"] = os.environ["DDP_PG_BACKEND"]
+    if os.environ.get("DDP_COMPILE"):
+        cfg["compile"] = os.environ["DDP_COMPILE"] not in ("", "0")
     _env = {
         "epochs": "DDP_EPOCHS",
         "per_core_batch_size": "DDP_PER_CORE_BATCH",
