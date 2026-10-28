@@ -25,7 +25,7 @@ repos:
       - id: mypy
         # Same scope as CI (`mypy scripts/`). examples/, advanced/, validation/ and tests/ are
         # not type-checked; running --strict over them would fail on every commit. scripts/
-        # passes --strict; per-module overrides (e.g. cost_monitor, #36) come from pyproject.toml.
+        # passes --strict (third-party import overrides come from pyproject.toml).
         files: ^scripts/
         args: [--ignore-missing-imports, --strict]
         additional_dependencies: [types-requests, types-PyYAML]
