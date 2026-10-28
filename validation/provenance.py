@@ -17,7 +17,7 @@ import platform
 import re
 import subprocess
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -47,7 +47,7 @@ def utc_now_iso(clock: str | None = None) -> str:
     """
     if clock:
         return clock
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def detect_instance_type() -> str | None:

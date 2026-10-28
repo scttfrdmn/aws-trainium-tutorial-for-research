@@ -132,7 +132,7 @@ Savings vs alternative: X%
 - **Advanced NKI kernels**: Custom operations for specific domains
 - **Cost optimization tools**: Better spot instance management
 
-### Medium Priority  
+### Medium Priority
 - **Monitoring improvements**: Better dashboards and alerting
 - **Educational content**: Jupyter notebooks and tutorials
 - **Integration examples**: With popular ML frameworks

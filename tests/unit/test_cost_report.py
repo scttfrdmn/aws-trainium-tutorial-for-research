@@ -3,7 +3,7 @@ static dashboard that renders it (monitoring/cost_monitoring_dashboard.html)."""
 
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -14,7 +14,7 @@ from cost_monitor import build_cost_report, is_ml_instance, main
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DASHBOARD = REPO_ROOT / "monitoring" / "cost_monitoring_dashboard.html"
 
-NOW = datetime(2025, 3, 15, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2025, 3, 15, 12, 0, tzinfo=UTC)
 
 
 def _monthly_response():
@@ -186,7 +186,7 @@ def test_build_cost_report_schema(mocked_clients):
 @pytest.mark.unit
 def test_build_cost_report_first_of_month_skips_mtd_query(mocked_clients):
     clients, _ = mocked_clients
-    first = datetime(2025, 4, 1, 9, 0, tzinfo=timezone.utc)
+    first = datetime(2025, 4, 1, 9, 0, tzinfo=UTC)
     report = build_cost_report(days=7, region="us-east-1", now=first)
     granularities = [
         c.kwargs["Granularity"] for c in clients["ce"].get_cost_and_usage.call_args_list

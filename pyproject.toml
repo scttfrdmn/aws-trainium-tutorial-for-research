@@ -127,9 +127,6 @@ convention = "google"
 # later section). Relax F401/F811 there; real bug rules (E7xx, B, F8xx, SIM, UP) still apply.
 "examples/**" = ["D", "E402", "F401", "F811"]
 "advanced/**" = ["D", "F401"]
-# The py312 target bump (#35) flags `timezone.utc` -> `datetime.UTC` here; the file belongs to
-# another workstream, so the one-line fix is tracked separately. Drop this once it is applied.
-"validation/provenance.py" = ["UP017"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["scripts", "examples", "advanced"]
@@ -167,12 +164,6 @@ module = [
     "scipy.*",
 ]
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-# scripts/cost_monitor.py is being rewritten in a separate workstream (#36); its remaining
-# type errors are fixed there. Remove this override once #36 lands.
-module = ["cost_monitor"]
-ignore_errors = true
 
 [tool.pytest.ini_options]
 minversion = "7.0"
@@ -218,7 +209,8 @@ exclude_lines = [
     "except NoCredentialsError:",
     "# Placeholder for actual implementation",
 ]
-fail_under = 85
+# No fail_under: measured coverage is ~20-30% (most example code only runs on Trainium hardware), so
+# an 85% gate could never pass. `make coverage` reports without gating.
 show_missing = true
 
 [tool.coverage.html]
