@@ -54,6 +54,16 @@ that something is `xm.mark_step()` (or reading a tensor's value). `mark_step()` 
 run everything I've recorded since the last one." This is why the terms below (`mark_step`,
 "the graph") keep appearing: you're really programming a graph that gets compiled, not eager ops.
 
+> **TorchNeuron (beta) note.** This chapter describes PyTorch/XLA, the lead path. The opt-in
+> TorchNeuron backend (`device="neuron"`, Trn2/Trn3) has no lazy graph and no `mark_step`: ops run
+> eagerly, and graphs only exist where you wrap code in `torch.compile(backend="neuron")`. In
+> `torch.compile` terms, a "new graph per new shape" is a **recompile** (`TORCH_LOGS=recompiles`),
+> and a data-dependent op splits the graph with a **graph break** (`TORCH_LOGS=graph_breaks`,
+> `torch._dynamo.explain`). The shape-stability advice below still applies to any compiled region.
+> **Not yet verified on Trn2 hardware:** whether eager TorchNeuron compiles per op or per shape,
+> whether `NEURON_COMPILE_CACHE_URL` applies, and whether the bf16 SDPA `nan` (§4) reproduces under
+> `torch.autocast`.
+
 A new graph is compiled **every time the compiler sees a shape (or computation) it hasn't seen
 before.** Compilation is expensive — seconds to *minutes* per graph for big models. If your program
 keeps presenting new shapes, you recompile constantly and never make progress.
@@ -282,6 +292,18 @@ export NEURON_RT_LOG_LEVEL=INFO        # see runtime / compile activity
 grep -c "Compilation Successfully Completed" run.log   # count how many graphs you compiled
 ```
 If that count is more than "a handful," you have a shape-stability problem — go back to §1.
+
+You can see the same lesson on a laptop. `python examples/debugging/diagnose_common_failures.py
+--only recompile` runs `torch.compile(backend="eager")` on CPU and counts graphs: fixed shapes give 1,
+ragged shapes with `dynamic=False` give 4 (by default Dynamo switches to dynamic shapes after the
+2nd shape, giving 2). These are torch.compile counts, not Neuron compiles.
+
+> **TorchNeuron (beta) note.** Timing works differently too. Under XLA you call
+> `xm.wait_device_ops()` before stopping the clock. TorchNeuron's equivalent sync isn't documented in
+> this repo, so this tutorial doesn't name one. Reading a value back (`.item()` / `.cpu()`) does force
+> completion. **Not yet verified on Trn2 hardware:** whether the `Compilation Successfully Completed`
+> line appears under TorchNeuron, so the `grep` count above may not apply. Use
+> `TORCH_LOGS=recompiles` there instead.
 
 For CPU-side kernel development without burning Trainium time, use NKI's simulation mode (see the
 [Simulator chapter](main_tutorial_doc.md#simulator)).
