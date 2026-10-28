@@ -112,7 +112,8 @@ few small added matrices — far cheaper, and the standard way to fine-tune an L
 Run the cheapest possible probe: take the [NER example](../examples/use_cases/biomedical_ner.py),
 swap in a small slice of *your* data and *your* model, and run the CPU smoke path
 (`NER_SMOKE=1 …`). If it adapts cleanly with static shapes, you're likely a good fit — validate on
-real hardware next. If you find yourself fighting dynamic shapes or control flow at every turn,
+real hardware next (start on `trn1.2xlarge`; for Trainium2, see
+[Using Trn2](quick-start.md#using-trn2)). If you find yourself fighting dynamic shapes or control flow at every turn,
 that's your answer too.
 
 ---

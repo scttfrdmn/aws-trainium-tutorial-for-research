@@ -152,6 +152,20 @@ Create a simple cost tracking dashboard - see `monitoring/` directory for the co
 | On-Demand $/hr | $3.06 | $32.77 | $98.32 | $1.34 | ~$40 | $0.758 |
 | Spot $/hr (avg) | $0.918 | $9.83 | ~$29.50 | $0.40 | ~$12 | $0.227 |
 
+### Which Trainium instance to start on
+
+**Start on `trn1.2xlarge`.** It's the cheapest Trainium instance, it's usually available, and all six
+single-device examples in this tutorial were validated on it. On Trn1, PyTorch/XLA is the only path, and that's the
+path this tutorial teaches.
+
+**Trn2 takes the same XLA code**, so you can move up when you need more memory or compute.
+`trn2.3xlarge` has 1 Trainium2 chip (4 logical NeuronCores at LNC=2, 96 GB HBM, 12 vCPU) and
+`trn2.48xlarge` has 16. Two cautions: Trn2 is offered in few regions, and in Sept–Oct 2026 our spot
+and on-demand requests never got capacity. EC2 Capacity Blocks for ML did work. See
+[Using Trn2](quick-start.md#using-trn2) for the regions we saw, the prices we paid, and how to
+point the validation harness at a block. [`VALIDATED.md`](../VALIDATED.md) shows which examples
+passed on `trn2.3xlarge`.
+
 ---
 
 ## 5. Migrating from CUDA to Neuron {#cuda-migration}

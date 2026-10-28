@@ -11,9 +11,10 @@ A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This
 
 > ✅ **Hardware-validated on real Trainium** (PyTorch 2.9 / XLA): **6 single-device examples
 > auto-validated on `trn1.2xlarge` on Neuron 2.33** (each with a captured provenance artifact; SDK
-> 2.33.38, torch-neuronx 2.9.0.2.15, neuronx-cc 2.28), **plus multi-process examples** (`qwen3_lora`,
-> `ddp_ner`, `tp_full_finetune`, run on earlier 2.30/2.31 SDKs) validated by manual `torchrun` launch — see
-> [`VALIDATED.md`](VALIDATED.md). Every performance number traces to a real run; nothing is hand-typed.
+> 2.33.38, torch-neuronx 2.9.0.2.15, neuronx-cc 2.28), **4 of those 6 also passed on `trn2.3xlarge`** on
+> the same XLA path (`cv_utilization_spike` and `antibody_affinity_slm` did not), **plus multi-process
+> examples** (`qwen3_lora`, `ddp_ner`, `tp_full_finetune`) validated by manual `torchrun` launch
+> (`ddp_ner` on both `trn1.2xlarge` and `trn2.3xlarge`) — see [`VALIDATED.md`](VALIDATED.md). Every performance number traces to a real run; nothing is hand-typed.
 > (One example, the satellite CNN, is slow to *compile* the first time — Trainium compiles your whole
 > model before running it, unlike a GPU. That first-compile cost and how to make it one-time is a core
 > lesson, explained in the [CUDA→Neuron chapter](docs/main_tutorial_doc.md#cuda-migration).)
@@ -42,7 +43,6 @@ A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This
 - **Advanced Patterns**: NKI development, RAG implementations, distributed training
 - **Real-Time Monitoring**: S3-hosted dashboard for cost and resource tracking
 - **Domain-Specific Examples**: Climate science, biomedical, social sciences
-- **Production Ready**: Container-based workflows with AWS Batch
 
 ## Cost Savings
 
@@ -114,6 +114,10 @@ python scripts/ephemeral_instance.py \
 python scripts/cost_monitor.py
 ```
 
+`trn1.2xlarge` is the recommended starting instance: cheap, usually available, and the XLA path used
+throughout. Want Trainium2? Trn2 capacity is scarce and usually needs an EC2 Capacity Block; see
+[Using Trn2](docs/quick-start.md#using-trn2).
+
 ## Repository Structure
 
 ```
@@ -125,8 +129,8 @@ aws-trainium-tutorial-for-research/
 ├── examples/
 │   ├── use_cases/                    # biomedical_ner, satellite_landcover, cv_utilization_spike, distill/antibody/crystal SLMs, qwen3_lora (all hardware-validated)
 │   ├── complete_workflow/            # Trainium → Inferentia pipeline
-│   ├── deployment/ · integration/    # serving + MLflow/Kubeflow/CI templates
-│   └── advanced/                     # NKI patterns (illustrative)
+│   ├── debugging/ · distributed/     # failure walkthrough; DDP / tensor-parallel examples
+│   └── _legacy/                      # older templates (deployment, integration, …), not maintained
 ├── advanced/                          # Advanced NKI patterns (illustrative)
 ├── monitoring/                        # Cost monitoring dashboard
 └── VALIDATED.md                       # Generated: which examples are hardware-validated
