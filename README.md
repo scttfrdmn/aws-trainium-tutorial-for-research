@@ -41,7 +41,7 @@ A comprehensive, research-focused tutorial for AWS Trainium and Inferentia. This
 - **Ephemeral Computing**: Auto-terminating resources to prevent runaway costs
 - **Complete Workflows**: End-to-end examples from training to inference
 - **Advanced Patterns**: NKI development, RAG implementations, distributed training
-- **Real-Time Monitoring**: S3-hosted dashboard for cost and resource tracking
+- **Cost Monitoring**: local cost report + static dashboard (no AWS credentials in the browser)
 - **Domain-Specific Examples**: Climate science, biomedical, social sciences
 
 ## Cost Savings
@@ -98,8 +98,8 @@ Using **Claude Code** or **Kiro**? Optional capstone: **[Agentic Neuron developm
 ## Quick Start
 
 ```bash
-# 1. Set up AWS credentials
-aws configure
+# 1. Set up AWS credentials (SSO preferred: `aws configure sso` + `aws sso login`; or `aws configure`)
+aws sso login --profile research && export AWS_PROFILE=research
 
 # 2. Create budget alerts (--email is required — alerts are time-sensitive)
 python scripts/setup_budget.py --limit 500 --email your-email@university.edu
@@ -110,8 +110,10 @@ python scripts/ephemeral_instance.py \
     --instance-type "trn1.2xlarge" \
     --max-hours 4
 
-# 4. Monitor costs
+# 4. Monitor costs (console summary + ml_costs.png)
 python scripts/cost_monitor.py
+# ...or write a report for the static dashboard (see monitoring/README.md)
+python scripts/cost_monitor.py --json monitoring/cost_report.json
 ```
 
 `trn1.2xlarge` is the recommended starting instance: cheap, usually available, and the XLA path used
@@ -132,7 +134,7 @@ aws-trainium-tutorial-for-research/
 │   ├── debugging/ · distributed/     # failure walkthrough; DDP / tensor-parallel examples
 │   └── _legacy/                      # older templates (deployment, integration, …), not maintained
 ├── advanced/                          # Advanced NKI patterns (illustrative)
-├── monitoring/                        # Cost monitoring dashboard
+├── monitoring/                        # Static cost dashboard (reads cost_report.json; no credentials in browser)
 └── VALIDATED.md                       # Generated: which examples are hardware-validated
 ```
 

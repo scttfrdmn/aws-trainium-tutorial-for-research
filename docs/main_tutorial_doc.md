@@ -97,9 +97,12 @@ Before we write any ML code, let's set up safeguards to prevent runaway costs.
 # Install AWS CLI v2 if you haven't (NOT `pip install awscli`, which is the deprecated v1):
 # see the local setup guide — docs/local_setup_guide.md — for per-OS instructions.
 
-# Configure with your academic credentials
-aws configure
-# Enter your Access Key ID, Secret Access Key, Region (us-east-1), and output format (json)
+# Preferred: short-lived credentials via IAM Identity Center (SSO), if your institution offers it
+aws configure sso            # one-time profile setup
+aws sso login --profile research
+export AWS_PROFILE=research
+# Fallback: long-lived access keys (keep them out of code, notebooks and browsers)
+# aws configure
 ```
 
 #### Step 2: Auto-Termination Scripts
@@ -108,7 +111,10 @@ aws configure
 
 #### Step 3: Cost Dashboard
 
-Create a simple cost tracking dashboard - see `monitoring/` directory for the complete S3-hosted dashboard.
+Generate a local cost report and view it in the static dashboard; see [`monitoring/README.md`](../monitoring/README.md).
+Run `AWS_PROFILE=your-profile python scripts/cost_monitor.py --json monitoring/cost_report.json`, then
+open `monitoring/cost_monitoring_dashboard.html` and load the file. The dashboard never asks for AWS
+credentials.
 
 ---
 
@@ -624,7 +630,7 @@ Before starting your research on AWS:
 - [ ] Create S3 bucket for data/models
 - [ ] Set up auto-termination scripts (`scripts/ephemeral_instance.py`)
 - [ ] Test with the CPU smoke run first (`NER_SMOKE=1 python examples/use_cases/biomedical_ner.py`)
-- [ ] Deploy cost monitoring dashboard (`monitoring/cost_monitoring_dashboard.html`)
+- [ ] Generate a cost report and open the dashboard (`python scripts/cost_monitor.py --json monitoring/cost_report.json`, then `monitoring/cost_monitoring_dashboard.html`)
 - [ ] Join Neuron community channels
 - [ ] Have emergency shutdown script ready (`scripts/emergency_shutdown.py`)
 
