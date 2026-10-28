@@ -119,9 +119,8 @@ and [nki-samples](https://github.com/aws-neuron/nki-samples)):
 5. **Report the win honestly.** Error vs FP64 reference *and* time vs the composed baseline — so the
    accuracy claim is measured, not asserted.
 
-> The illustrative kernels under [`advanced/`](../advanced/) and
-> [`examples/advanced/`](../examples/advanced/) show NKI *shape* but are not drop-in runnable. Start
-> from the official nki-samples for working code.
+> The illustrative kernels under [`advanced/`](../advanced/) show NKI *shape* but are not drop-in
+> runnable. Start from the official nki-samples for working code.
 
 ---
 

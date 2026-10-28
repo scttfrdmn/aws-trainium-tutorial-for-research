@@ -77,6 +77,42 @@ python -m validation.run_on_hardware --instance trn1.2xlarge --region us-east-2 
 # add --yes to actually provision (spot + auto-terminate + cost ceiling)
 ```
 
+<a id="using-trn2"></a>
+### Using Trn2 (optional)
+
+**Start on `trn1.2xlarge`.** It's cheap, usually available, and runs the PyTorch/XLA path this
+tutorial teaches. On Trainium2 the examples use the same XLA code, unchanged:
+[`VALIDATED.md`](../VALIDATED.md) shows 4 of the 6 single-device examples passing on `trn2.3xlarge`
+and which 2 didn't. What to know before you try Trn2:
+
+- **Sizes:** `trn2.3xlarge` (1 Trainium2 chip, 4 logical NeuronCores at LNC=2, 96 GB HBM, 12 vCPU)
+  and `trn2.48xlarge` (16 chips).
+- **Regions are sparse.** For this project's account, `trn2.48xlarge` was offered only in
+  `us-east-2` and `trn2.3xlarge` only in `sa-east-1` and `ap-southeast-4`; `us-east-1` offered no
+  Trn2. Check what your account sees before planning.
+- **Spot and on-demand may not get you an instance.** In Sept–Oct 2026, every spot and on-demand Trn2
+  request we made, in every offered AZ, returned `InsufficientInstanceCapacity`. That includes a
+  spot-retry watcher that ran for 12 hours. Spot prices for `trn2.3xlarge` were *observed* at about
+  $6–8/hr when listed, but the capacity wasn't there. Check
+  [current pricing](https://aws.amazon.com/ec2/pricing/).
+- **EC2 Capacity Blocks for ML worked.** You buy a block ahead of time for a fixed window. For
+  example, a ~14 h `trn2.3xlarge` block in `ap-southeast-4` cost **$32.07 prepaid
+  (non-refundable)**, and a `trn2.48xlarge` block in `us-east-2` for the same window was quoted at
+  about $514. **AWS starts reclaiming the instance before the block ends** (we saw it ~30 min
+  early), so finish your work and copy results off well before the end time.
+
+To run the validation harness inside a block, pass its reservation ID and AZ:
+
+```bash
+python -m validation.run_on_hardware --instance trn2.3xlarge --region ap-southeast-4 \
+    --az <block-az> --capacity-reservation-id cr-... --launcher awscli --bootstrap \
+    --example ner_biomedical          # dry run; add --yes to launch
+```
+
+See `python -m validation.run_on_hardware --help` for the other flags. TorchNeuron, AWS's native
+backend, runs only on Trn2/Trn3 and is still **beta**, so this tutorial stays on XLA; see
+[Trying TorchNeuron](main_tutorial_doc.md#trying-torchneuron) if you want to experiment.
+
 ## Cost monitoring
 
 ```bash

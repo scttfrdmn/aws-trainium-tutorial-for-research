@@ -2,7 +2,7 @@
 
 This document tracks software versions, dependencies, and the current platform direction for the AWS Trainium & Inferentia tutorial components.
 
-**Last Updated**: 2026-10-20
+**Last Updated**: 2026-10-27
 **Reference**: [AWS Neuron release notes](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/release-notes/index.html)
 **Legend**: ✅ Current/recommended | ⚠️ Legacy/maintenance | ❌ Archived/EOL | 🔬 Preview
 
@@ -137,6 +137,7 @@ SDKs but will not receive new features or hardware support.
 | Instance | Chip | Status | Use Case |
 |----------|------|--------|----------|
 | **trn2.48xlarge** | Trainium2 (16 chips, 1,536 GiB device mem) | ✅ | Current flagship — large-scale training **and inference** |
+| **trn2.3xlarge** | Trainium2 (1 chip, 96 GB HBM, 4 logical NeuronCores at LNC=2, 12 vCPU) | ✅ | Single-chip Trn2; few regions, capacity scarce (see [Using Trn2](docs/quick-start.md#using-trn2)) |
 | **trn1.32xlarge** | Trainium1 (16 chips) | ✅ | Large-scale training |
 | **trn1.2xlarge** | Trainium1 (1 chip) | ✅ | Entry-level training / experimentation |
 | **Trn3 UltraServer** | Trainium3 | 🔬 | Announced re:Invent 2025; private preview, UltraServer-scale |
