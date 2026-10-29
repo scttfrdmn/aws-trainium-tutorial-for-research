@@ -34,7 +34,11 @@ python examples/use_cases/cv_utilization_spike.py
 CV_SMOKE=1 python examples/use_cases/cv_utilization_spike.py
 ```
 
-> **Opt-in, beta:** a TorchNeuron backend also exists (`device="neuron"` / `CV_DEVICE=neuron`; Trn2/Trn3 only; not validated on hardware yet). The XLA path above is the default.
+> **Opt-in, beta:** a TorchNeuron backend also exists (`device="neuron"` / `CV_DEVICE=neuron`, plus
+> `CV_COMPILE=1` for `torch.compile`; Trn2/Trn3 only). The XLA path above is the default. On a
+> `trn2.3xlarge`, the ViT/CNN ratio was **0.80 in eager mode** (the thesis fails) but **2.33 under
+> `torch.compile`** (it holds). Eager per-op dispatch hides how well each model fills the array, so
+> measure compiled code when the question is hardware utilization.
 
 ## ✅ Result (measured on real hardware)
 

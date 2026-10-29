@@ -10,6 +10,37 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Added (Trn2 results from a shared Capacity Block slot)
+Run on a `trn2.3xlarge` (Neuron 2.33) during a 5-hour slot on trnsci's Capacity Block.
+- **TorchNeuron facts (#28)**, measured with `validation/torchneuron_facts.py`. The debugging chapters'
+  "not yet verified" lists now state these instead:
+  - Eager mode compiles per op and per shape. The "Compilation Successfully Completed" line never
+    appears, and `NEURON_COMPILE_CACHE_URL` had no effect.
+  - Ops it can't lower raise an error rather than silently falling back to CPU.
+  - The bf16 SDPA `nan` doesn't reproduce.
+  - `torch.neuron.synchronize()` blocks, so use it as the timing fence.
+- **Native PyTorch DDP on TorchNeuron (#26):** the process-group backend is `neuron` (`gloo` and `nccl`
+  fail). `ddp_ner` with `DDP_DEVICE=neuron` reached eval_f1 0.833 at 117 samples/s, with replicas in
+  sync; XLA DDP got 0.826.
+- **`qwen3_lora` on Trn2 (#26):** Qwen3-1.7B, tensor-parallel over 2 cores, 597 steps in 34 min, final
+  loss 1.40. optimum-neuron (even 0.4.5) pins the 2.26-era stack (`torch-neuronx 2.8`, `neuronx-cc 2.21`,
+  Python <3.12, NumPy <2), so it needs its own venv: Python 3.11 via uv, plus `pyarrow<19`.
+- **cv spike (#33):** the TorchNeuron ViT/CNN ratio is 0.80 in eager mode but **2.33 under
+  `torch.compile`**, so the thesis holds once compiled.
+- **Cold-cache `torch.compile` NER (#27):** 49 min of training wall time (vs ~13 min warm), steady state
+  31.9 samples/s, eval_f1 0.860.
+- **Antibody seed sweep (#24):** on XLA, 4 of 5 seeds pass (spearman 0.41 ± 0.12; one seed at 0.21), so
+  the earlier failure was seed variance. On TorchNeuron all 5 seeds fail (0.354 ± 0.023), a consistent
+  gap.
+- **#23 reduced to a standalone repro.** The saved HLO segfaults `neuronx-cc 2.28` for `--target=trn2`
+  (with NumPy 2.5 and 2.3), and `neuronx-cc 2.27` fails on it with `NCC_ISMP902`. The same graph
+  compiles for `--target=trn1`. It's a Trn2 compiler bug; artifacts are in S3.
+
+### Fixed
+- `tensor_parallel_full_finetune.py` crashed under `torchrun` with `No module named 'examples'` (the same
+  plain-script import bug fixed elsewhere), so its Trn2 run didn't happen. The script now puts the repo
+  root on `sys.path`.
+
 ### Changed (cleanup batch: #28, #35–#38)
 - **Cost dashboard no longer takes AWS credentials (#36).**
   - `scripts/cost_monitor.py --json` builds a report using the normal credential chain (profile/SSO).
