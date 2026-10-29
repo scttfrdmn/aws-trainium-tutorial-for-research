@@ -67,3 +67,11 @@ python examples/use_cases/antibody_affinity_slm.py
 ✅ **Hardware-validated on trn1.2xlarge** (Neuron 2.30, torch 2.9.1, ESM-2 t6 8M, 8 epochs on the
 `2fjg` complex): **Spearman = 0.542**, Pearson = 0.638 on the held-out split — a real, useful
 ranking signal for candidate triage on a genuinely hard task.
+
+**Validated on a 5-seed mean, not a single run.** Spearman on this small, hard split swings a lot
+with the random seed: on trn2.3xlarge (2026-10-29) seeds 1–5 gave 0.41 ± 0.12, with one seed at
+0.21, so whether a single run clears the 0.40 gate is mostly luck. The validation harness therefore
+runs this example with seeds 1–5 by default (`default_seeds`, overridable with `--seeds`) and
+counts it as passing only when the *mean* Spearman across all five meets 0.40 (`gate="mean"`).
+Each seed's artifact still records its own pass/fail; a lone run shows in `VALIDATED.md` as
+"insufficient seeds".

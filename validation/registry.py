@@ -32,6 +32,19 @@ class Example:
     validated_note: str = (
         ""  # for TORCHRUN_EXAMPLES: the observed hardware result (manual launch)
     )
+    # Seeds a full (non-smoke) hardware run uses when `--seeds` isn't given; () = one unseeded run.
+    default_seeds: tuple[int, ...] = ()
+    # How a seed sweep is judged in VALIDATED.md / --check: "each" = every seed must pass on its
+    # own; "mean" = the MEAN of each gated metric over >= len(default_seeds) seeds must meet its
+    # threshold (per-seed artifacts still record their own pass/fail).
+    gate: str = "each"
+
+    def __post_init__(self) -> None:
+        """Reject an unknown gate kind at registry-definition time."""
+        if self.gate not in ("each", "mean"):
+            raise ValueError(
+                f"{self.key}: gate must be 'each' or 'mean', not {self.gate!r}"
+            )
 
 
 # The registry. Phase 1 ships exactly one entry (the NER exemplar); more are added as they are
@@ -164,6 +177,11 @@ EXAMPLES: tuple[Example, ...] = (
         # a fine-tuned small protein LM on a single AbBibench complex should clear ~0.40 comfortably;
         # gate there so a broken regressor (correlation ~0) fails without being flaky on a hard task.
         thresholds={"spearman": 0.40},
+        # Gated on a 5-seed MEAN, not a single run: on trn2 (2026-10-29) Spearman across seeds 1-5
+        # was 0.41±0.12 (one seed 0.21), so one run passing or failing the 0.40 gate is luck.
+        # The _torchneuron variant inherits both fields via _torchneuron_variant's replace().
+        default_seeds=(1, 2, 3, 4, 5),
+        gate="mean",
         smoke_config={
             "device": "cpu",
             "epochs": 1,
