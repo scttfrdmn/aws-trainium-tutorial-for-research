@@ -21,6 +21,7 @@ RESULTS_DIR = _REPO_ROOT / "validation" / "results"
 OUT = _REPO_ROOT / "VALIDATED.md"
 
 from validation import registry  # noqa: E402
+from validation.provenance import meets_thresholds  # noqa: E402
 
 
 def _load_results() -> dict[str, list[dict]]:
@@ -90,26 +91,81 @@ def _joined(values: list[str | None]) -> str:
     return "/".join(seen) or "—"
 
 
+def _metric_vals(group: list[dict], mk: str) -> list[float]:
+    """Values of metric ``mk`` across the artifacts in ``group`` that reported it."""
+    return [
+        float((r.get("metrics") or {})[mk])
+        for r in group
+        if mk in (r.get("metrics") or {})
+    ]
+
+
+def _required_seeds(ex) -> int:
+    """Seeds a mean-gated group needs before its mean can count (at least one)."""
+    return max(1, len(ex.default_seeds))
+
+
+def _mean_gate(ex, group: list[dict]) -> tuple[str, int]:
+    """Judge one display group under ``gate="mean"``: ``(verdict, n)``.
+
+    ``verdict`` is ``"passed"`` iff every threshold metric was reported by at least
+    ``len(ex.default_seeds)`` artifacts and its MEAN meets the threshold; ``"insufficient"`` if
+    fewer seeds reported it (never a pass on too little evidence); else ``"failed"``. ``n`` is the
+    smallest per-metric sample count (or the group size when there are no thresholds).
+    """
+    required = _required_seeds(ex)
+    if not ex.thresholds:
+        n = len(group)
+        if n < required:
+            return "insufficient", n
+        ok = all(r.get("status") == "passed" for r in group)
+        return ("passed" if ok else "failed"), n
+    samples = {mk: _metric_vals(group, mk) for mk in ex.thresholds}
+    n = min(len(v) for v in samples.values())
+    if n < required:
+        return "insufficient", n
+    ok, _ = meets_thresholds(
+        {mk: statistics.fmean(v) for mk, v in samples.items()}, ex.thresholds
+    )
+    return ("passed" if ok else "failed"), n
+
+
+def _group_passed(ex, group: list[dict]) -> bool:
+    """Whether one display group counts as validated under the example's gate."""
+    if ex.gate == "mean":
+        return _mean_gate(ex, group)[0] == "passed"
+    return any(r.get("status") == "passed" for r in group)
+
+
 def _sweep_row(ex, group: list[dict]) -> str:
     """One aggregated markdown row for a seed sweep (>1 seeded artifacts on one instance).
 
     The headline metric is ``name=mean±std (n=k)`` (sample std over the seeds that reported it),
-    the wall clock is the mean, and the status is ✅ only if every seed passed.
+    the wall clock is the mean, and the status is ✅ only if every seed passed. For a
+    ``gate="mean"`` example every group renders here (even a single run) and the status is the mean
+    gate's verdict instead, labelled ``(mean)`` / ``insufficient seeds`` so the gate kind is visible.
     """
     n = len(group)
-    n_failed = sum(1 for r in group if r.get("status") != "passed")
-    icon = "✅ passed" if not n_failed else f"❌ failed ({n_failed}/{n} seeds)"
+    mean_gate = ex.gate == "mean"
+    if mean_gate:
+        verdict, n_seeds = _mean_gate(ex, group)
+        icon = {
+            "passed": "✅ passed (mean)",
+            "failed": "❌ failed (mean)",
+        }.get(verdict, f"⚠️ insufficient seeds ({n_seeds}/{_required_seeds(ex)})")
+    else:
+        n_failed = sum(1 for r in group if r.get("status") != "passed")
+        icon = "✅ passed" if not n_failed else f"❌ failed ({n_failed}/{n} seeds)"
     metric_str = "—"
     if ex.thresholds:
         mk = next(iter(ex.thresholds))
-        vals = [
-            float((r.get("metrics") or {})[mk])
-            for r in group
-            if mk in (r.get("metrics") or {})
-        ]
-        if vals:
+        vals = _metric_vals(group, mk)
+        gate_note = ", gate: mean" if mean_gate else ""
+        if vals and mean_gate and len(vals) == 1:
+            metric_str = f"{mk}={vals[0]:.4f} (n=1{gate_note})"
+        elif vals:
             std = statistics.stdev(vals) if len(vals) > 1 else 0.0
-            metric_str = f"{mk}={statistics.fmean(vals):.4f}±{std:.4f} (n={len(vals)})"
+            metric_str = f"{mk}={statistics.fmean(vals):.4f}±{std:.4f} (n={len(vals)}{gate_note})"
     walls = [r["wall_clock_s"] for r in group if r.get("wall_clock_s") is not None]
     wall = f"{round(statistics.fmean(walls), 2)}s" if walls else "—"
     versions = [r.get("versions") or {} for r in group]
@@ -132,7 +188,7 @@ def _table_rows(ex, rows: list[dict]) -> list[str]:
         return [f"| `{ex.key}` | ⚠️ unvalidated | — | — | — | — | — | — | — |"]
     out = []
     for group in _group_rows(rows):
-        if len(group) > 1:
+        if len(group) > 1 or ex.gate == "mean":
             out.append(_sweep_row(ex, group))
             continue
         r = group[0]
@@ -159,9 +215,16 @@ def _table_rows(ex, rows: list[dict]) -> list[str]:
     return out
 
 
-def _passed_on_any(rows: list[dict]) -> bool:
-    """True if the example passed on at least one instance."""
-    return any(r.get("status") == "passed" for r in rows)
+def _passed_on_any(rows: list[dict], ex=None) -> bool:
+    """True if the example passed on at least one instance (under its gate).
+
+    ``gate="each"`` (or no ``ex``): any passing artifact counts (unchanged). ``gate="mean"``: some
+    display group (a seed sweep on one instance) must pass the mean gate, so a run with fewer seeds
+    than ``default_seeds`` never suffices.
+    """
+    if ex is None or ex.gate != "mean":
+        return any(r.get("status") == "passed" for r in rows)
+    return any(_group_passed(ex, g) for g in _group_rows(rows))
 
 
 def render(clock: str | None = None) -> str:
@@ -182,7 +245,7 @@ def render(clock: str | None = None) -> str:
 
     total = len(registry.EXAMPLES)
     passed = sum(
-        1 for ex in registry.EXAMPLES if _passed_on_any(_rows_for(results, ex))
+        1 for ex in registry.EXAMPLES if _passed_on_any(_rows_for(results, ex), ex)
     )
     # Distinct instances, not artifacts: a seed sweep on one instance is not "more than one instance".
     multi = sum(
@@ -260,6 +323,12 @@ def render(clock: str | None = None) -> str:
     lines.append(
         "- ⚠️ **unvalidated** — no provenance artifact yet; not proven on hardware."
     )
+    if any(e.gate == "mean" for e in (*registry.EXAMPLES, *torchneuron)):
+        lines.append(
+            "- **(mean)** / ⚠️ **insufficient seeds** — the example is gated on the mean of its "
+            "metric over a multi-seed sweep (`gate: mean`); a run with fewer seeds than its "
+            "registry `default_seeds` is not counted as validated."
+        )
     lines.append("")
     lines.append("Artifacts: `validation/results/*.json` · Logs: `validation/logs/`")
     lines.append("")
@@ -292,7 +361,7 @@ def main(argv: list[str] | None = None) -> int:
         unvalidated = [
             e.key
             for e in registry.EXAMPLES
-            if not _passed_on_any(_rows_for(results, e))
+            if not _passed_on_any(_rows_for(results, e), e)
         ]
         if unvalidated:
             print(f"Unvalidated: {', '.join(unvalidated)}", file=sys.stderr)

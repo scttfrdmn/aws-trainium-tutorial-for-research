@@ -151,6 +151,21 @@ def _run_isolated(
     return subprocess.run(cmd, cwd=_REPO_ROOT, check=False).returncode != 0
 
 
+def _seeds_for(
+    ex: registry.Example, seeds: list[int] | None, *, smoke: bool
+) -> list[int | None]:
+    """Return the seeds one example runs with (``[None]`` = a single unseeded run).
+
+    Explicit ``--seeds`` win; else the registry's ``default_seeds`` for a full (gated) run; else a
+    single unseeded run. Smoke runs aren't gated, so they never expand to ``default_seeds``.
+    """
+    if seeds:
+        return list(seeds)
+    if ex.default_seeds and not smoke:
+        return list(ex.default_seeds)
+    return [None]
+
+
 def run_in_instance(
     keys: list[str],
     *,
@@ -164,7 +179,8 @@ def run_in_instance(
     With more than one run (examples x seeds) and ``isolate`` set (the default), each run gets its
     own child process (see ``_run_isolated``); a single run always stays in-process. ``seeds``
     (from ``--seeds``) runs every example once per seed with ``config["seed"]`` overridden; without
-    it each example runs once with its registry config, exactly as before.
+    it a full run uses the example's ``default_seeds`` if it has any, else runs it once with its
+    registry config, exactly as before (see ``_seeds_for``).
     """
     examples = (
         registry.EXAMPLES if not keys else [e for k in keys if (e := registry.get(k))]
@@ -177,14 +193,13 @@ def run_in_instance(
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
-    seed_list: list[int | None] = list(seeds) if seeds else [None]
-    runs = [(ex, s) for ex in examples for s in seed_list]
+    runs = [(ex, s) for ex in examples for s in _seeds_for(ex, seeds, smoke=smoke)]
 
     if isolate and len(runs) > 1:
         failed = sum(
             _run_isolated(ex, smoke=smoke, clock=clock, seed=s) for ex, s in runs
         )
-        unit = "example" if seeds is None else "run"
+        unit = "example" if all(s is None for _, s in runs) else "run"
         print(f"\n{len(runs) - failed}/{len(runs)} passed (one process per {unit}).")
         return 1 if failed else 0
 
@@ -421,7 +436,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help="--in-instance: run each example once per seed (config['seed'] overridden), writing "
-        "one artifact per seed (…#s<N>.json); VALIDATED.md aggregates them as mean±std.",
+        "one artifact per seed (…#s<N>.json); VALIDATED.md aggregates them as mean±std. Without "
+        "it, full runs of an example with registry default_seeds use those.",
     )
     p.add_argument(
         "--smoke",
