@@ -153,9 +153,10 @@ shapes; see best-practices §1).
 > Trn2/Trn3) there's no `mark_step`, and recompiles are tracked the stock `torch.compile` way:
 > `TORCH_LOGS=recompiles`, or count graphs with `torch._dynamo.utils.counters["stats"]["unique_graphs"]`.
 > The walkthrough's CPU mode demonstrates this with `backend="eager"`: fixed shapes give 1 graph,
-> ragged shapes with `dynamic=False` give 4. **Not yet verified on Trn2 hardware:** whether eager
-> TorchNeuron compiles per op or per shape, whether the `Compilation Successfully Completed` log line
-> appears (so the `grep` count may not apply), and whether `NEURON_COMPILE_CACHE_URL` applies.
+> ragged shapes with `dynamic=False` give 4. Measured on a `trn2.3xlarge` (TorchNeuron 2.14.3, Neuron 2.33) with `python -m validation.torchneuron_facts`: eager TorchNeuron **compiles per op and per
+> shape** (first matmul call 55 s, repeat 0.0008 s, new shape 1.3 s). The `Compilation Successfully
+> Completed` line **never appears**, so the `grep` count doesn't apply. `NEURON_COMPILE_CACHE_URL`
+> had **no effect**.
 
 > Some additional flags (`NEURON_CC_FLAGS` verbosity, `NEURON_RT_LOG_LEVEL`, `XLA_IR_DEBUG`,
 > `XLA_HLO_DEBUG`) exist; their exact accepted values aren't all in the public docs. Check
@@ -225,8 +226,10 @@ recognize the unavoidable case.
 > same lesson by a different mechanism. Find breaks with `TORCH_LOGS=graph_breaks` or
 > `torch._dynamo.explain(fn)(*args)` (`graph_count`, `graph_break_count`, `break_reasons`). On CPU,
 > `--only fallback` shows the `.nonzero()` mask at 2 graphs / 1 break and `torch.where` at 1 graph /
-> 0 breaks. **Not yet verified on Trn2 hardware:** how TorchNeuron handles an op it can't lower
-> (error, CPU fallback, or something else) and whether that shows up in any counter.
+> 0 breaks. On a real `trn2.3xlarge`, TorchNeuron **raises instead of silently falling back**:
+> complex FFT failed with a RuntimeError saying CPU fallback is disabled
+> (`TORCH_NEURONX_FALLBACK_ONLY_FOR_UNIMPLEMENTED_OPS=1`), and a sparse op raised
+> `NotImplementedError`. You get an error, not a hidden slowdown. (`linalg.eig` ran on device.)
 
 ---
 
@@ -244,7 +247,8 @@ All three demos also **run on a laptop** (the default `--device cpu`, stock PyTo
 and 3 show the same lessons through `torch.compile(backend="eager")`: Dynamo graph counts for ragged
 vs fixed shapes, and `torch._dynamo.explain` graph breaks for `.nonzero()` vs `torch.where`.
 `--device xla` is the hardware path. `--device neuron` is the opt-in TorchNeuron beta mode; it falls
-back to CPU when TorchNeuron isn't installed and hasn't been hardware-verified.
+back to CPU when TorchNeuron isn't installed. The walkthrough's neuron mode hasn't been run on
+hardware, but the facts above come from a real Trn2 run (`validation/torchneuron_facts.py`).
 
 ---
 

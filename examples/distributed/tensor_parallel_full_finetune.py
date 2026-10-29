@@ -67,6 +67,15 @@ Reuses the optimum-neuron path and dataset from the Qwen3 LoRA example
 
 from __future__ import annotations
 
+# Allow `torchrun examples/distributed/<this>.py` (a plain script) as well as `-m`/the harness: put
+# the repo root on sys.path so the `examples.use_cases.*` import below resolves.
+import sys as _sys  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+_ROOT = str(_Path(__file__).resolve().parents[2])
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+
 import argparse
 import os
 from dataclasses import dataclass, field

@@ -222,11 +222,15 @@ TORCHRUN_EXAMPLES: tuple[Example, ...] = (
         key="qwen3_lora",
         module="examples.use_cases.qwen3_lora_finetune",
         entrypoint="run",
-        instances=("trn1.32xlarge",),
+        instances=("trn1.32xlarge", "trn2.3xlarge"),
         thresholds={},  # validated by inspecting train_loss from a manual torchrun launch
         est_runtime_min=30.0,
         description="Qwen3 LoRA SFT via optimum-neuron (torchrun; hardware-only).",
-        validated_note="Qwen3-8B, full epoch on 32 cores: loss 1.93→1.43, ~5s/step, MFU ~29%",
+        validated_note=(
+            "Qwen3-8B, full epoch on 32 cores: loss 1.93→1.43, ~5s/step, MFU ~29% (trn1.32xlarge); "
+            "trn2.3xlarge, Qwen3-1.7B TP=2: 597 steps in 34 min, final loss 1.40 (optimum-neuron "
+            "0.4.5 on its pinned torch-neuronx 2.8 / Python 3.11 stack)"
+        ),
     ),
     Example(
         key="ddp_ner",
@@ -238,7 +242,9 @@ TORCHRUN_EXAMPLES: tuple[Example, ...] = (
         description="Data-parallel NER across NeuronCores (torchrun XLA DDP).",
         validated_note=(
             "2-core data-parallel: eval_f1 0.826, gradient all-reduce verified (trn1.2xlarge); "
-            "trn2.3xlarge / Neuron 2.33, 2 logical cores: eval_f1 0.826, 11.6 samples/s"
+            "trn2.3xlarge / Neuron 2.33, 2 logical cores: eval_f1 0.826, 11.6 samples/s; "
+            "native PyTorch DDP on TorchNeuron (DDP_DEVICE=neuron, backend 'neuron'): eval_f1 0.833, "
+            "117 samples/s, replicas in sync"
         ),
     ),
     Example(

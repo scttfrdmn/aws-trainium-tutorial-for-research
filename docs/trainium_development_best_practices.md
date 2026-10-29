@@ -60,9 +60,11 @@ run everything I've recorded since the last one." This is why the terms below (`
 > `torch.compile` terms, a "new graph per new shape" is a **recompile** (`TORCH_LOGS=recompiles`),
 > and a data-dependent op splits the graph with a **graph break** (`TORCH_LOGS=graph_breaks`,
 > `torch._dynamo.explain`). The shape-stability advice below still applies to any compiled region.
-> **Not yet verified on Trn2 hardware:** whether eager TorchNeuron compiles per op or per shape,
-> whether `NEURON_COMPILE_CACHE_URL` applies, and whether the bf16 SDPA `nan` (§4) reproduces under
-> `torch.autocast`.
+> Measured on a `trn2.3xlarge` (TorchNeuron 2.14.3, Neuron 2.33) with `python -m validation.torchneuron_facts`:
+> eager mode **compiles per op and per shape**. The first call of a matmul took 55 s, the repeat
+> 0.0008 s, and the same op at a new shape 1.3 s. `NEURON_COMPILE_CACHE_URL` had **no effect**: no
+> files were written. The bf16 SDPA `nan` (§4) **does not reproduce**: SDPA and plain attention both
+> stay finite under `torch.autocast(device_type="neuron", dtype=torch.bfloat16)`.
 
 A new graph is compiled **every time the compiler sees a shape (or computation) it hasn't seen
 before.** Compilation is expensive — seconds to *minutes* per graph for big models. If your program
@@ -299,11 +301,11 @@ ragged shapes with `dynamic=False` give 4 (by default Dynamo switches to dynamic
 2nd shape, giving 2). These are torch.compile counts, not Neuron compiles.
 
 > **TorchNeuron (beta) note.** Timing works differently too. Under XLA you call
-> `xm.wait_device_ops()` before stopping the clock. TorchNeuron's equivalent sync isn't documented in
-> this repo, so this tutorial doesn't name one. Reading a value back (`.item()` / `.cpu()`) does force
-> completion. **Not yet verified on Trn2 hardware:** whether the `Compilation Successfully Completed`
-> line appears under TorchNeuron, so the `grep` count above may not apply. Use
-> `TORCH_LOGS=recompiles` there instead.
+> `xm.wait_device_ops()` before stopping the clock. On TorchNeuron, `torch.neuron.synchronize()` (or
+> `torch.accelerator.synchronize()`) blocks until queued work finishes; without one, a 4096 matmul
+> "took" 0.1 ms instead of about 4 ms. The `Compilation Successfully Completed` line **never appears**
+> under TorchNeuron, so the `grep` count above doesn't apply there. Use `TORCH_LOGS=recompiles`
+> instead. (Measured on a `trn2.3xlarge` (TorchNeuron 2.14.3, Neuron 2.33) with `python -m validation.torchneuron_facts`.)
 
 For CPU-side kernel development without burning Trainium time, use NKI's simulation mode (see the
 [Simulator chapter](main_tutorial_doc.md#simulator)).
