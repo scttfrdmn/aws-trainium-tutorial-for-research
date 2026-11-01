@@ -199,7 +199,7 @@ def train(cfg: TPConfig) -> dict[str, float]:
         print(
             f"🧩 TP full fine-tune | tensor_parallel_size={tp} | model={cfg.model_id} | FULL FT (no LoRA)\n"
             f"   full-FT AdamW needs ~14 B/param => ~{approx_gib} GiB weights+optimizer; "
-            f"each NeuronCore has a hard 16.00 GB HBM ceiling. TP shards this across {tp} core(s)."
+            f"each NeuronCore has a hard HBM ceiling (16.00 GB on trn1.2xlarge). TP shards this across {tp} core(s)."
         )
 
     training_args = NeuronTrainingArguments(
@@ -255,8 +255,8 @@ def train(cfg: TPConfig) -> dict[str, float]:
                     print(
                         f"\n📉 THIS IS THE LESSON — a full fine-tune of {cfg.model_id} does NOT fit "
                         "on ONE NeuronCore.\n"
-                        "   Full-FT AdamW needs ~14 B/param, over the hard 16.00 GB per-core HBM "
-                        "ceiling. Shard the model with tensor parallelism across both cores:\n"
+                        "   Full-FT AdamW needs ~14 B/param, over the hard per-core HBM ceiling (16.00 GB on "
+                        "trn1.2xlarge). Shard the model with tensor parallelism across both cores:\n"
                         "     torchrun --nproc_per_node=2 "
                         "examples/distributed/tensor_parallel_full_finetune.py --tensor_parallel_size 2"
                     )
@@ -266,7 +266,7 @@ def train(cfg: TPConfig) -> dict[str, float]:
                         "further than one core), but a full fine-tune is still MARGINAL on the "
                         "smallest box.\n"
                         "   The weight-update step's fp32 master + Adam moments push the peak over "
-                        "the 16.00 GB/core ceiling. With only 2 cores there's no data-parallel "
+                        "the per-core HBM ceiling. With only 2 cores there's no data-parallel "
                         "dimension for ZeRO-1 to shard optimizer state.\n"
                         "   This is exactly why full fine-tuning belongs on trn1.32xlarge / Trn2 "
                         "(more cores → more aggregate HBM), and why LoRA is the trn1.2xlarge play "

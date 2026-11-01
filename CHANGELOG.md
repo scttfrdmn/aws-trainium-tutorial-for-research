@@ -10,6 +10,21 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Changed (Nov 1 Trn2 slot)
+- **Antibody's TorchNeuron gap is bf16 autocast (#24).** With autocast off (fp32), 5-seed spearman on a
+  `trn2.3xlarge` is **0.430 ± 0.091**, which passes the mean gate; with bf16 it was 0.354 ± 0.023. The
+  `antibody_affinity_slm_torchneuron` variant now runs fp32. The other TorchNeuron variants keep bf16.
+- **`tp_full_finetune` on Trn2 is still unvalidated (#26):**
+  - TP=2 ran 2 of 20 steps (about 35 min, mostly compiling), then ran out of device memory loading
+    collectives (`NRT_RESOURCE`).
+  - TP=4 hadn't finished compiling when the slot ended.
+
+### Fixed
+- The `tp_full_finetune` OOM messages hardcoded Trn1's "16.00 GB per core"; they now say "per-core HBM
+  ceiling (16.00 GB on trn1.2xlarge)".
+- `test_cli_json_writes_report` failed on the 1st of every month, because it ran on the real clock and
+  the report correctly skips month-to-date on day 1. It now pins the date.
+
 ### Added (Trn2 results from a shared Capacity Block slot)
 Run on a `trn2.3xlarge` (Neuron 2.33) during a 5-hour slot on trnsci's Capacity Block.
 - **TorchNeuron facts (#28)**, measured with `validation/torchneuron_facts.py`. The debugging chapters'

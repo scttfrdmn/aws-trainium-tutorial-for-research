@@ -277,7 +277,10 @@ TORCHRUN_EXAMPLES: tuple[Example, ...] = (
             "Full FT, 16.00 GB/core HBM ceiling: 1 core OOMs (Qwen3-1.7B 17.87 GB compile; "
             "Llama-3.2-1B runtime). TP=2 shards the model + trains steps (Llama), but full FT is "
             "marginal — Qwen3-1.7B 19.59 GB/core, Llama-3.2-1B 15.958 GB (32 MB over). TP necessary, "
-            "not sufficient on 2 cores → LoRA here, full FT on trn1.32xlarge."
+            "not sufficient on 2 cores → LoRA here, full FT on trn1.32xlarge. "
+            "trn2.3xlarge (Neuron 2.33, optimum-neuron 0.4.5): TP=2 ran 2/20 steps (compile-dominated, "
+            "~35 min) then OOM'd loading collectives (NRT_RESOURCE, 19.7 GB in use on the HBM); TP=4 "
+            "unfinished (slot ended mid-compile)."
         ),
     ),
 )
@@ -351,7 +354,15 @@ TORCHNEURON_EXAMPLES += (
     _torchneuron_variant("satellite_landcover", "Satellite land-cover CNN"),
     _torchneuron_variant("cv_utilization_spike", "CNN vs ViT utilization spike"),
     _torchneuron_variant("distill_ner_slm", "NER distillation into a student SLM"),
-    _torchneuron_variant("antibody_affinity_slm", "ESM-2 antibody-affinity regression"),
+    # bf16 autocast hurts this regression on TorchNeuron: 5-seed spearman 0.354±0.023 with it vs
+    # 0.430±0.091 with fp32 (trn2.3xlarge, 2026-10-29 / 11-01), so the variant runs fp32.
+    replace(
+        _torchneuron_variant(
+            "antibody_affinity_slm", "ESM-2 antibody-affinity regression"
+        ),
+        full_config={"device": "neuron", "epochs": 8, "autocast_bf16": False},
+        description="ESM-2 antibody-affinity regression on TorchNeuron (beta, opt-in; device='neuron', fp32).",
+    ),
     _torchneuron_variant("crystal_cif_slm", "Crystal-CIF char GPT"),
 )
 

@@ -215,7 +215,12 @@ def test_running_instances_follow_next_token():
 @pytest.mark.unit
 def test_cli_json_writes_report(mocked_clients, tmp_path):
     out = tmp_path / "nested" / "cost_report.json"
-    with patch("cost_monitor.generate_cost_report") as png_report:
+    # Pin the clock: on the 1st of a month the real report (correctly) skips month-to-date.
+    pinned = lambda **kw: build_cost_report(**kw, now=NOW)  # noqa: E731
+    with (
+        patch("cost_monitor.generate_cost_report") as png_report,
+        patch("cost_monitor.build_cost_report", side_effect=pinned),
+    ):
         rc = main(["--json", str(out), "--region", "us-east-1", "--days", "7"])
     assert rc == 0
     png_report.assert_not_called()  # --json mode doesn't make the matplotlib chart
