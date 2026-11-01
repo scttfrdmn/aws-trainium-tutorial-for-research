@@ -176,6 +176,9 @@ It's a teaching template (edit the S3 bucket; it's not a hardened service).
 > operates on tiles with explicit partition/free-axis reductions and masking. For working kernels,
 > start from the
 > [official NKI documentation and samples](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/nki/index.html).
+> ⚠️ If you make kernels in a factory that captures constants, set `NKI_ENABLE_TRACE_CACHE=0`: an open
+> NKI bug ([aws-neuron-sdk#1454](https://github.com/aws-neuron/aws-neuron-sdk/issues/1454)) can silently reuse the wrong kernel. See the
+> [novel kernels chapter](docs/novel_kernels_on_trainium.md#4-how-youd-actually-build-it).
 
 ```python
 # Custom Flash Attention kernel for Trainium (ILLUSTRATIVE — not runnable as-is)

@@ -11,6 +11,13 @@
     To develop/validate kernels without burning Trainium time, use NKI's simulation mode
     (``nki.simulate_kernel`` / ``baremetal``-style simulation) on CPU first — see the NKI docs.
 
+⚠️ KNOWN BUG — NKI TRACE CACHE (https://github.com/aws-neuron/aws-neuron-sdk/issues/1454)
+    ``import torch_neuronx`` enables NKI's trace cache, which ignores constants captured from a
+    kernel's enclosing scope. Factory-made kernels that differ only in such a constant can silently
+    reuse the first kernel's trace. Several sketches below build kernels inside functions, so if you
+    adapt them, launch with ``NKI_ENABLE_TRACE_CACHE=0`` in the environment or pass the constants
+    as kernel arguments.
+
 
 
 This module demonstrates advanced optimization techniques using the Neuron Kernel
