@@ -10,6 +10,13 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Added
+- **Warning for an NKI trace-cache bug (#48, upstream aws-neuron-sdk#1454).** `import torch_neuronx`
+  enables NKI's trace cache, which ignores constants a kernel captures from its enclosing scope. Kernels
+  made by a factory can then silently reuse the wrong trace. The novel-kernels chapter, the README NKI
+  snippet and `advanced/advanced_patterns_nki.py` now say to launch with `NKI_ENABLE_TRACE_CACHE=0`,
+  or pass such constants as kernel arguments. Reported by the trnsci project.
+
 ### Changed (Nov 1 Trn2 slot)
 - **Antibody's TorchNeuron gap is bf16 autocast (#24).** With autocast off (fp32), 5-seed spearman on a
   `trn2.3xlarge` is **0.430 ± 0.091**, which passes the mean gate; with bf16 it was 0.354 ± 0.023. The

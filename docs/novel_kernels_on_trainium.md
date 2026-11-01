@@ -119,6 +119,17 @@ and [nki-samples](https://github.com/aws-neuron/nki-samples)):
 5. **Report the win honestly.** Error vs FP64 reference *and* time vs the composed baseline — so the
    accuracy claim is measured, not asserted.
 
+> ⚠️ **Known bug: the NKI trace cache can silently reuse the wrong kernel**
+> ([aws-neuron-sdk#1454](https://github.com/aws-neuron/aws-neuron-sdk/issues/1454), open as of Nov 2026). Two `@nki.jit` kernels made by the same
+> factory function, differing only in a Python constant captured from the enclosing scope, share one
+> trace-cache entry, so the second returns the first one's result. The cache is meant to be off by
+> default, but `import torch_neuronx` sets `NKI_ENABLE_TRACE_CACHE=1`. That was verified with
+> TorchNeuron (`torch-neuronx` 2.14.3); it's unverified for the XLA 2.9 build. **If you build
+> kernels in a factory or close over constants, launch the process with `NKI_ENABLE_TRACE_CACHE=0`**
+> (the workaround the upstream issue reports working; it also names `NKI_DISABLE_TRACE_CACHE=1`), or
+> pass the constants as kernel arguments. Step 3's comparison against a
+> reference catches this; one more reason not to skip it.
+
 > The illustrative kernels under [`advanced/`](../advanced/) show NKI *shape* but are not drop-in
 > runnable. Start from the official nki-samples for working code.
 
