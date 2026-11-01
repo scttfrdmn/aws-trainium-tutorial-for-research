@@ -2,7 +2,7 @@
 
 This file is **generated** by `validation/render_status.py` from the provenance artifacts in `validation/results/`. Do not edit by hand. Each row reflects a real run on real Neuron hardware (or marks the example as not-yet-validated).
 
-_Last rendered: 2026-10-29_
+_Last rendered: 2026-11-01_
 
 **Coverage: 6/6 examples validated on hardware.** (6 validated on more than one instance — one row each below.)
 
@@ -49,7 +49,7 @@ These need one process per NeuronCore (`torchrun`), which the single-device auto
 |---------|--------|----------|----------|-------|
 | `qwen3_lora` | ✅ validated (manual) | trn1.32xlarge, trn2.3xlarge | Qwen3-8B, full epoch on 32 cores: loss 1.93→1.43, ~5s/step, MFU ~29% (trn1.32xlarge); trn2.3xlarge, Qwen3-1.7B TP=2: 597 steps in 34 min, final loss 1.40 (optimum-neuron 0.4.5 on its pinned torch-neuronx 2.8 / Python 3.11 stack) | Qwen3 LoRA SFT via optimum-neuron (torchrun; hardware-only). |
 | `ddp_ner` | ✅ validated (manual) | trn1.2xlarge, trn2.3xlarge | 2-core data-parallel: eval_f1 0.826, gradient all-reduce verified (trn1.2xlarge); trn2.3xlarge / Neuron 2.33, 2 logical cores: eval_f1 0.826, 11.6 samples/s; native PyTorch DDP on TorchNeuron (DDP_DEVICE=neuron, backend 'neuron'): eval_f1 0.833, 117 samples/s, replicas in sync | Data-parallel NER across NeuronCores (torchrun XLA DDP). |
-| `tp_full_finetune` | ✅ validated (manual) | trn1.2xlarge | Full FT, 16.00 GB/core HBM ceiling: 1 core OOMs (Qwen3-1.7B 17.87 GB compile; Llama-3.2-1B runtime). TP=2 shards the model + trains steps (Llama), but full FT is marginal — Qwen3-1.7B 19.59 GB/core, Llama-3.2-1B 15.958 GB (32 MB over). TP necessary, not sufficient on 2 cores → LoRA here, full FT on trn1.32xlarge. trn2.3xlarge (Neuron 2.33, optimum-neuron 0.4.5): TP=2 ran 2/20 steps (compile-dominated, ~35 min) then OOM'd loading collectives (NRT_RESOURCE, 19.7 GB in use on the HBM); TP=4 unfinished (slot ended mid-compile). | Tensor-parallel FULL fine-tune: 1 core OOMs; TP=2 shards but stays tight (optimum-neuron; torchrun; hardware-only). |
+| `tp_full_finetune` | ✅ validated (manual) | trn1.2xlarge, trn2.3xlarge | Full FT, 16.00 GB/core HBM ceiling: 1 core OOMs (Qwen3-1.7B 17.87 GB compile; Llama-3.2-1B runtime). TP=2 shards the model + trains steps (Llama), but full FT is marginal — Qwen3-1.7B 19.59 GB/core, Llama-3.2-1B 15.958 GB (32 MB over). TP necessary, not sufficient on 2 cores → LoRA here, full FT on trn1.32xlarge. trn2.3xlarge (Neuron 2.33, optimum-neuron 0.4.5): TP=4 fits and trains (20/20 steps, final loss 1.72, ~11.4 GiB/core, 29 min of which ~28 min compile); TP=2 OOMs after 2 steps (NRT_RESOURCE loading collectives, reproduced twice). | Tensor-parallel FULL fine-tune: 1 core OOMs; TP=2 shards but stays tight (optimum-neuron; torchrun; hardware-only). |
 
 ### Legend
 - ✅ **passed** — ran on the listed instance and met its registry thresholds.

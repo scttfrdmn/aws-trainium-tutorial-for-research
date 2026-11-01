@@ -224,6 +224,37 @@ here, and why **full** fine-tuning belongs on `trn1.32xlarge` / Trn2 (32 cores �
 HBM *and* a data-parallel dimension for optimizer-state sharding). This example makes the "just use
 LoRA / get a bigger box" advice concrete with numbers.
 
+### On Trn2: full fine-tune fits at TP=4
+
+Measured on a real **`trn2.3xlarge`** (1 Trainium2 chip, 4 logical NeuronCores; Neuron 2.33 DLAMI;
+optimum-neuron 0.4.5 on its pinned torch-neuronx 2.8 / neuronx-cc 2.21 stack, Python 3.11), 2026-11-01.
+Default model (Qwen3-1.7B), 20 steps:
+
+| Full FT on trn2.3xlarge | Result | Wall time |
+|---|---|---|
+| **TP=4** (`--nproc_per_node=4`) | ✅ **fits and trains**: 20/20 steps, final loss 1.72, ~11.4 GiB/core HBM | 29 min (1,738 s) |
+| **TP=2** (`--nproc_per_node=2`) | ❌ trains 2 steps, then OOMs loading collectives (`NRT_RESOURCE`: 593.5 MB at 1 GB alignment). Reproduced on two runs | 35 min (2,127 s) |
+
+**Where the 29 minutes go: almost all compilation.**
+
+| TP=4 milestone | Elapsed |
+|---|---|
+| step 1 (first graph compiled) | 18 min 58 s |
+| step 2 (second graph) | 24 min 28 s |
+| step 3 (third graph) | 27 min 47 s |
+| steps 4–20 | ~15 s total (**~1 s/step**) |
+
+About 28 of the 29 minutes are one-time compilation, and the training itself is seconds. That's the
+tutorial's central lesson at full scale: on a fresh box, **budget for the compile, not the steps**. The
+optimum-neuron environment took a further 149 s to build.
+
+> ⚠️ **Don't point `NEURON_COMPILE_CACHE_URL` at S3 for this multi-process run.** With the cache in S3,
+> TP=4 hung for 52 minutes: one rank logged "Another process must be compiling …" every minute while
+> no compiler was running (load average ~0.1), apparently waiting on a lock nobody held. On the
+> default local cache (`/var/tmp/neuron-compile-cache`) the same run completed. Observed with
+> optimum-neuron 0.4.5 / neuronx-cc 2.21; the single-process examples use the S3 cache without
+> trouble.
+
 ## Notes
 
 - **bf16 + eager rules still apply** — same Trainium-native constraints as the other examples.

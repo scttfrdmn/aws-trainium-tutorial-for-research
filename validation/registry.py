@@ -269,7 +269,7 @@ TORCHRUN_EXAMPLES: tuple[Example, ...] = (
         key="tp_full_finetune",
         module="examples.distributed.tensor_parallel_full_finetune",
         entrypoint="run",
-        instances=("trn1.2xlarge",),
+        instances=("trn1.2xlarge", "trn2.3xlarge"),
         thresholds={},  # torchrun example — validated by manual launch, not auto-gated
         est_runtime_min=25.0,
         description="Tensor-parallel FULL fine-tune: 1 core OOMs; TP=2 shards but stays tight (optimum-neuron; torchrun; hardware-only).",
@@ -278,9 +278,9 @@ TORCHRUN_EXAMPLES: tuple[Example, ...] = (
             "Llama-3.2-1B runtime). TP=2 shards the model + trains steps (Llama), but full FT is "
             "marginal — Qwen3-1.7B 19.59 GB/core, Llama-3.2-1B 15.958 GB (32 MB over). TP necessary, "
             "not sufficient on 2 cores → LoRA here, full FT on trn1.32xlarge. "
-            "trn2.3xlarge (Neuron 2.33, optimum-neuron 0.4.5): TP=2 ran 2/20 steps (compile-dominated, "
-            "~35 min) then OOM'd loading collectives (NRT_RESOURCE, 19.7 GB in use on the HBM); TP=4 "
-            "unfinished (slot ended mid-compile)."
+            "trn2.3xlarge (Neuron 2.33, optimum-neuron 0.4.5): TP=4 fits and trains (20/20 steps, "
+            "final loss 1.72, ~11.4 GiB/core, 29 min of which ~28 min compile); TP=2 OOMs after 2 "
+            "steps (NRT_RESOURCE loading collectives, reproduced twice)."
         ),
     ),
 )
