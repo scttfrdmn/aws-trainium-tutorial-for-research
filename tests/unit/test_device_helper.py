@@ -149,6 +149,10 @@ def test_torchneuron_entries_import_and_have_entrypoint(ex):
     assert registry.get(ex.key) is ex
 
 
+# Deliberate, measured per-variant config overrides (see validation/registry.py comments).
+TORCHNEURON_OVERRIDES = {"antibody_affinity_slm": {"autocast_bf16": False}}
+
+
 @pytest.mark.parametrize("key", PORTED)
 def test_ported_examples_have_torchneuron_variant(key):
     xla = registry.get(key)
@@ -157,6 +161,11 @@ def test_ported_examples_have_torchneuron_variant(key):
     assert tn.module == xla.module
     assert tn.thresholds == xla.thresholds
     assert tn.smoke_config == xla.smoke_config
-    assert tn.full_config == {**xla.full_config, "device": "neuron"}
+    expected = {
+        **xla.full_config,
+        "device": "neuron",
+        **TORCHNEURON_OVERRIDES.get(key, {}),
+    }
+    assert tn.full_config == expected
     assert tn.instances == ("trn2.3xlarge",)
     assert xla.full_config["device"] == "xla"  # XLA default untouched
