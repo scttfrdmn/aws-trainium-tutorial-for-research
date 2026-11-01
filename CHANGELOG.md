@@ -10,6 +10,16 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Added (Trn2 full fine-tune, #26)
+- **`tensor_parallel_full_finetune` fits on Trn2 at TP=4.** On a `trn2.3xlarge` (Neuron 2.33,
+  optimum-neuron 0.4.5), the Qwen3-1.7B full fine-tune ran 20/20 steps at final loss 1.72, using about
+  11.4 GiB of HBM per core. Of its **29 min wall time, ~28 min was compilation**: steps 4–20 took about
+  1 s each. **TP=2 OOMs after 2 steps** (`NRT_RESOURCE`), reproduced twice. The distributed README has the
+  timing breakdown.
+- **Warning:** a S3 `NEURON_COMPILE_CACHE_URL` hung the multi-process TP=4 run for 52 min, with a rank
+  waiting on a compile lock while no compiler ran. The local cache works. Documented in the distributed
+  README.
+
 ### Added
 - **Warning for an NKI trace-cache bug (#48, upstream aws-neuron-sdk#1454).** `import torch_neuronx`
   enables NKI's trace cache, which ignores constants a kernel captures from its enclosing scope. Kernels
