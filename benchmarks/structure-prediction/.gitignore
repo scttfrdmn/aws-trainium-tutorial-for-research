@@ -1,0 +1,4 @@
+# Copyright 2026 Scott Friedman. SPDX-License-Identifier: Apache-2.0
+# The repository root ignores *.json; this directory commits its manifests, configs and fixtures.
+!*.json
+!*.csv

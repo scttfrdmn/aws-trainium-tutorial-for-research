@@ -1,0 +1,8 @@
+# Copyright 2026 Scott Friedman. SPDX-License-Identifier: Apache-2.0
+# Raw run outputs, predictions and profiles stay in S3; commit result/manifest/timing JSON, scores, gates and tables.
+raw/
+raw-all/
+*.cif
+*.pdb
+**/neuron-profile/
+**/torch-profile*.json

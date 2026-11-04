@@ -1,0 +1,52 @@
+# Copyright 2026 Scott Friedman
+# SPDX-License-Identifier: Apache-2.0
+#
+# Phase A measurement hosts. `launcher: spawn` uses spore.host spawn; `launcher: awscli` is the
+# documented fallback for what spawn does not support yet:
+#   * trn2.3xlarge: spore-host/spawn#205 (Trainium2 single-device support) is open.
+#   * an empty data EBS volume at launch (2 TB gp3 for the ColabFold databases): spawn only
+#     sets the root size (--volume-size) or attaches a volume from a snapshot (--attach-volume);
+#     spore-host/spawn#1527.
+# AMIs are resolved at launch from SSM public parameters, never hard-coded.
+
+defaults:
+  region: us-east-1
+  root_gb: 300
+  tags:
+    Project: structure-prediction
+    Phase: A
+    spore: structure-prediction
+
+hosts:
+  trn2:
+    instance_type: trn2.3xlarge
+    launcher: awscli
+    ami_ssm: /aws/service/neuron/dlami/torch-neuronx-2.14.0/ubuntu-24.04/latest/image_id
+    ami_label: "Deep Learning AMI Neuron torch-neuronx 2.14.0 (Ubuntu 24.04) SDK 2.33.0"
+    ttl_hours: 24
+    purpose: boltz-neuron runs (LNC=2 x4, LNC=1 x8), task 0 reproduction, neuron-profile
+  g7e:
+    instance_type: g7e.2xlarge
+    launcher: awscli
+    ami_ssm: /aws/service/deeplearning/ami/x86_64/base-oss-nvidia-driver-gpu-ubuntu-24.04/latest/ami-id
+    ami_label: "Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04); CUDA 13.0 checked on boot"
+    data_gb: 2000
+    data_mount: /data
+    ttl_hours: 24
+    purpose: MMseqs2-GPU MSAs, Boltz-2 + cuEquivariance, OpenFold-TRT
+  r7a:
+    instance_type: r7a.48xlarge
+    launcher: awscli
+    ami_ssm: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    ami_label: "Ubuntu 24.04 LTS"
+    data_gb: 2000
+    data_mount: /data
+    ttl_hours: 12
+    purpose: MMseqs2-CPU timing for the trn2 end-to-end MSA term (1,536 GiB RAM)
+  c7a:
+    instance_type: c7a.48xlarge
+    launcher: spawn
+    ami_ssm: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    ami_label: "Ubuntu 24.04 LTS"
+    ttl_hours: 216  # ~8 days continuous for the CPU fp32 oracle, plus a day of margin
+    purpose: CPU fp32 oracle (stock Boltz-2, 20 CASP14 targets x 2 seeds, ds=1)

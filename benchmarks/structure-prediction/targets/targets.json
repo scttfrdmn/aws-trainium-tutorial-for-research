@@ -1,0 +1,822 @@
+{
+  "_copyright": "Copyright 2026 Scott Friedman. SPDX-License-Identifier: Apache-2.0",
+  "schema": "sp-targets/1.0",
+  "generated_at": "2026-11-04T21:30:08+00:00",
+  "sources": {
+    "supplement": {
+      "url": "https://research.nvidia.com/labs/dbr/assets/data/manuscripts/fast_folding_supplement.xlsx",
+      "sha256": "f3833ba928f3c94d17b01db454187ee3eb272373bb2f38d671e1bb7322c13dff"
+    },
+    "casp_seq": {
+      "url": "https://predictioncenter.org/download_area/CASP14/sequences/casp14.seq.txt",
+      "sha256": "252781d0ffd187b1137833125927975f54c8db92ab18e4ba648df3a28b3d7eab"
+    },
+    "casp_list": {
+      "url": "https://predictioncenter.org/casp14/targetlist.cgi?type=csv",
+      "sha256": "1b02870d946a166c297e0c470d816b61174dc4168d8a764ebd3457052cd42661"
+    },
+    "casp_targets": {
+      "url": "https://predictioncenter.org/download_area/CASP14/targets/casp14.targets.T.public_11.29.2020.tar.gz",
+      "sha256": "343df483221505be6e6c875390dbc53e846338f7d4def5dd16fdc5716921195e"
+    }
+  },
+  "rules": {
+    "min_identity": 0.95,
+    "min_coverage_without_casp_file": 0.9,
+    "scoring_unit": "whole-target for every CASP14 target (the supplement does not state domains)"
+  },
+  "targets": [
+    {
+      "id": "T1031",
+      "set": "casp14",
+      "length": 95,
+      "supplement_length": 95,
+      "tokens": 95,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "ACKIENIKYKGKEVESKLGSQLIDIFNDLDRAKEEYDKLSSPEFIAKFGDWINDEVERNVNEDGEPLLIQDVRQDSSKHYFFILKNGERFDLLTR",
+          "truth_chain": "A",
+          "msa_id": "T1031"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6VR4",
+        "entity": "6VR4_1",
+        "file": "T1031.cif",
+        "chain": "A",
+        "matched": 95,
+        "identity": 1.0,
+        "coverage": 1.0,
+        "observed_range": [
+          2,
+          2141
+        ],
+        "reason": "PDB 6VR4_1 (released 2020-07-29) named in the CASP target list; chain A covers 95/95 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1033",
+      "set": "casp14",
+      "length": 100,
+      "supplement_length": 100,
+      "tokens": 100,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "EFDSFTSPDLTNEIKEITDQLSYYIYNKHFSSDFEQVEGAKLNIQNEISQFVKEGKAPVQAAYNKLQDPDIKDLLDYYDNIEKHSDEFESEIVKFFSEKK",
+          "truth_chain": "A",
+          "msa_id": "T1033"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6VR4",
+        "entity": "6VR4_1",
+        "file": "T1033.cif",
+        "chain": "A",
+        "matched": 100,
+        "identity": 1.0,
+        "coverage": 1.0,
+        "observed_range": [
+          453,
+          2149
+        ],
+        "reason": "PDB 6VR4_1 (released 2020-07-29) named in the CASP target list; chain A covers 100/100 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1064",
+      "set": "casp14",
+      "length": 106,
+      "supplement_length": 106,
+      "tokens": 106,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "FHQECSLQSCTQHQPYVVDDPCPIHFYSKWYIRVGARKSAPLIELCVDEAGSKSPIQYIDIGNYTVSCLPFTINCQEPKLGSLVVRCSFYEDFLEYHDVRVVLDFI",
+          "truth_chain": "A",
+          "msa_id": "T1064"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "7JTL",
+        "entity": "7JTL_1",
+        "file": "T1064.cif",
+        "chain": "A",
+        "matched": 102,
+        "identity": 1.0,
+        "coverage": 0.9622641509433962,
+        "observed_range": [
+          18,
+          121
+        ],
+        "reason": "PDB 7JTL_1 (released 2020-08-26) named in the CASP target list; chain A covers 102/106 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1029",
+      "set": "casp14",
+      "length": 125,
+      "supplement_length": 125,
+      "tokens": 125,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "MRIDELVPADPRAVSLYTPYYSQANRRRYLPYALSLYQGSSIEGSRAVEGGAPISFVATWTVTPLPADMTRCHLQFNNDAELTYEILLPNHEFLEYLIDMLMGYQRMQKTDFPGAFYRRLLGYDS",
+          "truth_chain": "A",
+          "msa_id": "T1029"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6UF2",
+        "entity": "6UF2_1",
+        "file": "T1029.cif",
+        "chain": "A",
+        "matched": 125,
+        "identity": 1.0,
+        "coverage": 1.0,
+        "observed_range": [
+          1,
+          125
+        ],
+        "reason": "PDB 6UF2_1 (released 2020-09-30) named in the CASP target list; chain A covers 125/125 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1040",
+      "set": "casp14",
+      "length": 130,
+      "supplement_length": 130,
+      "tokens": 130,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "PNFKVEHTKKSFKLAKDYIAQNEITVEEMYDELEDHGFNIDDIANGEEVTESAITEAFIKNHILNSNSELEYHNDFVKQHNIDAVNKIDFLGYSEELHKNKSEQLQNRLFDLYWAVLTNEKTYGDLITPI",
+          "truth_chain": "A",
+          "msa_id": "T1040"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6VR4",
+        "entity": "6VR4_1",
+        "file": "T1040.cif",
+        "chain": "A",
+        "matched": 130,
+        "identity": 1.0,
+        "coverage": 1.0,
+        "observed_range": [
+          1372,
+          2159
+        ],
+        "reason": "PDB 6VR4_1 (released 2020-07-29) named in the CASP target list; chain A covers 130/130 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1049",
+      "set": "casp14",
+      "length": 141,
+      "supplement_length": 141,
+      "tokens": 141,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "SIFSYITESTGTPSNATYTYVIERWDPETSGILNPCYGWPVCYVTVNHKHTVNGTGGNPAFQIARIEKLRTLAEVRDVVLKNRSFPIEGQTTHRGPSLNSNQECVGLFYQPNSSGISPRGKLLPGSLCGIAPPPVHHHHHH",
+          "truth_chain": "A",
+          "msa_id": "T1049"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6Y4F",
+        "entity": "6Y4F_1",
+        "file": "T1049.cif",
+        "chain": "A",
+        "matched": 134,
+        "identity": 1.0,
+        "coverage": 0.950354609929078,
+        "observed_range": [
+          25,
+          158
+        ],
+        "reason": "PDB 6Y4F_1 (released 2020-08-19) named in the CASP target list; chain A covers 134/141 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1043",
+      "set": "casp14",
+      "length": 148,
+      "supplement_length": 148,
+      "tokens": 148,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "SFEEQFIKNNSDSNILAPKVSQSVIKSIKGIKSKHVFELPINDKTKRYILGATETKEEVLPNYVKVGSDLYRLKAYREKSGVYVRTNKLGFEDPKSFLSIKEYKFGTRTGGNFTGELTKQELVYTNQWVNENITLANGYISADSRTVD",
+          "truth_chain": "A",
+          "msa_id": "T1043"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6VR4",
+        "entity": "6VR4_1",
+        "file": "T1043.cif",
+        "chain": "A",
+        "matched": 148,
+        "identity": 1.0,
+        "coverage": 1.0,
+        "observed_range": [
+          1997,
+          2148
+        ],
+        "reason": "PDB 6VR4_1 (released 2020-07-29) named in the CASP target list; chain A covers 148/148 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1039",
+      "set": "casp14",
+      "length": 161,
+      "supplement_length": 161,
+      "tokens": 161,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "NNPISSKLTEYYTNFKYKILPGGKLNKGKLKDLQSTVTSLLEKTRKENNPKYKSDSDFYEVFEEGVVELMQVFEDLGVDSITFEAMDIFLKQFRFDLPENNAYKIMYQQYQGKLTNLNNLLKDIQSNKINPYKINPFKNYSNLIFNSLAEAENYFIENNNE",
+          "truth_chain": "A",
+          "msa_id": "T1039"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6VR4",
+        "entity": "6VR4_1",
+        "file": "T1039.cif",
+        "chain": "A",
+        "matched": 161,
+        "identity": 1.0,
+        "coverage": 1.0,
+        "observed_range": [
+          370,
+          2157
+        ],
+        "reason": "PDB 6VR4_1 (released 2020-07-29) named in the CASP target list; chain A covers 161/161 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1027",
+      "set": "casp14",
+      "length": 168,
+      "supplement_length": 168,
+      "tokens": 168,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "KPTENNEDFNIVAVASNFATTDLDADRGKLPGKKLPLEVLKEMEANARKAGCTRGCLICLSHIKCTPKMKKFIPGRCHTYEGDKESAQGGIGEAIVDIPAIPRFKDLEPMEQFIAQVDLCVDCTTGCLKGLANVQCSDLLKKWLPQRCATFASKIQGQVDKIKGAGGD",
+          "truth_chain": "A",
+          "msa_id": "T1027"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "7D2O",
+        "entity": "7D2O_1",
+        "file": "T1027.cif",
+        "chain": "A",
+        "matched": 168,
+        "identity": 1.0,
+        "coverage": 1.0,
+        "observed_range": [
+          1,
+          168
+        ],
+        "reason": "PDB 7D2O_1 (released 2020-12-02) named in the CASP target list; chain A covers 168/168 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1038",
+      "set": "casp14",
+      "length": 199,
+      "supplement_length": 193,
+      "tokens": 199,
+      "gated": true,
+      "oligo_state": "A2",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "STTQKTISVSDLPNNCLNASSLKCEIKGISTYNVYYQVENNGVIYSCVSDSAEGLEKCDNSLNLPKRFSKVPVIPITKLDNKRHFSVGTKFFISESLTQDNYPITYNSYPTNGTVCLQTVKLSGDCKITKSNFANPYTVSITSPEKIMGYLIKKPGENVEHKVISFSGSASITFTEEMLDGEHNLLCGDKSAKIPKTNK",
+          "truth_chain": "B",
+          "msa_id": "T1038"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6YA2",
+        "entity": "6YA2_1",
+        "file": "T1038.cif",
+        "chain": "B",
+        "matched": 190,
+        "identity": 1.0,
+        "coverage": 0.9547738693467337,
+        "observed_range": [
+          107,
+          296
+        ],
+        "reason": "PDB 6YA2_1 (released 2020-09-30) named in the CASP target list; chain B covers 190/199 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1090",
+      "set": "casp14",
+      "length": 193,
+      "supplement_length": 199,
+      "tokens": 193,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "HHAHGTENLYFQGSAATMAAQSLLSIPVEYRSQVWCRANLPYPPAPQLPIPAVVDILTKASQALPQISFSWTLIDQPPDGSLFLVWQAPTLPSPPDGMHFMSNERFFNMDVAGKVLEIHEAKHGFYPLSETRTMHVRCRYRLLGVGFDNFWLVHYFQGSETDSIPANISVAKPPHLRRYPLPDVKTSPFLLQE",
+          "truth_chain": "A",
+          "msa_id": "T1090"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "7K7V",
+        "entity": "7K7V_1",
+        "file": "T1090.cif",
+        "chain": "A",
+        "matched": 192,
+        "identity": 1.0,
+        "coverage": 0.9948186528497409,
+        "observed_range": [
+          -11,
+          180
+        ],
+        "reason": "PDB 7K7V_1 (released 2020-12-16); chain A covers 192/193 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1074",
+      "set": "casp14",
+      "length": 202,
+      "supplement_length": 202,
+      "tokens": 202,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "MRLLSKPKPLEGSFFMVRLSVRIGWHRGPFLAGTGFGVKGTKQGNTMKNMFGKILASTLLLSSISASAGGNDFVSRLKALDGREGKIVSSYDDENTGRCRLELQKYELEDGSQGLAVYLQDTGMYFTPSAGLDKETKLKDANTAVVSTSSERPGGDACGDFGGALGYKKVLVLKDNQVTIRETFRCVMDGFKKYDLSTTCQF",
+          "truth_chain": "A",
+          "msa_id": "T1074"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "7OC9",
+        "entity": "7OC9_1",
+        "file": "T1074.cif",
+        "chain": "A",
+        "matched": 133,
+        "identity": 1.0,
+        "coverage": 0.6584158415841584,
+        "observed_range": [
+          2,
+          134
+        ],
+        "reason": "PDB 7OC9_1 (released 2021-05-05); chain A covers 133/202 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1047s1",
+      "set": "casp14",
+      "length": 232,
+      "supplement_length": 232,
+      "tokens": 232,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "MQKNAAHTYAISSLLVLSLTGCAWIPSTPLVQGATSAQPVPGPTPVANGSIFQSAQPINYGYQPLFEDRRPRNIGDTLTIVLQENVSASKSSSANASRDGKTNFGFDTVPRYLQGLFGNARADVEASGGNTFNGKGGANASNTFSGTLTVTVDQVLVNGNLHVVGEKQIAINQGTEFIRFSGVVNPRTISGSNTVPSTQVADARIEYVGNGYINEAQNMGWLQRFFLNLSPM",
+          "truth_chain": null,
+          "msa_id": "T1047s1"
+        }
+      ],
+      "truth": {
+        "source": null,
+        "file": null,
+        "reason": "no PDB entity at >= 95 % identity and no public CASP target file; gated as missing until the owner decides (see the Phase A tracking issue)"
+      }
+    },
+    {
+      "id": "T1041",
+      "set": "casp14",
+      "length": 242,
+      "supplement_length": 242,
+      "tokens": 242,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "DFPHVKDEIKRVFGDNSKQTGENLKFHDPLYQLKLKFTYAGGKSGVGITANMLVDHNRSKGIDMQFNQYNLGVGHTQNGNTVFDKEYSEELNGTRFKIKDTISAFLNAFVDNAKDPYINDGNFNTYTSSVAFMLIRAGVHPDWIISFIGQPVLRELADFTQRYESKIIPKEDVGKSSFDIIVEKYETINQESYKDAESRAFSLDTLQESIEVGVHGIDLDVLKTFKGFQEQAKRLNESVQLS",
+          "truth_chain": "A",
+          "msa_id": "T1041"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6VR4",
+        "entity": "6VR4_1",
+        "file": "T1041.cif",
+        "chain": "A",
+        "matched": 242,
+        "identity": 1.0,
+        "coverage": 1.0,
+        "observed_range": [
+          1502,
+          2162
+        ],
+        "reason": "PDB 6VR4_1 (released 2020-07-29) named in the CASP target list; chain A covers 242/242 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1042",
+      "set": "casp14",
+      "length": 289,
+      "supplement_length": 289,
+      "tokens": 289,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "RFDTNGSGKNILDLIILKNKIKNLYVSEQTQQKGSMMNHFKKYHNNGKITSLGTQVKNTLLFTDDILNNNPSLFLLGSKPIQDLVNSISNNLVDSRGGSRGLLTNEDVGKLFYKEVYKYIMADFAPFKVGDPMAYIKDTIFDLVNYKTEDKQYDSSNFFIENMTVYENSFGITNKNKSVDFQDRLYRSAYDLMMENPELANKMFISSFLMNGFENKLIDIKEYIPYQWFLENDIRSFIESKNTGLKDSSESLRNPADKILEQNSLENILFSQNNVVSSDENDITKQECK",
+          "truth_chain": "A",
+          "msa_id": "T1042"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6VR4",
+        "entity": "6VR4_1",
+        "file": "T1042.cif",
+        "chain": "A",
+        "matched": 278,
+        "identity": 0.9619377162629758,
+        "coverage": 0.9619377162629758,
+        "observed_range": [
+          1744,
+          2163
+        ],
+        "reason": "PDB 6VR4_1 (released 2020-07-29) named in the CASP target list; chain A covers 278/289 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1070",
+      "set": "casp14",
+      "length": 335,
+      "supplement_length": 335,
+      "tokens": 335,
+      "gated": true,
+      "oligo_state": "A3",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "MANKPTQPLFPLGLETSESSNIKGFNNSGTIEHSPGAVMTFPEDTEVTGLPSSVRYNPDSDEFEGYYENGGWLSLGGGGIRWETLPHAPSSNLLEGRGYLINNTTGTSTVVLPSPTRIGDSVTICDAYGKFATYPLTVSPSGNNLYGSTEDMAITTDNVSATFTWSGPEQGWVITSGVGLGQGRVYSREIFTQILASETSAVTLNTPPTIVDVYADGKRLAESKYSLDGNVITFSPSLPASTELQVIEYTPIQLGNGGGSGSSTITWVYNGGSAIGGETEITLDIVVDDVPAIDINGSRQYKNLGFTFDPLTSKITLAQELDAEDEVVVIINGTP",
+          "truth_chain": "A",
+          "msa_id": "T1070"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "7REJ",
+        "entity": "7REJ_1",
+        "file": "T1070.cif",
+        "chain": "A",
+        "matched": 324,
+        "identity": 1.0,
+        "coverage": 0.9671641791044776,
+        "observed_range": [
+          4,
+          335
+        ],
+        "reason": "PDB 7REJ_1 (released 2022-02-23); chain A covers 324/335 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1037",
+      "set": "casp14",
+      "length": 404,
+      "supplement_length": 404,
+      "tokens": 404,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "SKINFYTTTIETLETEDQNNTLTTFKVQNVSNASTIFSNGKTYWNFARPSYISNRINTFKNNPGVLRQLLNTSYGQSSLWAKHLLGEEKNVTGDFVLAGNARESASENRLKSLELSIFNSLQEKDKGAEGNDNGSISIVDQLADKLNKVLRGGTKNGTSIYSTVTPGDKSTLHEIKIDHFIPETISSFSNGTMIFNDKIVNAFTDHFVSEVNRMKEAYQELETLPESKRVVHYHTDARGNVMKDGKLAGNAFKSGHILSELSFDQITQDDNEMLKLYNEDGSPINPKGAVSNEQKILIKQTINKVLNQRIKENIRYFKDQGLVIDTVNKDGNKGFHFHGLDKSIMSEYTDDIQLTEFDISHVVSDFTLNSILASIEYTKLFTGDPANYKNMVDFFKRVPATYTN",
+          "truth_chain": "A",
+          "msa_id": "T1037"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "6VR4",
+        "entity": "6VR4_1",
+        "file": "T1037.cif",
+        "chain": "A",
+        "matched": 404,
+        "identity": 1.0,
+        "coverage": 1.0,
+        "observed_range": [
+          337,
+          2165
+        ],
+        "reason": "PDB 6VR4_1 (released 2020-07-29) named in the CASP target list; chain A covers 404/404 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1096",
+      "set": "casp14",
+      "length": 464,
+      "supplement_length": 464,
+      "tokens": 464,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "MDILENYVSFDEQARDINIAFDKLFGRDDISHMNNFSINKRSYYNCLDQISDDLNLVLNKYNDLAYSLLEIRYNMATKENYTHMEFYSDIERLFIKNEKLLNVISDIVEEEYDLDLNQASKGKKINIELQVTDNLNKIYLKSSVLMRILIPILCDFNCDDDINEVLVYDIFKEVIKSFDDGKKNALNKLYKIIYSRVFETKYSDVVIWTYLKNMSTDLMIIVKDYFKVIIKKIFPKLKHNSSVISYLDVVIKQKLKYLFTFKYPISYKPLKAETTDDEELSEQERMEINLLRNDQGNSIINECSIKQEIAKIKKKYNVTDEVMKEFINGRELNSIQIYLVKIYYSNKFKVNSNKNDIFYLLYGMTRELGEMNFSIIPEILSCAIAPNVRKMNNRKKLVDKIIHSDKYSYLLKSYLPIKNILDKNNVILQLMTIKNAKFMNKENKEVDFSTDHLAEEVLDMLLCI",
+          "truth_chain": "A",
+          "msa_id": "T1096"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "7S01",
+        "entity": "7S01_1",
+        "file": "T1096.cif",
+        "chain": "A",
+        "matched": 463,
+        "identity": 1.0,
+        "coverage": 0.9978448275862069,
+        "observed_range": [
+          2,
+          464
+        ],
+        "reason": "PDB 7S01_1 (released 2022-07-06); chain A covers 463/464 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1094",
+      "set": "casp14",
+      "length": 496,
+      "supplement_length": 496,
+      "tokens": 496,
+      "gated": true,
+      "oligo_state": "A1",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "MISNFRKFHGNKNQEKFNENLILNKENESILNYLDPICKTLEIIPEITYLGSSVEPINKVYKFNKEEKTSDIERSELQLIKMSFLIEKDDKKEEINKFIYFPKLIDSQYFIINGNRYYPIYQLLDSGTYRTNKALTLKTLLMPIVLREKKETFDDINGETHTMLNVDLDLFKSKVPFLIYFFSKFGFEGTLEYFGLQDLIHVLMKEDLDQLDEDEINDNVIFMITKNISLVVDKNFFSNKNNQIIIATLLNCFNTRIKIDKIYEKDYWVKKLGGYFTTNNSNKQEKGEGIILSFERILDEWTKKILRTEEKNKEDIYSVVRWMINNYLALVKQDNMNLANKRIRLYEYLLHPLLIKFSKGTYRVLNNRNSNKFEKIKTIFSNIQEGFLVKKIINNELLRYDNSVNSISLFTLILRYTQSGPQSPFSSNSTNNKLRGLHPSYLGRLGLTSTSAGDPGASGSLTPFLELPENSYMHFTEEPEINLNIDDISIDEVIES",
+          "truth_chain": "c",
+          "msa_id": "T1094"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "7S00",
+        "entity": "7S00_1",
+        "file": "T1094.cif",
+        "chain": "c",
+        "matched": 484,
+        "identity": 1.0,
+        "coverage": 0.9758064516129032,
+        "observed_range": [
+          1,
+          484
+        ],
+        "reason": "PDB 7S00_1 (released 2022-07-06); chain c covers 484/496 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "T1061",
+      "set": "casp14",
+      "length": 949,
+      "supplement_length": 949,
+      "tokens": 949,
+      "gated": true,
+      "oligo_state": "A3",
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "MKKILDSAKNYLNTHDKLKTACLIALELPSSSGSAATYIYLTDYFRDVTYNGILYRSGKVKSISSHKQNRQLSIGSLSFTITGTAEDEVLKLVQNGVSFLDRGITIHQAIINEEGNILPVDPDTDGPLLFFRGRITGGGIKDNVNTSGIGTSVITWNCSNQFYDFDRVNGRYTDDASHRGLEVVNGTLQPSNGAKRPEYQEDYGFFHSNKSTTILAKYQVKEERYKLQSKKKLFGLSRSYSLKKYYETVTKEVDLDFNLAAKFIPVVYGVQKIPGIPIFADTELNNPNIVYVVYAFAEGEIDGFLDFYIGDSPMICFDETDSDTRTCFGRKKIVGDTMHRLAAGTSTSQPSVHGQEYKYNDGNGDIRIWTFHGKPDQTAAQVLVDIAKKKGFYLQNQNGNGPEYWDSRYKLLDTAYAIVRFTINENRTEIPEISAEVQGKKVKVYNSDGTIKADKTSLNGIWQLMDYLTSDRYGADITLDQFPLQKVISEAKILDIIDESYQTSWQPYWRYVGWNDPLSENRQIVQLNTILDTSESVFKNVQGILESFGGAINNLSGEYRITVEKYSTNPLRINFLDTYGDLDLSDTTGRNKFNSVQASLVDPALSWKTNSITFYNSKFKEQDKGLDKKLQLSFANITNYYTARSYADRELKKSRYSRTLSFSVPYKFIGIEPNDPIAFTYERYGWKDKFFLVDEVENTRDGKINLVLQEYGEDVFINSEQVDNSGNDIPDISNNVLPPRDFKYTPTPGGVVGAIGKNGELSWLPSLTNNVVYYSIAHSGHVNPYIVQQLENNPNERMIQEIIGEPAGLAIFELRAVDINGRRSSPVTLSVDLNSAKNLSVVSNFRVVNTASGDVTEFVGPDVKLAWDKIPEEEIIPEIYYTLEIYDSQDRMLRSVRIEDVYTYDYLLTYNKADFALLNSGALGINRKLRFRIRAEGENGEQSVGWATI",
+          "truth_chain": "b",
+          "msa_id": "T1061"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "7ZHJ",
+        "entity": "7ZHJ_6",
+        "file": "T1061.cif",
+        "chain": "b",
+        "matched": 949,
+        "identity": 1.0,
+        "coverage": 1.0,
+        "observed_range": [
+          1,
+          949
+        ],
+        "reason": "PDB 7ZHJ_6 (released 2023-02-08); chain b covers 949/949 residues",
+        "scoring_unit": "whole-target",
+        "unit": null
+      }
+    },
+    {
+      "id": "CEIL-5CEZ",
+      "set": "ceiling",
+      "kind": "antibody-antigen",
+      "length": 1543,
+      "supplement_length": null,
+      "tokens": 1543,
+      "gated": false,
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "protein",
+          "sequence": "QSVLTQSASVSGSLGQSVTISCTGPNSVCCSHKSISWYQWPPGRAPTLIIYEDNERAPGISPRFSGYKSYWSAYLTISDLRPEDETTYYCCSYTHNSGCVFGTGTKVSVLGQSKANPSVTLFPPSSEELQANKATLVCLISDFYPGAVTVAWKADSSPVKAGVETTTPSKQSNNKYAASSYLSLTPEQWKSHRSYSCQVTHEGSTVEKTVAPTECS",
+          "truth_chain": "E",
+          "msa_id": "CEIL-5CEZ_5CEZ_6"
+        },
+        {
+          "chain_id": "B",
+          "entity": "protein",
+          "sequence": "EGQLVQSGAELKKPGASVKISCKTSGYRFNFYHINWIRQTAGRGPEWMGWISPYSGDKNLAPAFQDRVIMTTDTEVPVTSFTSTGAAYMEIRNLKFDDTGTYFCAKGLLRDGSSTWLPYLWGQGTLLTVSSASTKGPSVFPLAPSSKSTSGGTAALGCLVKDYFPEPVTVSWNSGALTSGVHTFPAVLQSSGLYSLSSVVTVPSSSLGTQTYICNVNHKPSNTKVDKRVEPKSCDKGLEV",
+          "truth_chain": "D",
+          "msa_id": "CEIL-5CEZ_5CEZ_5"
+        },
+        {
+          "chain_id": "C",
+          "entity": "protein",
+          "sequence": "QVQLQESGPGLVKPSETLSLTCTVSGGSISNYYWSWIRQSPGKGLEWIGYISDSESTNYNPSLKSRVIISVDTSKNQLSLKLNSVTAADSAIYYCARAQQGKRIYGMVSFGEFFYYYYMDVWGKGTTVTVSSASTKGPSVFPLAPSSKSTSGGTAALGCLVKDYFPEPVTVSWNSGALTSGVHTFPAVLQSSGLYSLSSVVTVPSSSLGTQTYICNVNHKPSNTKVDKKVEPKSCD",
+          "truth_chain": "H",
+          "msa_id": "CEIL-5CEZ_5CEZ_4"
+        },
+        {
+          "chain_id": "D",
+          "entity": "protein",
+          "sequence": "GSVTSYVRPLSVALGETASISCGRQALGSRAVQWYQHRPGQAPILLIYNNQDRPSGIPERFSGTPDINFGTRATLTISGVEAGDEADYYCHMWDSRSGFSWSFGGATRLTVLGQPKAAPSVTLFPPSSEELQANKATLVCLISDFYPGAVTVAWKADSSPVKAGVETTTPSKQSNNKYAASSYLSLTPEQWKSHKSYSCQVTHEGSTVEKTVAPTECS",
+          "truth_chain": "L",
+          "msa_id": "CEIL-5CEZ_5CEZ_3"
+        },
+        {
+          "chain_id": "E",
+          "entity": "protein",
+          "sequence": "AVGIGAVFLGFLGAAGSTMGAASMTLTVQARNLLSGIVQQQSNLLRAPEAQQHLLKLTVWGIKQLQARVLAVERYLRDQQLLGIWGCSGKLICCTNVPWNSSWSNRNLSEIWDNMTWLQWDKEISNYTQIIYGLLEESQNQQEKNEQDLLALD",
+          "truth_chain": "B",
+          "msa_id": "CEIL-5CEZ_5CEZ_2"
+        },
+        {
+          "chain_id": "F",
+          "entity": "protein",
+          "sequence": "ENLWVTVYYGVPVWKDAETTLFCASDAKAYETEKHNVWATHACVPTDPNPQEIHLENVTEEFNMWKNNMVEQMHTDIISLWDQSLKPCVKLTPLCVTLQCTNVTNAITDDMRGELKNCSFNMTTELRDKKQKVYSLFYRLDVVQINENQGNRSNNSNKEYRLINCNTSAITQACPKVSFEPIPIHYCAPAGFAILKCKDKKFNGTGPCPSVSTVQCTHGIKPVVSTQLLLNGSLAEEEVMIRSENITNNAKNILVQFNTPVQINCTRPNNNTRKSIRIGPGQAFYATGDIIGDIRQAHCNVSKATWNETLGKVVKQLRKHFGNNTIIRFANSSGGDLEVTTHSFNCGGEFFYCNTSGLFNSTWISNTSVQGSNSTGSNDSITLPCRIKQIINMWQRIGQAMYAPPIQGVIRCVSNITGLILTRDGGSTNSTTETFRPGGGDMRDNWRSELYKYKVVKIEPLGVAPTRCKRRVVGRRRRRR",
+          "truth_chain": "G",
+          "msa_id": "CEIL-5CEZ_5CEZ_1"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "5CEZ",
+        "file": null,
+        "reason": "BG505 SOSIP gp140 HIV-1 Env protomer (gp120 + gp41) with two Fabs (35O22, 3H+109L): 1,543 polymer residues in the deposited unit, a standard antibody-antigen benchmark just above the trn2 LNC=2 single-core ceiling and well inside one 96 GB GPU."
+      }
+    },
+    {
+      "id": "CEIL-5F9R",
+      "set": "ceiling",
+      "kind": "protein-RNA",
+      "length": 1546,
+      "supplement_length": null,
+      "tokens": 1546,
+      "gated": false,
+      "chains": [
+        {
+          "chain_id": "A",
+          "entity": "dna",
+          "sequence": "GGCGCATAAAGATGAGACGCTGGCGATTAG",
+          "truth_chain": "D",
+          "msa_id": null
+        },
+        {
+          "chain_id": "B",
+          "entity": "dna",
+          "sequence": "CTAATCGCCAGCGTCTCATCTTTATGCGCC",
+          "truth_chain": "C",
+          "msa_id": null
+        },
+        {
+          "chain_id": "C",
+          "entity": "rna",
+          "sequence": "GGCGCAUAAAGAUGAGACGCGUUUUAGAGCUAUGCUGUUUUGAAAAAAACAGCAUAGCAAGUUAAAAUAAGGCUAGUCCGUUAUCAACUUGAAAAAGUGGCACCGAGUCGGUGCUUCG",
+          "truth_chain": "A",
+          "msa_id": null
+        },
+        {
+          "chain_id": "D",
+          "entity": "protein",
+          "sequence": "MDKKYSIGLDIGTNSVGWAVITDEYKVPSKKFKVLGNTDRHSIKKNLIGALLFDSGETAEATRLKRTARRRYTRRKNRICYLQEIFSNEMAKVDDSFFHRLEESFLVEEDKKHERHPIFGNIVDEVAYHEKYPTIYHLRKKLVDSTDKADLRLIYLALAHMIKFRGHFLIEGDLNPDNSDVDKLFIQLVQTYNQLFEENPINASGVDAKAILSARLSKSRRLENLIAQLPGEKKNGLFGNLIALSLGLTPNFKSNFDLAEDAKLQLSKDTYDDDLDNLLAQIGDQYADLFLAAKNLSDAILLSDILRVNTEITKAPLSASMIKRYDEHHQDLTLLKALVRQQLPEKYKEIFFDQSKNGYAGYIDGGASQEEFYKFIKPILEKMDGTEELLVKLNREDLLRKQRTFDNGSIPHQIHLGELHAILRRQEDFYPFLKDNREKIEKILTFRIPYYVGPLARGNSRFAWMTRKSEETITPWNFEEVVDKGASAQSFIERMTNFDKNLPNEKVLPKHSLLYEYFTVYNELTKVKYVTEGMRKPAFLSGEQKKAIVDLLFKTNRKVTVKQLKEDYFKKIECFDSVEISGVEDRFNASLGTYHDLLKIIKDKDFLDNEENEDILEDIVLTLTLFEDREMIEERLKTYAHLFDDKVMKQLKRRRYTGWGRLSRKLINGIRDKQSGKTILDFLKSDGFANRNFMQLIHDDSLTFKEDIQKAQVSGQGDSLHEHIANLAGSPAIKKGILQTVKVVDELVKVMGRHKPENIVIEMARENQTTQKGQKNSRERMKRIEEGIKELGSQILKEHPVENTQLQNEKLYLYYLQNGRDMYVDQELDINRLSDYDVDHIVPQSFLKDDSIDNKVLTRSDKNRGKSDNVPSEEVVKKMKNYWRQLLNAKLITQRKFDNLTKAERGGLSELDKAGFIKRQLVETRQITKHVAQILDSRMNTKYDENDKLIREVKVITLKSKLVSDFRKDFQFYKVREINNYHHAHDAYLNAVVGTALIKKYPKLESEFVYGDYKVYDVRKMIAKSEQEIGKATAKYFFYSNIMNFFKTEITLANGEIRKRPLIETNGETGEIVWDKGRDFATVRKVLSMPQVNIVKKTEVQTGGFSKESILPKRNSDKLIARKKDWDPKKYGGFDSPTVAYSVLVVAKVEKGKSKKLKSVKELLGITIMERSSFEKNPIDFLEAKGYKEVKKDLIIKLPKYSLFELENGRKRMLASAGELQKGNELALPSKYVNFLYLASHYEKLKGSPEDNEQKQLFVEQHKHYLDEIIEQISEFSKRVILADANLDKVLSAYNKHRDKPIREQAENIIHLFTLTNLGAPAAFKYFDTTIDRKRYTSTKEVLDATLIHQSITGLYETRIDLSQLGGD",
+          "truth_chain": "B",
+          "msa_id": "CEIL-5F9R_5F9R_1"
+        }
+      ],
+      "truth": {
+        "source": "pdb",
+        "pdb_id": "5F9R",
+        "file": null,
+        "reason": "Catalytically active SpCas9 with a 116-nt sgRNA and a 30-bp target DNA: 1,546 residues + nucleotides, a protein-RNA(-DNA) complex just above the trn2 LNC=2 single-core ceiling."
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+ "_comment": "synthetic neuron-profile instructions for harness tests (not a real run)",
+ "instructions": [
+  {
+   "engine": "PE",
+   "start_ns": 0,
+   "duration_ns": 100,
+   "label": "PairformerModule/TriangleAttentionStartingNode/matmul_qk"
+  },
+  {
+   "engine": "ACT",
+   "start_ns": 100,
+   "duration_ns": 300,
+   "label": "PairformerModule/TriangleAttentionStartingNode/exp"
+  },
+  {
+   "engine": "DVE",
+   "start_ns": 100,
+   "duration_ns": 250,
+   "label": "PairformerModule/TriangleAttentionStartingNode/reduce_max"
+  },
+  {
+   "engine": "PE",
+   "start_ns": 400,
+   "duration_ns": 200,
+   "label": "PairformerModule/TriangleMultiplicationOutgoing/einsum"
+  },
+  {
+   "engine": "DVE",
+   "start_ns": 600,
+   "duration_ns": 50,
+   "label": "PairformerModule/Transition/swiglu"
+  },
+  {
+   "engine": "PE",
+   "start_ns": 700,
+   "duration_ns": 100,
+   "label": "DiffusionTransformer/attention/matmul"
+  },
+  {
+   "engine": "PE",
+   "start_ns": 800,
+   "duration_ns": 50,
+   "label": "aten::bmm atom_window"
+  },
+  {
+   "engine": "qSyncIO0",
+   "start_ns": 850,
+   "duration_ns": 40,
+   "label": "dma"
+  },
+  {
+   "engine": "PE",
+   "start_ns": 1000,
+   "duration_ns": 10,
+   "label": "unknown_op"
+  }
+ ]
+}

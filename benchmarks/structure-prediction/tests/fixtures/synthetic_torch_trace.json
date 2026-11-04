@@ -1,0 +1,323 @@
+{
+ "traceEvents": [
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: Boltz2_0",
+   "ts": 0,
+   "dur": 1000,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: PairformerModule_0",
+   "ts": 10,
+   "dur": 500,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: PairformerLayer_0",
+   "ts": 10,
+   "dur": 500,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: TriangleAttentionStartingNode_0",
+   "ts": 20,
+   "dur": 100,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "cuda_runtime",
+   "name": "cudaLaunchKernel",
+   "ts": 30,
+   "dur": 2,
+   "tid": 1,
+   "pid": 1,
+   "args": {
+    "correlation": 1
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "kernel",
+   "name": "tri_att_softmax",
+   "ts": 40,
+   "dur": 80,
+   "tid": 7,
+   "pid": 0,
+   "args": {
+    "correlation": 1
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: TriangleMultiplicationOutgoing_0",
+   "ts": 130,
+   "dur": 100,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "cuda_runtime",
+   "name": "cudaLaunchKernel",
+   "ts": 140,
+   "dur": 2,
+   "tid": 1,
+   "pid": 1,
+   "args": {
+    "correlation": 2
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "kernel",
+   "name": "gemm",
+   "ts": 150,
+   "dur": 60,
+   "tid": 7,
+   "pid": 0,
+   "args": {
+    "correlation": 2
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: Transition_0",
+   "ts": 240,
+   "dur": 50,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "cuda_runtime",
+   "name": "cudaLaunchKernel",
+   "ts": 245,
+   "dur": 2,
+   "tid": 1,
+   "pid": 1,
+   "args": {
+    "correlation": 3
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "kernel",
+   "name": "gelu",
+   "ts": 250,
+   "dur": 20,
+   "tid": 7,
+   "pid": 0,
+   "args": {
+    "correlation": 3
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: AttentionPairBias_0",
+   "ts": 300,
+   "dur": 50,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "cuda_runtime",
+   "name": "cudaLaunchKernel",
+   "ts": 305,
+   "dur": 2,
+   "tid": 1,
+   "pid": 1,
+   "args": {
+    "correlation": 4
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "kernel",
+   "name": "sdpa",
+   "ts": 310,
+   "dur": 10,
+   "tid": 7,
+   "pid": 0,
+   "args": {
+    "correlation": 4
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: MSAModule_0",
+   "ts": 520,
+   "dur": 60,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: Transition_1",
+   "ts": 530,
+   "dur": 20,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "cuda_runtime",
+   "name": "cudaLaunchKernel",
+   "ts": 535,
+   "dur": 2,
+   "tid": 1,
+   "pid": 1,
+   "args": {
+    "correlation": 5
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "kernel",
+   "name": "msa_trans",
+   "ts": 540,
+   "dur": 10,
+   "tid": 7,
+   "pid": 0,
+   "args": {
+    "correlation": 5
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: DiffusionModule_0",
+   "ts": 600,
+   "dur": 300,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: AtomAttentionEncoder_0",
+   "ts": 610,
+   "dur": 40,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: AtomTransformer_0",
+   "ts": 612,
+   "dur": 30,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "cuda_runtime",
+   "name": "cudaLaunchKernel",
+   "ts": 615,
+   "dur": 2,
+   "tid": 1,
+   "pid": 1,
+   "args": {
+    "correlation": 6
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "kernel",
+   "name": "atom_attn",
+   "ts": 620,
+   "dur": 25,
+   "tid": 7,
+   "pid": 0,
+   "args": {
+    "correlation": 6
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "python_function",
+   "name": "nn.Module: DiffusionTransformer_0",
+   "ts": 660,
+   "dur": 200,
+   "tid": 1,
+   "pid": 1
+  },
+  {
+   "ph": "X",
+   "cat": "cuda_runtime",
+   "name": "cudaLaunchKernel",
+   "ts": 665,
+   "dur": 2,
+   "tid": 1,
+   "pid": 1,
+   "args": {
+    "correlation": 7
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "kernel",
+   "name": "token_attn",
+   "ts": 670,
+   "dur": 100,
+   "tid": 7,
+   "pid": 0,
+   "args": {
+    "correlation": 7
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "gpu_memcpy",
+   "name": "Memcpy HtoD",
+   "ts": 0,
+   "dur": 15,
+   "tid": 7,
+   "pid": 0
+  },
+  {
+   "ph": "X",
+   "cat": "cuda_runtime",
+   "name": "cudaLaunchKernel",
+   "ts": 950,
+   "dur": 2,
+   "tid": 1,
+   "pid": 1,
+   "args": {
+    "correlation": 8
+   }
+  },
+  {
+   "ph": "X",
+   "cat": "kernel",
+   "name": "orphan",
+   "ts": 955,
+   "dur": 5,
+   "tid": 7,
+   "pid": 0,
+   "args": {
+    "correlation": 8
+   }
+  }
+ ],
+ "_comment": "synthetic torch.profiler trace for harness tests (not a real run)"
+}
