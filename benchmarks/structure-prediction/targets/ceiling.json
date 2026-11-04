@@ -1,0 +1,17 @@
+{
+  "_comment": "Copyright 2026 Scott Friedman. SPDX-License-Identifier: Apache-2.0. Ceiling-column complexes (>1,500 tokens): not gated, no oracle run; they show which platforms run inputs above boltz-neuron's per-logical-core ceiling (1,408 tokens at ds=1, LNC=2).",
+  "complexes": [
+    {
+      "id": "CEIL-5CEZ",
+      "pdb_id": "5CEZ",
+      "kind": "antibody-antigen",
+      "reason": "BG505 SOSIP gp140 HIV-1 Env protomer (gp120 + gp41) with two Fabs (35O22, 3H+109L): 1,543 polymer residues in the deposited unit, a standard antibody-antigen benchmark just above the trn2 LNC=2 single-core ceiling and well inside one 96 GB GPU."
+    },
+    {
+      "id": "CEIL-5F9R",
+      "pdb_id": "5F9R",
+      "kind": "protein-RNA",
+      "reason": "Catalytically active SpCas9 with a 116-nt sgRNA and a 30-bp target DNA: 1,546 residues + nucleotides, a protein-RNA(-DNA) complex just above the trn2 LNC=2 single-core ceiling."
+    }
+  ]
+}
