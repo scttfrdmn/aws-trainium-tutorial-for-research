@@ -50,8 +50,8 @@ the tree.
 
 - **Plan/track** with [GitHub milestones, issues, and labels](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/milestones).
   Labels follow a `type:` / `area:` / `status:` taxonomy. Each release is a milestone.
-- **Versioning:** [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). Pre-1.0, the
-  tutorial is evolving; `0.MINOR.PATCH`. `1.0.0` = every example hardware-validated.
+- **Versioning:** [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The tutorial
+  stays on `0.MINOR.PATCH`; there is no planned 1.0.0. The every-example-hardware-validated release is v0.4.0.
 - **Changelog:** keep [`CHANGELOG.md`](CHANGELOG.md) in [Keep a Changelog](https://keepachangelog.com/)
   format. Add an entry under `## [Unreleased]` in the same PR as your change; releases move the
   Unreleased section under a version heading and tag `vMAJOR.MINOR.PATCH`.

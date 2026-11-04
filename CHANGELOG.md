@@ -10,6 +10,12 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Changed (versioning stays on 0.x, #52)
+- **Package version is now `0.1.0`**, replacing the calendar-style `2026.3.0`, in `pyproject.toml`, `uv.lock`,
+  the README badge and the main tutorial doc footer. Nothing had been tagged or released under the old scheme.
+- **`CONTRIBUTING.md` no longer defines a 1.0.0.** The tutorial stays on `0.MINOR.PATCH`. The
+  every-example-hardware-validated milestone is now v0.4.0.
+
 ### Added (Trn2 full fine-tune, #26)
 - **`tensor_parallel_full_finetune` fits on Trn2 at TP=4.** On a `trn2.3xlarge` (Neuron 2.33,
   optimum-neuron 0.4.5), the Qwen3-1.7B full fine-tune ran 20/20 steps at final loss 1.72, using about
