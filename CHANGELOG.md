@@ -10,6 +10,18 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Added (structure-prediction Phase A harness, #55)
+- **`benchmarks/structure-prediction/`: Phase A harness for Boltz-2 on Trainium2 vs G7e** (Apache-2.0,
+  this directory only). Implemented and unit-tested without hardware; **no measured numbers yet**.
+  Target set (20 CASP14 targets from Didi et al. 2025 + two >1,500-token ceiling complexes, ground
+  truth from the PDB or the CASP Prediction Center), ColabFold-search MSA scripts (MMseqs2-GPU on g7e,
+  MMseqs2-CPU timing on r7a), run manifest with live prices, a CLI with `neuron` / `gpu` /
+  `openfold-trt` / `cpu` backends and `--dry-run`, accuracy scoring with the work plan's gate,
+  a profile classifier, a fixed-schema $/structure cost table, host launch/teardown configs, and
+  RUNBOOK-A0 / RUNBOOK-A. Status lives on the charter (#54) and the Phase A milestone.
+- `docs/structure-prediction/`: the background analysis for the project.
+- `science` extra: `gemmi` and `openpyxl` (structure parsing; reading the supplement).
+
 ### Changed (versioning stays on 0.x, #52)
 - **Package version is now `0.1.0`**, replacing the calendar-style `2026.3.0`, in `pyproject.toml`, `uv.lock`,
   the README badge and the main tutorial doc footer. Nothing had been tagged or released under the old scheme.

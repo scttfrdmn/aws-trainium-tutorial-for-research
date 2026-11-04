@@ -69,6 +69,8 @@ science = [
     "faiss-cpu>=1.7.4",
     "rasterio>=1.3.0",  # satellite_landcover: read Sentinel-2/WorldCover COGs from RODA S3
     "pymatgen>=2024.1.1",  # crystal_cif_slm: structural-validity rate of generated CIFs
+    "gemmi>=0.6.5",  # structure-prediction benchmark: mmCIF parsing for scoring
+    "openpyxl>=3.1",  # structure-prediction benchmark: read the Didi et al. supplement
 ]
 notebooks = [
     "jupyter>=1.0.0",
@@ -129,7 +131,7 @@ convention = "google"
 "advanced/**" = ["D", "F401"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["scripts", "examples", "advanced"]
+known-first-party = ["scripts", "examples", "advanced", "harness", "targets"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -168,9 +170,9 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-ra -q --strict-markers --strict-config"
-testpaths = ["tests"]
+testpaths = ["tests", "benchmarks/structure-prediction/tests"]
 # Tutorial scripts are flat modules imported directly in tests (e.g. `from cost_monitor import ...`).
-pythonpath = ["scripts", "examples", "advanced", "."]
+pythonpath = ["scripts", "examples", "advanced", ".", "benchmarks/structure-prediction"]
 filterwarnings = [
     "ignore::UserWarning",
     "ignore::DeprecationWarning",

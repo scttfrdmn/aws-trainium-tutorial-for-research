@@ -1,0 +1,2 @@
+# Copyright 2026 Scott Friedman. SPDX-License-Identifier: Apache-2.0
+# CPU fp32 oracle cache: results/oracle/<target>/seed<s>/ (result + manifest JSON).
