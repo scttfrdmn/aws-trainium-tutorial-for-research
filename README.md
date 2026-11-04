@@ -2,7 +2,7 @@
 
 [![Open Source](https://img.shields.io/badge/Open%20Source-MIT-blue)](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research)
 [![GitHub Stars](https://img.shields.io/github/stars/scttfrdmn/aws-trainium-tutorial-for-research)](https://github.com/scttfrdmn/aws-trainium-tutorial-for-research/stargazers)
-[![Version](https://img.shields.io/badge/Version-2026.3.0-green)](VERSION_MATRIX.md)
+[![Version](https://img.shields.io/badge/Version-0.1.0-green)](VERSION_MATRIX.md)
 [![Neuron SDK](https://img.shields.io/badge/Neuron%20SDK-2.33.0-orange)](https://awsdocs-neuron.readthedocs-hosted.com/)
 
 ## 🎯 Overview

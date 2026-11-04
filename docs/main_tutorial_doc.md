@@ -652,4 +652,4 @@ The future of academic ML research is cost-efficient, and AWS ML chips provide t
 ---
 
 *Last Updated: October 20, 2026*
-*Tutorial Version: 2026.3.0 — targets Neuron SDK 2.33.0 / PyTorch 2.9 (PyTorch/XLA)*
+*Tutorial Version: 0.1.0 — targets Neuron SDK 2.33.0 / PyTorch 2.9 (PyTorch/XLA)*
