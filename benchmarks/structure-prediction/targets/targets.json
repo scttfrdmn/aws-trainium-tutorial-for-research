@@ -33,6 +33,7 @@
       "supplement_length": 95,
       "tokens": 95,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -68,6 +69,7 @@
       "supplement_length": 100,
       "tokens": 100,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -103,6 +105,7 @@
       "supplement_length": 106,
       "tokens": 106,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -138,6 +141,7 @@
       "supplement_length": 125,
       "tokens": 125,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -173,6 +177,7 @@
       "supplement_length": 130,
       "tokens": 130,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -208,6 +213,7 @@
       "supplement_length": 141,
       "tokens": 141,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -243,6 +249,7 @@
       "supplement_length": 148,
       "tokens": 148,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -278,6 +285,7 @@
       "supplement_length": 161,
       "tokens": 161,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -313,6 +321,7 @@
       "supplement_length": 168,
       "tokens": 168,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -348,6 +357,7 @@
       "supplement_length": 193,
       "tokens": 199,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A2",
       "chains": [
         {
@@ -383,6 +393,7 @@
       "supplement_length": 199,
       "tokens": 193,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -418,6 +429,7 @@
       "supplement_length": 202,
       "tokens": 202,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -452,7 +464,8 @@
       "length": 232,
       "supplement_length": 232,
       "tokens": 232,
-      "gated": true,
+      "gated": false,
+      "timing_only": true,
       "oligo_state": "A1",
       "chains": [
         {
@@ -466,7 +479,7 @@
       "truth": {
         "source": null,
         "file": null,
-        "reason": "no PDB entity at >= 95 % identity and no public CASP target file; gated as missing until the owner decides (see the Phase A tracking issue)"
+        "reason": "no PDB entity at >= 95 % identity and no public CASP target file; no ground truth, timing only (file requested from the CASP organisers)"
       }
     },
     {
@@ -476,6 +489,7 @@
       "supplement_length": 242,
       "tokens": 242,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -511,6 +525,7 @@
       "supplement_length": 289,
       "tokens": 289,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -546,6 +561,7 @@
       "supplement_length": 335,
       "tokens": 335,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A3",
       "chains": [
         {
@@ -581,6 +597,7 @@
       "supplement_length": 404,
       "tokens": 404,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -616,6 +633,7 @@
       "supplement_length": 464,
       "tokens": 464,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -651,6 +669,7 @@
       "supplement_length": 496,
       "tokens": 496,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A1",
       "chains": [
         {
@@ -686,6 +705,7 @@
       "supplement_length": 949,
       "tokens": 949,
       "gated": true,
+      "timing_only": false,
       "oligo_state": "A3",
       "chains": [
         {

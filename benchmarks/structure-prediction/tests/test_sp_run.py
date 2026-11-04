@@ -289,7 +289,7 @@ def test_cpu_oracle_runs_once_and_is_cached(tmp_path):
     targets = tmp_path / "targets.json"
     targets.write_text('{"targets": []}')
     c = cfg(tmp_path, backend="cpu", lnc=None, visible_core=None)
-    ex = Exec(timing={"model_s": 3600.0, "precision": "32-true"})
+    ex = Exec(timing=GOOD_ORACLE_TIMING)
     first = run.predict(
         c,
         dry_run=False,
@@ -446,6 +446,133 @@ def test_inputs_writes_boltz_yaml_with_shared_msa(tmp_path):
     doc = yaml.safe_load(path.read_text())
     assert doc["sequences"][0]["protein"]["msa"].endswith("msa/C1_P.a3m")
     assert "msa" not in doc["sequences"][1]["rna"]
+
+
+GOOD_AUDIT = {
+    "modules_seen": 1200,
+    "nonfp32_modules": [],
+    "nonfp32_count": 0,
+    "autocast_active_in": [],
+    "required_seen": {
+        "structure_module": True,
+        "pairformer_module": True,
+        "msa_module": True,
+    },
+    "fp32_ok": True,
+}
+GOOD_ORACLE_TIMING = {
+    "model_s": 3600.0,
+    "precision": "32-true",
+    "dtype_audit": GOOD_AUDIT,
+}
+
+
+@pytest.mark.parametrize(
+    "audit, msg",
+    [
+        (None, "dtype audit failed"),
+        (
+            {
+                **GOOD_AUDIT,
+                "fp32_ok": False,
+                "nonfp32_modules": ["structure_module.score_model.x"],
+            },
+            "structure_module",
+        ),
+        (
+            {
+                **GOOD_AUDIT,
+                "fp32_ok": False,
+                "autocast_active_in": ["pairformer_module"],
+            },
+            "autocast",
+        ),
+    ],
+)
+def test_cpu_oracle_rejects_failed_dtype_audit(tmp_path, audit, msg):
+    c = cfg(tmp_path, backend="cpu", lnc=None, visible_core=None)
+    ex = Exec(timing={"model_s": 1.0, "precision": "32-true", "dtype_audit": audit})
+    doc = run.predict(
+        c,
+        dry_run=False,
+        profile=False,
+        tokens=96,
+        run_group="g",
+        executor=ex,
+        manifest_fn=fake_manifest,
+    )
+    assert doc["status"] == "failed" and msg in doc["error"]
+
+
+def test_primary_rows_keep_default_msa_depth(tmp_path):
+    with pytest.raises(backends.ConfigError, match="secondary run"):
+        backends.build(cfg(tmp_path, max_msa_seqs=2048))
+    inv = backends.build(cfg(tmp_path, max_msa_seqs=2048, variant="msa2048"))
+    assert inv.argv[inv.argv.index("--max_msa_seqs") + 1] == "2048"
+    with pytest.raises(backends.ConfigError, match="short lowercase"):
+        backends.build(cfg(tmp_path, max_msa_seqs=2048, variant="MSA 2048"))
+
+
+def test_variant_recorded_in_result(tmp_path):
+    doc = run.predict(
+        cfg(tmp_path, max_msa_seqs=2048, variant="msa2048"),
+        dry_run=True,
+        profile=False,
+        tokens=949,
+        run_group="g",
+        executor=Exec(),
+        manifest_fn=fake_manifest,
+    )
+    assert (doc["variant"], doc["max_msa_seqs"], doc["schema"]) == (
+        "msa2048",
+        2048,
+        schema.RESULT_SCHEMA,
+    )
+
+
+def test_cpu_threads_and_pinning(tmp_path, monkeypatch):
+    monkeypatch.setattr(backends.shutil, "which", lambda name: "/usr/bin/taskset")
+    inv = backends.build(
+        cfg(
+            tmp_path,
+            backend="cpu",
+            lnc=None,
+            visible_core=None,
+            threads=24,
+            cpu_cores="24-47",
+        )
+    )
+    assert inv.argv[:3] == ["taskset", "-c", "24-47"]
+    assert inv.env == {
+        "OMP_NUM_THREADS": "24",
+        "MKL_NUM_THREADS": "24",
+        "SP_TORCH_THREADS": "24",
+    }
+    monkeypatch.setattr(backends.shutil, "which", lambda name: None)
+    with pytest.raises(backends.ConfigError, match="taskset"):
+        backends.build(
+            cfg(
+                tmp_path,
+                backend="cpu",
+                lnc=None,
+                visible_core=None,
+                threads=24,
+                cpu_cores="0-23",
+            )
+        )
+
+
+def test_schema_1_0_documents_still_validate():
+    doc = schema.empty_result(
+        target_id="T",
+        backend="gpu",
+        seed=0,
+        diffusion_samples=1,
+        recycling_steps=3,
+        sampling_steps=200,
+    )
+    doc["schema"] = "sp-result/1.0"
+    schema.validate_result(doc)
 
 
 def test_cpu_oracle_rejects_non_fp32(tmp_path):

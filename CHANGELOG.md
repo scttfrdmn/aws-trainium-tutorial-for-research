@@ -10,6 +10,25 @@ Project work (milestones, issues, labels) is tracked on
 
 ## [Unreleased]
 
+### Changed (structure-prediction owner decisions, #55)
+- **The accuracy gate passes at ≥ 17 of 19.** T1047s1 has no public ground truth, so it is
+  timing-only: it stays in every timing and cost table and is marked "no ground truth, timing
+  only" in the accuracy table. The threshold is now the number of targets with ground truth
+  minus 2, so it returns to 18 of 20 if CASP supplies the file (#95).
+- **Primary rows use Boltz-2's default MSA depth.** T1061 at `--max_msa_seqs 2048` is a labelled
+  secondary row (`--variant msa2048`, gated per target, no phase verdict). The harness refuses a
+  non-default depth on an unlabelled run.
+- **New cost-table columns** (`sp-cost/1.1`, appended):
+  - per-sample columns beside the per-structure ones;
+  - an end-to-end batch column that bills instance boot, model load, MSA and cache restore,
+    amortised over the 20-target directory run. It uses the new `harness.run directory` and
+    `harness.stages`.
+- **The CPU oracle runs as parallel pinned workers** (`harness.run oracle`). It is calibrated on
+  one ~300-residue target first (`oracle-calibrate`, `harness.oracle budget`).
+- **The oracle's fp32 check now includes a dtype audit.** Forward hooks confirm that every
+  submodule's floating output is float32, including the diffusion module, with no autocast
+  active.
+
 ### Added (structure-prediction Phase A harness, #55)
 - **`benchmarks/structure-prediction/`: Phase A harness for Boltz-2 on Trainium2 vs G7e** (Apache-2.0,
   this directory only). Implemented and unit-tested without hardware; **no measured numbers yet**.

@@ -28,10 +28,12 @@ Gate (work plan section 2), per target and gate metric:
     deviation = max over seeds s in {0,1} of |m(acc, s) - m(ref, s)|
     spread    = |m(ref, 0) - m(ref, 1)|
     pass      if deviation <= max(spread, floor)
-Phase pass: >= 18 of the 20 CASP14 targets pass on every gate metric, and no deviation exceeds
-2 x max(spread, floor). ref is CPU fp32 at ds=1; at ds=5 the ref is the g7e ds=5 run, which is
+Phase pass: at most 2 gated targets fail (>= 17 of the 19 CASP14 targets with ground truth; T1047s1
+has none and is timing-only, and if CASP supplies it the same rule gives >= 18 of 20), and no
+deviation exceeds 2 x max(spread, floor). ref is CPU fp32 at ds=1; at ds=5 the ref is the g7e ds=5 run, which is
 only allowed once the g7e ds=1 run has passed against CPU (`--prereq`). The two ceiling
-complexes are never gated.
+complexes are never gated. Secondary (variant) rows, e.g. T1061 at --max_msa_seqs 2048, are gated
+per target against a reference run with the same variant; they carry no phase verdict.
 """
 
 from __future__ import annotations
@@ -53,8 +55,9 @@ import numpy as np
 
 GATE_METRICS = ("ca_rmsd", "lddt_ca", "ligand_rmsd")
 FLOORS = {"ca_rmsd": 0.5, "lddt_ca": 0.01, "ligand_rmsd": 0.5}
-PHASE_MIN_PASS = 18
-PHASE_TARGETS = 20
+# Phase pass allows this many gated targets to fail: 18/20 as written, 17/19 while T1047s1 has no
+# ground truth (owner decision, 2026-11-04).
+PHASE_ALLOWED_FAILURES = 2
 CAP_FACTOR = 2.0
 LDDT_RADIUS = 15.0
 LDDT_THRESHOLDS = (0.5, 1.0, 2.0, 4.0)
@@ -326,7 +329,7 @@ def score_prediction(
 
 # ----------------------------------------------------------------------------- score CLI
 SCORE_COLUMNS = (
-    "target_id", "backend", "lnc", "diffusion_samples", "atom_graph_break", "seed",
+    "target_id", "backend", "lnc", "diffusion_samples", "atom_graph_break", "variant", "seed",
     "ca_rmsd", "lddt_ca", "ligand_rmsd", "tm_score", "n_residues",
     "best_ca_rmsd", "best_lddt_ca", "best_ligand_rmsd", "best_tm_score", "n_samples",
     "prediction", "result_path",
@@ -382,6 +385,7 @@ def score_results(
                 "lnc": doc["lnc"],
                 "diffusion_samples": doc["diffusion_samples"],
                 "atom_graph_break": doc["atom_graph_break"],
+                "variant": doc.get("variant"),
                 "seed": doc["seed"],
                 **{
                     k: top[k]
@@ -452,9 +456,20 @@ def gate(
     acc: dict[str, str],
     ref: dict[str, str],
     gated_ids: Sequence[str],
+    timing_only: Sequence[str] = (),
 ) -> dict[str, Any]:
-    """Apply the section-2 gate. Missing data for a gated target counts as a failure."""
+    """Apply the section-2 gate. Missing data for a gated target counts as a failure.
+
+    Primary rows have an empty variant; unless a filter names one, `variant=""` is implied on
+    both sides. A secondary (variant) gate covers only the targets the reference has rows for
+    and gives no phase verdict.
+    """
+    acc = {"variant": "", **acc}
+    ref = {"variant": "", **ref}
     a, r = _select(rows, acc), _select(rows, ref)
+    secondary = acc["variant"] != ""
+    if secondary:
+        gated_ids = [t for t in gated_ids if any(k[0] == t for k in r)]
     targets = []
     for tid in gated_ids:
         entry: dict[str, Any] = {
@@ -496,17 +511,21 @@ def gate(
         targets.append(entry)
     n_pass = sum(t["pass"] for t in targets)
     any_cap = any(t["cap_exceeded"] for t in targets)
+    required = max(len(targets) - PHASE_ALLOWED_FAILURES, 1)
     return {
         "acc": acc,
         "ref": ref,
         "floors": FLOORS,
         "targets": targets,
+        "timing_only": list(timing_only),
         "n_targets": len(targets),
+        "n_required": None if secondary else required,
         "n_pass": n_pass,
         "cap_exceeded": any_cap,
-        "phase_pass": len(targets) == PHASE_TARGETS
-        and n_pass >= PHASE_MIN_PASS
-        and not any_cap,
+        "secondary": secondary,
+        "phase_pass": None
+        if secondary
+        else (bool(targets) and n_pass >= required and not any_cap),
     }
 
 
@@ -539,11 +558,16 @@ def gate_markdown(res: dict[str, Any]) -> str:
     def f(v: Any, nd: int = 3) -> str:
         return "—" if v is None else f"{v:.{nd}f}"
 
+    if res.get("secondary"):
+        verdict = "secondary row: per-target results only, no phase verdict"
+    else:
+        verdict = (
+            f"**{'PASS' if res['phase_pass'] else 'FAIL'}** "
+            f"({res['n_pass']}/{res['n_targets']} targets pass, {res['n_required']} required; "
+            f"2× cap {'exceeded' if res['cap_exceeded'] else 'not exceeded'})"
+        )
     lines = [
-        f"Gate: acc `{res['acc']}` vs ref `{res['ref']}` — "
-        f"**{'PASS' if res['phase_pass'] else 'FAIL'}** "
-        f"({res['n_pass']}/{res['n_targets']} targets pass; 2× cap "
-        f"{'exceeded' if res['cap_exceeded'] else 'not exceeded'})",
+        f"Gate: acc `{res['acc']}` vs ref `{res['ref']}` — {verdict}",
         "",
         "| target | metric | ref s0 | ref s1 | acc s0 | acc s1 | deviation | tolerance | pass |",
         "|---|---|---:|---:|---:|---:|---:|---:|---|",
@@ -556,6 +580,8 @@ def gate_markdown(res: dict[str, Any]) -> str:
                 f"{f(m.get('tolerance'))} | {'yes' if m.get('pass_') else 'no'}"
                 f"{' (cap)' if m.get('cap_exceeded') else ''}{' — ' + m['reason'] if m.get('reason') else ''} |"
             )
+    for tid in res.get("timing_only", []):
+        lines.append(f"| {tid} | — | | | | | | | no ground truth, timing only |")
     return "\n".join(lines) + "\n"
 
 
@@ -592,12 +618,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     acc, ref = parse_filter(ns.acc), parse_filter(ns.ref)
     check_prereq(acc, ref, ns.prereq)
     gated = [t["id"] for t in targets["targets"] if t.get("gated")]
-    res = gate(_read_csv(ns.scores), acc, ref, gated)
+    timing_only = [t["id"] for t in targets["targets"] if t.get("timing_only")]
+    res = gate(_read_csv(ns.scores), acc, ref, gated, timing_only)
     ns.out.parent.mkdir(parents=True, exist_ok=True)
     Path(f"{ns.out}.json").write_text(json.dumps(res, indent=2) + "\n")
     Path(f"{ns.out}.md").write_text(gate_markdown(res))
+    if res["secondary"]:
+        print(f"SECONDARY {res['n_pass']}/{res['n_targets']} targets pass")
+        return 0
     print(
-        f"{'PASS' if res['phase_pass'] else 'FAIL'} {res['n_pass']}/{res['n_targets']}"
+        f"{'PASS' if res['phase_pass'] else 'FAIL'} {res['n_pass']}/{res['n_targets']} "
+        f"({res['n_required']} required)"
     )
     return 0 if res["phase_pass"] else 1
 

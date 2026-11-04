@@ -9,6 +9,8 @@ profiled; the profile comes from an extra run so profiler overhead cannot leak i
 
 from __future__ import annotations
 
+import re
+import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,6 +38,11 @@ class RunConfig:
     max_msa_seqs: int | None = None
     max_parallel_samples_cap: bool = False
     nim: bool = False
+    # A labelled secondary run (e.g. "msa2048"); primary rows have no variant.
+    variant: str | None = None
+    # cpu only: intra-op threads per worker and the cores it is pinned to (taskset list)
+    threads: int | None = None
+    cpu_cores: str | None = None
     # openfold-trt only
     alignment_dir: Path | None = None
     template_mmcif_dir: Path | None = None
@@ -176,8 +183,18 @@ def cpu(c: RunConfig) -> Invocation:
         )
     timing = c.out_dir / "timing.json"
     args = [*_boltz_args(c), "--accelerator", "cpu"]
+    argv = _entry("boltz_fp32", timing, args)
+    env: dict[str, str] = {}
+    if c.threads is not None:
+        n = str(c.threads)
+        env = {"OMP_NUM_THREADS": n, "MKL_NUM_THREADS": n, "SP_TORCH_THREADS": n}
+    if c.cpu_cores is not None:
+        if shutil.which("taskset") is None:
+            raise ConfigError("cpu_cores needs taskset (util-linux) on the host")
+        argv = ["taskset", "-c", c.cpu_cores, *argv]
     return Invocation(
-        argv=_entry("boltz_fp32", timing, args),
+        argv=argv,
+        env=env,
         timing_json=timing,
         predictions_dir=_predictions_dir(c),
     )
@@ -254,4 +271,11 @@ def build(c: RunConfig) -> Invocation:
         raise ConfigError("comparison runs use Boltz-2's default 200 sampling steps")
     if c.recycling_steps != pins.RECYCLING_STEPS:
         raise ConfigError("comparison runs use Boltz-2's default 3 recycling steps")
+    if c.variant is None and c.max_msa_seqs is not None:
+        raise ConfigError(
+            "primary rows use Boltz-2's default --max_msa_seqs; label a different depth "
+            "as a secondary run with variant (e.g. msa2048)"
+        )
+    if c.variant is not None and not re.fullmatch(r"[a-z0-9-]+", c.variant):
+        raise ConfigError("variant must be a short lowercase label, e.g. msa2048")
     return BUILDERS[c.backend](c)
