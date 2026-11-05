@@ -11,8 +11,11 @@ from __future__ import annotations
 
 from typing import Any
 
-RESULT_SCHEMA = "sp-result/1.0"
-COST_SCHEMA = "sp-cost/1.0"
+RESULT_SCHEMA = "sp-result/1.1"
+COST_SCHEMA = "sp-cost/1.1"
+# 1.1 appends optional fields/columns (variant, max_msa_seqs, precision, dtype_audit; per-sample
+# and end-to-end batch cost columns). 1.0 documents remain valid.
+RESULT_SCHEMAS = ("sp-result/1.0", RESULT_SCHEMA)
 
 BACKENDS = ("neuron", "gpu", "openfold-trt", "cpu")
 STATUSES = ("measured", "dry-run", "failed", "did-not-run")
@@ -45,6 +48,11 @@ RESULT_FIELDS: dict[str, tuple[tuple[Any, ...], bool]] = {
     "returncode": ((int, None), True),
     "error": ((str, None), True),
     "manifest_path": ((str, None), True),
+    # 1.1, optional
+    "variant": ((str, None), False),
+    "max_msa_seqs": ((int, None), False),
+    "precision": ((str, None), False),
+    "dtype_audit": ((dict, None), False),
 }
 
 COST_COLUMNS = (
@@ -73,6 +81,17 @@ COST_COLUMNS = (
     "ran",
     "ceiling_tokens",
     "note",
+    # 1.1 (appended)
+    "variant",
+    "max_msa_seqs",
+    "timing_only",
+    "dl_s_per_sample",
+    "dl_usd_per_sample_od",
+    "dl_usd_per_sample_spot",
+    "batch_targets",
+    "batch_billed_s",
+    "batch_e2e_usd_per_structure_od",
+    "batch_e2e_usd_per_structure_spot",
 )
 
 
@@ -101,8 +120,8 @@ def validate_result(doc: dict[str, Any]) -> None:
     for key, (types, _) in RESULT_FIELDS.items():
         if key in doc and not _type_ok(doc[key], types):
             raise SchemaError(f"field {key!r} has invalid value {doc[key]!r}")
-    if doc["schema"] != RESULT_SCHEMA:
-        raise SchemaError(f"schema {doc['schema']!r} != {RESULT_SCHEMA!r}")
+    if doc["schema"] not in RESULT_SCHEMAS:
+        raise SchemaError(f"schema {doc['schema']!r} not in {RESULT_SCHEMAS}")
     if doc["status"] not in STATUSES:
         raise SchemaError(f"status {doc['status']!r} not in {STATUSES}")
     if doc["backend"] not in BACKENDS:

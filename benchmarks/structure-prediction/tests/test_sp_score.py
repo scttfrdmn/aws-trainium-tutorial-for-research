@@ -208,7 +208,7 @@ def test_gate_lddt_floor():
     assert m["tolerance"] == 0.01 and not m["pass_"]
 
 
-def test_gate_missing_seed_fails_target_and_19_targets_never_pass():
+def test_gate_missing_seed_fails_target():
     ref = dict.fromkeys(IDS, (1.0, 1.0))
     acc = dict.fromkeys(IDS, (1.0, 1.0))
     r = [
@@ -219,10 +219,77 @@ def test_gate_missing_seed_fails_target_and_19_targets_never_pass():
         )
     ]
     res = s.gate(r, {"backend": "neuron"}, {"backend": "cpu"}, IDS)
-    assert not res["targets"][0]["pass"] and res["n_pass"] == 19
-    assert not s.gate(r, {"backend": "neuron"}, {"backend": "cpu"}, IDS[1:])[
-        "phase_pass"
-    ]  # 19 gated ids
+    assert not res["targets"][0]["pass"] and res["n_pass"] == 19 and res["phase_pass"]
+
+
+def test_gate_threshold_is_targets_with_truth_minus_two():
+    ids19 = IDS[:19]
+    ref = dict.fromkeys(ids19, (1.0, 1.0))
+    acc = dict.fromkeys(ids19, (1.0, 1.0))
+    for t in ids19[:2]:
+        acc[t] = (1.8, 1.0)
+    res = s.gate(
+        rows({("cpu", 1): ref, ("neuron", 1): acc}),
+        {"backend": "neuron"},
+        {"backend": "cpu"},
+        ids19,
+        timing_only=["T1047s1"],
+    )
+    assert (res["n_targets"], res["n_required"], res["n_pass"], res["phase_pass"]) == (
+        19,
+        17,
+        17,
+        True,
+    )
+    acc[ids19[2]] = (1.8, 1.0)
+    res = s.gate(
+        rows({("cpu", 1): ref, ("neuron", 1): acc}),
+        {"backend": "neuron"},
+        {"backend": "cpu"},
+        ids19,
+        timing_only=["T1047s1"],
+    )
+    assert res["n_pass"] == 16 and not res["phase_pass"]
+    md = s.gate_markdown(res)
+    assert (
+        "| T1047s1 | — |" in md
+        and "no ground truth, timing only" in md
+        and "17 required" in md
+    )
+
+
+def test_secondary_variant_gate_is_per_target_without_verdict():
+    base = rows(
+        {
+            ("cpu", 1): dict.fromkeys(IDS, (1.0, 1.0)),
+            ("neuron", 1): dict.fromkeys(IDS, (1.0, 1.0)),
+        }
+    )
+    for x in base:
+        x["variant"] = ""
+    extra = [
+        {**x, "variant": "msa2048", "ca_rmsd": 1.2}
+        for x in rows(
+            {("cpu", 1): {"T05": (1.0, 1.0)}, ("neuron", 1): {"T05": (1.0, 1.0)}}
+        )
+    ]
+    all_rows = base + extra
+    primary = s.gate(
+        all_rows, {"backend": "neuron"}, {"backend": "cpu"}, IDS
+    )  # variant="" implied
+    assert primary["n_targets"] == 20 and primary["phase_pass"]
+    sec = s.gate(
+        all_rows,
+        {"backend": "neuron", "variant": "msa2048"},
+        {"backend": "cpu", "variant": "msa2048"},
+        IDS,
+    )
+    assert (
+        sec["secondary"]
+        and sec["phase_pass"] is None
+        and [t["target_id"] for t in sec["targets"]] == ["T05"]
+    )
+    assert "no phase verdict" in s.gate_markdown(sec)
 
 
 def test_gate_tm_score_is_not_gated():

@@ -29,6 +29,9 @@ Status, decisions and progress live on GitHub, not in this directory:
 | `harness/score.py` | CA-RMSD, lDDT-CA, ligand RMSD, TM-score; the work plan's accuracy gate |
 | `harness/profile_classify.py` | profiled time by operation class and engine |
 | `harness/cost_table.py` | `results/phaseA.csv` and Markdown $/structure tables |
+| `harness/oracle.py` | CPU fp32 oracle: parallel pinned workers, calibration, budget estimate |
+| `harness/directory.py` | end-to-end batch: the whole target directory, one process per worker |
+| `harness/stages.py` | per-host stage timer (boot, cache restore, MSA, ...) for the batch column |
 | `infra/` | host definitions and launch/teardown (spawn where supported, `aws ec2` otherwise) |
 | `RUNBOOK-A0.md`, `RUNBOOK-A.md` | the reproduction check and the full Phase A sequence |
 | `results/EXPECTATIONS.md` | the work plan's expectations, copied before measurement |

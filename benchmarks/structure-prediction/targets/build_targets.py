@@ -337,7 +337,10 @@ def build(out: Path, truth_dir: Path, get: Fetch = fetch) -> dict[str, Any]:
                 "length": len(seq),
                 "supplement_length": sup_len,
                 "tokens": len(seq),
-                "gated": True,
+                # Gated only with ground truth; without it the target is timing-only (owner
+                # decision 2026-11-04: kept in every timing and cost table).
+                "gated": truth is not None,
+                "timing_only": truth is None,
                 "oligo_state": clist.get(tid, {}).get("oligo"),
                 "chains": [
                     {
@@ -353,7 +356,7 @@ def build(out: Path, truth_dir: Path, get: Fetch = fetch) -> dict[str, Any]:
                     "source": None,
                     "file": None,
                     "reason": "no PDB entity at >= 95 % identity and no public CASP target file; "
-                    "gated as missing until the owner decides (see the Phase A tracking issue)",
+                    "no ground truth, timing only (file requested from the CASP organisers)",
                 },
             }
         )

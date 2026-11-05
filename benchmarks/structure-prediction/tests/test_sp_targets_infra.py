@@ -28,7 +28,11 @@ def test_committed_target_manifest_is_consistent():
     m = json.loads((ROOT / "targets" / "targets.json").read_text())
     casp = [t for t in m["targets"] if t["set"] == "casp14"]
     ceil = [t for t in m["targets"] if t["set"] == "ceiling"]
-    assert len(casp) == 20 and all(t["gated"] for t in casp)
+    assert len(casp) == 20
+    gated = [t["id"] for t in casp if t["gated"]]
+    timing_only = [t["id"] for t in casp if t.get("timing_only")]
+    assert len(gated) == 19 and timing_only == ["T1047s1"]  # owner decision 2026-11-04
+    assert all(t["truth"]["source"] for t in casp if t["gated"])
     assert len(ceil) == 2 and not any(t["gated"] for t in ceil)
     assert all(t["tokens"] > 1500 for t in ceil)
     assert {t["length"] for t in casp} >= {95, 949}

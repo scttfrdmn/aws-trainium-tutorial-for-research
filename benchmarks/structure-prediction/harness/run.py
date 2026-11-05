@@ -6,6 +6,9 @@
     python -m harness.run predict --backend {neuron,gpu,openfold-trt,cpu} --target-id ID \
         --input inputs/ID.yaml --out-dir results/raw/... --seed {0,1} --ds {1,5} [...]
     python -m harness.run batch   --backend neuron --lnc 2 --workers 4 --inputs inputs/ ...
+    python -m harness.run oracle  --targets-json T --inputs inputs/ --out-root results/oracle \
+        --workers 8 --threads 24          (see harness.oracle; calibrate first)
+    python -m harness.run oracle-calibrate ...   python -m harness.run directory ...
 
 `predict` runs the model twice in fresh processes (cold: first run, compiles or loads caches;
 warm: the same command again), then optionally a third, profiled run whose timings are
@@ -96,6 +99,22 @@ def _predictions(inv: backends.Invocation) -> list[str]:
     ]
 
 
+def _oracle_fp32_error(timing: dict[str, Any]) -> str | None:
+    """Why an oracle run is not an fp32 run (None if it is).
+
+    Two independent checks: the Lightning precision in force, and the dtype audit (every
+    submodule's floating outputs float32, no autocast active, and the trunk, MSA module and
+    diffusion module all seen). A precision override alone would miss an autocast or a cast
+    inside the model.
+    """
+    if timing.get("precision") != "32-true":
+        return f"oracle ran at precision {timing.get('precision')!r}, not '32-true'"
+    audit = timing.get("dtype_audit") or {}
+    if not audit.get("fp32_ok"):
+        return f"oracle dtype audit failed: {json.dumps(audit)[:1500]}"
+    return None
+
+
 def _read_timing(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists():
         return {}
@@ -149,6 +168,8 @@ def predict(
         command=inv.argv,
     )
     doc["env"] = inv.env
+    doc["variant"] = cfg.variant
+    doc["max_msa_seqs"] = cfg.max_msa_seqs
     if cfg.backend == "cpu":
         doc["oracle_key"] = {"boltz": pins.BOLTZ, "targets_sha256": digest}
 
@@ -179,12 +200,12 @@ def predict(
         doc["returncode"] = rc
         timing = _read_timing(inv.timing_json) if rc == 0 else {}
         doc["precision"] = timing.get("precision")
-        if rc == 0 and cfg.backend == "cpu" and timing.get("precision") != "32-true":
+        doc["dtype_audit"] = timing.get("dtype_audit")
+        oracle_error = _oracle_fp32_error(timing) if cfg.backend == "cpu" else None
+        if rc == 0 and oracle_error is not None:
             # The oracle is only an oracle at fp32; stock Boltz-2 would silently run bf16-mixed.
             doc["status"] = "failed"
-            doc["error"] = (
-                f"oracle ran at precision {timing.get('precision')!r}, not '32-true'"
-            )
+            doc["error"] = oracle_error
         elif rc == 0:
             doc.update(
                 status="measured",
@@ -246,7 +267,7 @@ def _repo_paths(pairs: Sequence[str]) -> dict[str, str | None]:
 
 
 def _cfg(ns: argparse.Namespace, **over: Any) -> backends.RunConfig:
-    single = ns.cmd == "predict"
+    single = ns.cmd in ("predict",)
     fields: dict[str, Any] = {
         "backend": ns.backend,
         "target_id": ns.target_id if single else None,
@@ -259,6 +280,7 @@ def _cfg(ns: argparse.Namespace, **over: Any) -> backends.RunConfig:
         "visible_core": ns.core if single else None,
         "atom_graph_break": ns.atom_graph_break,
         "max_msa_seqs": ns.max_msa_seqs,
+        "variant": ns.variant,
         "max_parallel_samples_cap": ns.cap_parallel_samples,
         "nim": ns.nim,
         "alignment_dir": Path(ns.alignment_dir) if ns.alignment_dir else None,
@@ -280,7 +302,10 @@ def _common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--sampling-steps", type=int, default=pins.SAMPLING_STEPS)
     p.add_argument("--lnc", type=int, choices=(1, 2))
     p.add_argument("--atom-graph-break", type=int, choices=(0, 1))
-    p.add_argument("--max-msa-seqs", type=int)
+    p.add_argument(
+        "--max-msa-seqs", type=int, help="secondary runs only (with --variant)"
+    )
+    p.add_argument("--variant", help="label for a secondary run, e.g. msa2048")
     p.add_argument(
         "--cap-parallel-samples",
         action="store_true",
@@ -337,7 +362,51 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
     pb.add_argument("--out-root", type=Path, required=True)
     pb.add_argument("--workers", type=int, required=True)
 
+    po = sub.add_parser("oracle", help="CPU fp32 oracle: parallel pinned workers")
+    po.add_argument("--targets-json", type=Path, required=True)
+    po.add_argument("--inputs", type=Path, required=True)
+    po.add_argument("--out-root", type=Path, required=True)
+    po.add_argument("--workers", type=int, required=True)
+    po.add_argument(
+        "--threads", type=int, required=True, help="intra-op threads per worker"
+    )
+    po.add_argument("--only", nargs="*", help="restrict to these target IDs")
+    po.add_argument("--variant")
+    po.add_argument("--max-msa-seqs", type=int)
+    po.add_argument("--no-pin", action="store_true", help="do not taskset-pin workers")
+    po.add_argument("--dry-run", action="store_true")
+    po.add_argument("--repo", action="append", default=[], metavar="NAME=PATH")
+
+    pc = sub.add_parser(
+        "oracle-calibrate", help="solo vs N concurrent runs of one target"
+    )
+    pc.add_argument("--target-id", required=True)
+    pc.add_argument("--input", type=Path, required=True)
+    pc.add_argument("--tokens", type=int, required=True)
+    pc.add_argument("--out-root", type=Path, required=True)
+    pc.add_argument("--workers", type=int, required=True)
+    pc.add_argument("--threads", type=int, required=True)
+    pc.add_argument("--no-pin", action="store_true")
+    pc.add_argument("--repo", action="append", default=[], metavar="NAME=PATH")
+
+    pd = sub.add_parser("directory", help="end-to-end batch: one process per worker")
+    pd.add_argument("--backend", choices=("neuron", "gpu"), required=True)
+    pd.add_argument("--inputs", type=Path, required=True)
+    pd.add_argument("--out-dir", type=Path, required=True)
+    pd.add_argument("--seed", type=int, choices=pins.SEEDS, required=True)
+    pd.add_argument("--ds", type=int, default=1)
+    pd.add_argument("--lnc", type=int, choices=(1, 2))
+    pd.add_argument("--workers", type=int, default=1)
+    pd.add_argument("--dry-run", action="store_true")
+    pd.add_argument("--repo", action="append", default=[], metavar="NAME=PATH")
+
     ns = ap.parse_args(argv)
+    if ns.cmd in ("oracle", "oracle-calibrate", "directory"):
+        try:
+            return _extra_command(ns, executor)
+        except backends.ConfigError as exc:
+            print(f"config error: {exc}", file=sys.stderr)
+            return 2
     if ns.cmd == "inputs":
         targets = json.loads(ns.targets.read_text())
         for path in write_inputs(targets, ns.msa_dir, ns.out):
@@ -375,6 +444,70 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
     except backends.ConfigError as exc:
         print(f"config error: {exc}", file=sys.stderr)
         return 2
+
+
+def _extra_command(ns: argparse.Namespace, executor: Executor) -> int:
+    """Oracle / oracle-calibrate / directory."""
+    from harness import directory, oracle
+
+    repos = _repo_paths(ns.repo)
+
+    def pred(cfg: backends.RunConfig, **kw: Any) -> dict[str, Any]:
+        return predict(cfg, executor=executor, repo_paths=repos, **kw)
+
+    if ns.cmd == "oracle":
+        if (ns.variant is None) != (ns.max_msa_seqs is None):
+            raise backends.ConfigError("--variant and --max-msa-seqs go together")
+        targets = json.loads(ns.targets_json.read_text())
+        jobs = oracle.oracle_jobs(targets, ns.only)
+        res = oracle.run_oracle(
+            jobs,
+            inputs=ns.inputs,
+            out_root=ns.out_root,
+            workers=ns.workers,
+            threads=ns.threads,
+            predict=pred,
+            variant=ns.variant,
+            max_msa_seqs=ns.max_msa_seqs,
+            dry_run=ns.dry_run,
+            pin=not ns.no_pin,
+            targets_json=ns.targets_json,
+        )
+        bad = [j for j in res["jobs"] if j["status"] not in ("measured", "dry-run")]
+        print(
+            json.dumps(
+                {"jobs": len(res["jobs"]), "not_measured": bad, "wall_s": res["wall_s"]}
+            )
+        )
+        return 1 if bad else 0
+    if ns.cmd == "oracle-calibrate":
+        res = oracle.calibrate(
+            target_id=ns.target_id,
+            input_path=ns.input,
+            tokens=ns.tokens,
+            out_root=ns.out_root,
+            workers=ns.workers,
+            threads=ns.threads,
+            predict=pred,
+            pin=not ns.no_pin,
+        )
+        print(json.dumps({k: res.get(k) for k in ("ok", "slowdown", "startup_s")}))
+        return 0 if res["ok"] else 1
+    res = directory.run_directory(
+        backend=ns.backend,
+        inputs=ns.inputs,
+        out_dir=ns.out_dir,
+        seed=ns.seed,
+        ds=ns.ds,
+        lnc=ns.lnc,
+        workers=ns.workers,
+        dry_run=ns.dry_run,
+        executor=executor,
+        manifest_fn=capture_manifest,
+        repo_paths=repos,
+    )
+    print(json.dumps({k: res[k] for k in ("status", "n_targets", "group_wall_s")}))
+    return 0 if res["status"] in ("measured", "dry-run") else 1
 
 
 def _batch(
