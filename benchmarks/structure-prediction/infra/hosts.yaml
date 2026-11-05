@@ -21,6 +21,9 @@ hosts:
   trn2:
     instance_type: trn2.3xlarge
     launcher: awscli
+    # trn2.3xlarge Capacity Blocks are offered only in sa-east-1 and ap-southeast-4
+    # (2026-11-05); set the block's region here or pass --region.
+    region: sa-east-1
     ami_ssm: /aws/service/neuron/dlami/torch-neuronx-2.14.0/ubuntu-24.04/latest/image_id
     ami_label: "Deep Learning AMI Neuron torch-neuronx 2.14.0 (Ubuntu 24.04) SDK 2.33.0"
     ttl_hours: 24

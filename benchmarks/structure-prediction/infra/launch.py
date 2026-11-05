@@ -79,10 +79,18 @@ def plan(
     az: str | None = None,
     key_name: str | None = None,
     iam_instance_profile: str | None = None,
+    reservation_id: str | None = None,
+    region: str | None = None,
 ) -> list[str]:
-    """The launch argv for one host role."""
+    """The launch argv for one host role.
+
+    `reservation_id` targets a purchased EC2 Capacity Block for ML (its region and AZ must
+    match the launch); spot does not apply to a block.
+    """
     d, h = cfg["defaults"], cfg["hosts"][role]
-    region = h.get("region", d["region"])
+    region = region or host_region(cfg, role)
+    if reservation_id and spot:
+        raise ValueError("a Capacity Block launch cannot also be spot")
     name = f"sp-phaseA-{role}"
     tg = tags(d, role, name)
     root = h.get("root_gb", d["root_gb"])
@@ -107,6 +115,8 @@ def plan(
             argv += ["--az", az]
         if spot:
             argv.append("--spot")
+        if reservation_id:
+            argv += ["--capacity-block", "--reservation-id", reservation_id]
         if key_name:
             argv += ["--key-name", key_name]
         if iam_instance_profile:
@@ -149,6 +159,13 @@ def plan(
     ]  # fmt: skip
     if spot:
         argv += ["--instance-market-options", "MarketType=spot"]
+    if reservation_id:
+        argv += [
+            "--instance-market-options",
+            "MarketType=capacity-block",
+            "--capacity-reservation-specification",
+            f"CapacityReservationTarget={{CapacityReservationId={reservation_id}}}",
+        ]
     if az:
         argv += ["--placement", f"AvailabilityZone={az}"]
     if key_name:
@@ -156,6 +173,12 @@ def plan(
     if iam_instance_profile:
         argv += ["--iam-instance-profile", f"Name={iam_instance_profile}"]
     return argv
+
+
+def host_region(cfg: dict[str, Any], role: str) -> str:
+    """A host's region: its own `region` in hosts.yaml, else the default."""
+    region: str = cfg["hosts"][role].get("region", cfg["defaults"]["region"])
+    return region
 
 
 def list_argv(region: str) -> list[str]:
@@ -204,15 +227,24 @@ def main(argv: list[str] | None = None, runner: Runner = run) -> int:
     ap.add_argument("--az")
     ap.add_argument("--key-name")
     ap.add_argument("--iam-instance-profile")
+    ap.add_argument("--reservation-id", help="purchased Capacity Block (cr-...)")
+    ap.add_argument("--region", help="override the host's region for this command")
     ap.add_argument("--yes", action="store_true", help="actually launch / terminate")
     ns = ap.parse_args(argv)
     cfg = load_hosts()
-    region = cfg["defaults"]["region"]
     if ns.action == "list":
-        print(runner(list_argv(region)))
+        regions = (
+            [ns.region]
+            if ns.region
+            else sorted({host_region(cfg, r) for r in cfg["hosts"]})
+        )
+        for reg in regions:
+            print(f"# {reg}")
+            print(runner(list_argv(reg)))
         return 0
     if ns.role not in cfg["hosts"]:
         ap.error(f"role must be one of {sorted(cfg['hosts'])}")
+    region = ns.region or host_region(cfg, ns.role)
     if ns.action == "teardown":
         cmds = teardown_argvs(ns.role, region, runner)
         for c in cmds:
@@ -225,7 +257,8 @@ def main(argv: list[str] | None = None, runner: Runner = run) -> int:
     h = cfg["hosts"][ns.role]
     ami = resolve_ami(h["ami_ssm"], region, runner)
     cmd = plan(ns.role, cfg, ami=ami, spot=ns.spot, az=ns.az, key_name=ns.key_name,
-               iam_instance_profile=ns.iam_instance_profile)  # fmt: skip
+               iam_instance_profile=ns.iam_instance_profile,
+               reservation_id=ns.reservation_id, region=region)  # fmt: skip
     print(f"# {ns.role}: {h['instance_type']} via {h['launcher']} — {h['purpose']}")
     print(" ".join(repr(a) if " " in a or "\n" in a else a for a in cmd))
     if ns.action == "launch":

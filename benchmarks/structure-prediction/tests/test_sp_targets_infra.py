@@ -252,3 +252,37 @@ def test_repro_check_uses_median_of_warm_batches():
     assert not rc.check([60.0, 8.4, 8.5, 8.6], 7.5, 0.10)["within"]
     with pytest.raises(ValueError):
         rc.check([7.5, 7.5], 7.5, 0.1)
+
+
+def test_capacity_block_launch_and_per_host_region():
+    launch = load(ROOT / "infra" / "launch.py")
+    cfg = launch.load_hosts()
+    assert launch.host_region(cfg, "trn2") == "sa-east-1"
+    assert launch.host_region(cfg, "g7e") == cfg["defaults"]["region"]
+    a = launch.plan("trn2", cfg, ami="ami-1", reservation_id="cr-0abc")
+    assert a[a.index("--region") + 1] == "sa-east-1"
+    assert "MarketType=capacity-block" in a
+    assert "CapacityReservationTarget={CapacityReservationId=cr-0abc}" in a
+    assert (
+        launch.plan("trn2", cfg, ami="ami-1", region="ap-southeast-4")[
+            a.index("--region") + 1
+        ]
+        == "ap-southeast-4"
+    )
+    s = launch.plan("c7a", cfg, ami="ami-2", reservation_id="cr-0def")
+    assert s[s.index("--reservation-id") + 1] == "cr-0def" and "--capacity-block" in s
+    with pytest.raises(ValueError, match="cannot also be spot"):
+        launch.plan("trn2", cfg, ami="ami-1", reservation_id="cr-0abc", spot=True)
+
+
+def test_ami_resolved_in_the_hosts_region(capsys):
+    launch = load(ROOT / "infra" / "launch.py")
+    seen = []
+
+    def fake(argv):
+        seen.append(argv)
+        return "ami-0123\n"
+
+    assert launch.main(["plan", "trn2", "--reservation-id", "cr-1"], runner=fake) == 0
+    assert seen[0][seen[0].index("--region") + 1] == "sa-east-1"
+    assert "capacity-block" in capsys.readouterr().out
