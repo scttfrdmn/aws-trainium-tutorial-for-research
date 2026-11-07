@@ -23,8 +23,8 @@ timed per prediction by `harness.entry`.
    cd aws-trainium-tutorial-for-research/benchmarks/structure-prediction
    ```
 
-2. Pick a region and AZ that offer trn2.3xlarge, and set `defaults.region` in
-   `infra/hosts.yaml` to that region if it is not `us-east-1`.
+2. Pick a region and AZ that offer trn2.3xlarge. The trn2 host's `region` is in
+   `infra/hosts.yaml` (sa-east-1); `--region` overrides it per command.
 
    ```bash
    aws ec2 describe-instance-type-offerings --location-type availability-zone \
@@ -39,10 +39,15 @@ timed per prediction by `harness.entry`.
    python infra/launch.py plan trn2 --az <AZ> --key-name <KEY>
    ```
 
-4. Launch. The instance terminates itself after its TTL (24 h).
+4. Launch. The instance terminates itself after its TTL (24 h). Inside a purchased Capacity
+   Block (trn2.3xlarge blocks are offered only in sa-east-1 and ap-southeast-4), pass the
+   block's reservation ID and use its region and AZ. `hosts.yaml` defaults trn2 to sa-east-1,
+   and `--region` overrides it.
 
    ```bash
    python infra/launch.py launch trn2 --az <AZ> --key-name <KEY> --yes
+   # or, in a Capacity Block:
+   python infra/launch.py launch trn2 --region <BLOCK_REGION> --az <BLOCK_AZ> --reservation-id <cr-...> --key-name <KEY> --yes
    python infra/launch.py list        # note the instance ID and connect with SSH or SSM
    ```
 
