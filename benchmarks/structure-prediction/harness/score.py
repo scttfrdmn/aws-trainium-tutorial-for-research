@@ -233,7 +233,17 @@ def correspond(
 
 
 def ligand_rmsd(model: Structure, ref: Structure, corr: Correspondence) -> float | None:
-    """Pocket-aligned ligand RMSD (None when the reference has no ligand)."""
+    """Pocket-aligned ligand RMSD over the ligands the model contains (None when it has none).
+
+    Ground-truth PDB entries routinely carry ions, buffer molecules and ligands bound to other
+    chains; only reference ligands whose residue name the model also predicts are scored, so a
+    protein-only prediction gets no ligand metric instead of an error.
+    """
+    model_names = {k.split(":")[1] for k in model.ligands}
+    ref = Structure(
+        ref.chains,
+        {k: v for k, v in ref.ligands.items() if k.split(":")[1] in model_names},
+    )
     if not ref.ligands:
         return None
     ref_atoms = np.concatenate(
