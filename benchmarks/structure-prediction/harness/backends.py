@@ -260,8 +260,9 @@ def build(c: RunConfig) -> Invocation:
     """Dispatch on backend, enforcing the shared rules first."""
     if c.backend not in BUILDERS:
         raise ConfigError(f"unknown backend {c.backend!r}")
-    if c.seed not in pins.SEEDS:
-        raise ConfigError(f"seed must be one of {pins.SEEDS}")
+    allowed = pins.ORACLE_SEEDS if c.backend == "cpu" else pins.SEEDS
+    if c.seed not in allowed:
+        raise ConfigError(f"seed must be one of {allowed} for backend {c.backend!r}")
     if (
         c.backend != "openfold-trt"
         and c.diffusion_samples not in pins.DIFFUSION_SAMPLES

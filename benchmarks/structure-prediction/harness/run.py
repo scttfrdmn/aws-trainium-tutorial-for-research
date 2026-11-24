@@ -371,6 +371,14 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
         "--threads", type=int, required=True, help="intra-op threads per worker"
     )
     po.add_argument("--only", nargs="*", help="restrict to these target IDs")
+    po.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        choices=pins.ORACLE_SEEDS,
+        default=list(pins.SEEDS),
+        help="oracle seeds (default: the comparison seeds; extras calibrate the gate)",
+    )
     po.add_argument("--variant")
     po.add_argument("--max-msa-seqs", type=int)
     po.add_argument("--no-pin", action="store_true", help="do not taskset-pin workers")
@@ -522,7 +530,7 @@ def _extra_command(ns: argparse.Namespace, executor: Executor) -> int:
         if (ns.variant is None) != (ns.max_msa_seqs is None):
             raise backends.ConfigError("--variant and --max-msa-seqs go together")
         targets = json.loads(ns.targets_json.read_text())
-        jobs = oracle.oracle_jobs(targets, ns.only)
+        jobs = oracle.oracle_jobs(targets, ns.only, seeds=ns.seeds)
         res = oracle.run_oracle(
             jobs,
             inputs=ns.inputs,

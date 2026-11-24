@@ -341,3 +341,22 @@ def test_dtype_audit_catches_autocast_inside_a_submodule():
     assert rep["by_top_module"]["structure_module"]["nonfp32"] >= 1
     assert "structure_module.lin" in rep["autocast_active_in"]
     assert rep["by_top_module"]["pairformer_module"]["nonfp32"] == 0
+
+
+def test_cli_oracle_extra_seeds_cpu_only(tmp_path, monkeypatch):
+    # Extra oracle seeds calibrate the gate (#103); comparison backends stay on pins.SEEDS.
+    monkeypatch.setattr(run, "capture_manifest", lambda **k: {})
+    monkeypatch.setattr(backends.shutil, "which", lambda name: "/usr/bin/taskset")
+    tj = tmp_path / "t.json"
+    tj.write_text(json.dumps(TARGETS))
+    argv = ["oracle", "--targets-json", str(tj), "--inputs", str(tmp_path),
+            "--out-root", str(tmp_path / "o"), "--workers", "2", "--threads", "4",
+            "--seeds", "2", "3", "4", "--only", "T_small", "--dry-run"]  # fmt: skip
+    assert run.main(argv) == 0
+    seen = sorted(p.name for p in (tmp_path / "o" / "T_small").iterdir())
+    assert seen == ["seed2", "seed3", "seed4"]
+    with pytest.raises(SystemExit):
+        run.main(argv[:-4] + ["9", "--dry-run"])
+    with pytest.raises(backends.ConfigError, match="seed must be one of"):
+        backends.build(backends.RunConfig(backend="gpu", target_id="T", input_path=tmp_path / "x.yaml",
+                                          out_dir=tmp_path / "g", seed=2))  # fmt: skip
