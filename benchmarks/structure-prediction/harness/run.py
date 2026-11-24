@@ -400,7 +400,70 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
     pd.add_argument("--dry-run", action="store_true")
     pd.add_argument("--repo", action="append", default=[], metavar="NAME=PATH")
 
+    pw = sub.add_parser(
+        "warmbatch", help="in-process warm timing: one process per worker, targets x2"
+    )
+    pw.add_argument("--backend", choices=("neuron", "gpu"), required=True)
+    pw.add_argument("--inputs", type=Path, required=True)
+    pw.add_argument("--targets-json", type=Path, required=True)
+    pw.add_argument("--out-root", type=Path, required=True)
+    pw.add_argument("--seed", type=int, choices=pins.SEEDS, required=True)
+    pw.add_argument("--ds", type=int, default=1)
+    pw.add_argument("--lnc", type=int, choices=(1, 2))
+    pw.add_argument("--workers", type=int, default=1)
+    pw.add_argument("--only", nargs="*")
+    pw.add_argument("--atom-graph-break", type=int, choices=(0, 1))
+    pw.add_argument("--variant")
+    pw.add_argument("--max-msa-seqs", type=int)
+    pw.add_argument(
+        "--profile", action="store_true", help="profile this (separate, untimed) run"
+    )
+    pw.add_argument(
+        "--vcpus", type=int, help="host vCPUs to divide among workers (default: all)"
+    )
+    pw.add_argument("--dry-run", action="store_true")
+    pw.add_argument("--repo", action="append", default=[], metavar="NAME=PATH")
+
     ns = ap.parse_args(argv)
+    if ns.cmd == "warmbatch":
+        from harness import warmbatch
+
+        if (ns.variant is None) != (ns.max_msa_seqs is None):
+            print(
+                "config error: --variant and --max-msa-seqs go together",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            res = warmbatch.run_warmbatch(
+                backend=ns.backend,
+                inputs=ns.inputs,
+                targets=json.loads(ns.targets_json.read_text()),
+                out_root=ns.out_root,
+                seed=ns.seed,
+                ds=ns.ds,
+                lnc=ns.lnc,
+                workers=ns.workers,
+                executor=executor,
+                manifest_fn=capture_manifest,
+                only=ns.only,
+                atom_graph_break=ns.atom_graph_break,
+                variant=ns.variant,
+                max_msa_seqs=ns.max_msa_seqs,
+                profile=ns.profile,
+                vcpus=ns.vcpus,
+                dry_run=ns.dry_run,
+                repo_paths=_repo_paths(ns.repo),
+            )
+        except backends.ConfigError as exc:
+            print(f"config error: {exc}", file=sys.stderr)
+            return 2
+        print(
+            json.dumps(
+                {k: res[k] for k in ("run_group", "measured", "of", "group_wall_s")}
+            )
+        )
+        return 0 if res["dry_run"] or res["measured"] == res["of"] else 1
     if ns.cmd in ("oracle", "oracle-calibrate", "directory"):
         try:
             return _extra_command(ns, executor)

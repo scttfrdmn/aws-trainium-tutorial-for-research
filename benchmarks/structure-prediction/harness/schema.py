@@ -53,6 +53,10 @@ RESULT_FIELDS: dict[str, tuple[tuple[Any, ...], bool]] = {
     "max_msa_seqs": ((int, None), False),
     "precision": ((str, None), False),
     "dtype_audit": ((dict, None), False),
+    "timing_method": (
+        (str, None),
+        False,
+    ),  # "in-process-warm" (harness.warmbatch) or absent
 }
 
 COST_COLUMNS = (
