@@ -20,7 +20,9 @@ def test_target_deviation_leave_one_out():
         s.target_deviation([1.0], [1.0])
 
 
-def _rows(backend, seeds, n_targets=19, shift=0.0, sd=0.3, lddt_shift=0.0, bad=(), rng=None):
+def _rows(
+    backend, seeds, n_targets=19, shift=0.0, sd=0.3, lddt_shift=0.0, bad=(), rng=None
+):
     rng = rng or np.random.default_rng(1)
     rows = []
     for t in range(n_targets):
@@ -59,7 +61,9 @@ def test_calibrated_gate_accepts_same_distribution_and_rejects_defects():
 def test_calibrated_gate_missing_target_fails_and_seed_filters():
     ref = _rows("cpu", range(5))
     acc = [r for r in _rows("x", (0, 1)) if r["target_id"] != "T5"]
-    res = s.calibrated_gate(ref + acc, {"backend": "x"}, {"backend": "cpu"}, GATED, n_boot=500)
+    res = s.calibrated_gate(
+        ref + acc, {"backend": "x"}, {"backend": "cpu"}, GATED, n_boot=500
+    )
     assert res["incomplete"] == ["T5"] and not res["phase_pass"]
     res = s.calibrated_gate(ref, {"backend": "cpu"}, {"backend": "cpu"}, GATED,
                             acc_seeds=[3, 4], ref_seeds=[0, 1, 2], n_boot=500)  # fmt: skip
@@ -76,7 +80,9 @@ def test_perturbations():
     x = helix(60)
     st = _struct(x.copy())
     m = gs.mirror(st)
-    assert np.allclose(m.chains["A"].ca[:, 0], -x[:, 0]) and np.allclose(st.chains["A"].ca, x)
+    assert np.allclose(m.chains["A"].ca[:, 0], -x[:, 0]) and np.allclose(
+        st.chains["A"].ca, x
+    )
     r = gs.register_shift(st)
     moved = np.where(np.any(r.chains["A"].ca != x, axis=1))[0]
     assert moved.min() == 20 and len(moved) == 12

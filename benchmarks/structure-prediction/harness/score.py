@@ -590,7 +590,9 @@ def _seed_values(
     return [v for k in keys if (v := _num(sel[k][metric])) is not None]
 
 
-def target_deviation(ref_vals: Sequence[float], acc_vals: Sequence[float]) -> dict[str, float]:
+def target_deviation(
+    ref_vals: Sequence[float], acc_vals: Sequence[float]
+) -> dict[str, float]:
     """d_ref, d_acc, excess and raw bias for one target and metric (needs >= 2 refs, >= 1 acc)."""
     ref = np.asarray(ref_vals, dtype=float)
     acc = np.asarray(acc_vals, dtype=float)
@@ -638,7 +640,12 @@ def calibrated_gate(
         m: {"excess": [], "bias": []} for m in GATE_METRICS
     }
     for tid in gated_ids:
-        entry: dict[str, Any] = {"target_id": tid, "metrics": {}, "complete": True, "cap_exceeded": False}
+        entry: dict[str, Any] = {
+            "target_id": tid,
+            "metrics": {},
+            "complete": True,
+            "cap_exceeded": False,
+        }
         for metric in GATE_METRICS:
             rv = _seed_values(r, tid, metric, ref_seeds)
             av = _seed_values(a, tid, metric, acc_seeds)
@@ -688,10 +695,14 @@ def calibrated_gate(
         reasons.append(f"per-target cap exceeded: {', '.join(capped)}")
     for metric, s in metrics.items():
         if not s["excess_pass"]:
-            reasons.append(f"{metric} excess upper bound {s['excess_upper']:.3f} > {s['delta']}")
+            reasons.append(
+                f"{metric} excess upper bound {s['excess_upper']:.3f} > {s['delta']}"
+            )
         if not s["bias_pass"]:
             lo, hi = s["bias_interval"]
-            reasons.append(f"{metric} bias interval [{lo:.3f}, {hi:.3f}] not within +-{s['delta']}")
+            reasons.append(
+                f"{metric} bias interval [{lo:.3f}, {hi:.3f}] not within +-{s['delta']}"
+            )
     return {
         "method": "calibrated/1",
         "acc": acc,
@@ -722,7 +733,9 @@ def calibrated_gate_markdown(res: dict[str, Any]) -> str:
     def f(v: Any, nd: int = 3) -> str:
         return "—" if v is None else f"{v:.{nd}f}"
 
-    verdict = "**PASS**" if res["phase_pass"] else "**FAIL** — " + "; ".join(res["reasons"])
+    verdict = (
+        "**PASS**" if res["phase_pass"] else "**FAIL** — " + "; ".join(res["reasons"])
+    )
     lines = [
         f"Calibrated gate: acc `{res['acc']}` vs ref `{res['ref']}` — {verdict}",
         "",
@@ -841,8 +854,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     pc.add_argument("--ref", required=True)
     pc.add_argument("--acc-seeds", type=int, nargs="+")
     pc.add_argument("--ref-seeds", type=int, nargs="+")
-    pc.add_argument("--prereq", type=Path, help="ds=5: the g7e ds=1 vs CPU gate-cal result")
-    pc.add_argument("--out", type=Path, required=True, help="output stem (.json and .md)")
+    pc.add_argument(
+        "--prereq", type=Path, help="ds=5: the g7e ds=1 vs CPU gate-cal result"
+    )
+    pc.add_argument(
+        "--out", type=Path, required=True, help="output stem (.json and .md)"
+    )
     ns = ap.parse_args(argv)
     targets = json.loads(ns.targets.read_text())
     if ns.cmd == "score":

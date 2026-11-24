@@ -48,7 +48,10 @@ REGISTER_SHIFT = 3
 def copy_structure(st: Structure) -> Structure:
     """Deep copy of the coordinates (sequences and numbering are shared, read-only)."""
     return Structure(
-        {k: Chain(c.chain_id, c.seq, c.resnums, c.ca.copy()) for k, c in st.chains.items()},
+        {
+            k: Chain(c.chain_id, c.seq, c.resnums, c.ca.copy())
+            for k, c in st.chains.items()
+        },
         {k: {a: x.copy() for a, x in v.items()} for k, v in st.ligands.items()},
     )
 
@@ -89,7 +92,7 @@ def register_shift(st: Structure, shift: int = REGISTER_SHIFT) -> Structure:
 
 
 def defects() -> dict[str, tuple[Perturb | None, str]]:
-    """name -> (whole-structure perturbation, or None for the local defect; kind)."""
+    """Name -> (whole-structure perturbation, or None for the local defect; kind)."""
     out: dict[str, tuple[Perturb | None, str]] = {}
     for sigma in (0.25, 0.5, 1.0, 2.0):
         out[f"noise:{sigma}"] = (
@@ -116,7 +119,9 @@ def _resolve(pred: str, res_path: Path, root: Path) -> Path:
     hits = sorted(res_path.parent.rglob(p.name))
     if hits:
         return hits[0]
-    raise FileNotFoundError(f"prediction {pred} (from {res_path}) not found under {root}")
+    raise FileNotFoundError(
+        f"prediction {pred} (from {res_path}) not found under {root}"
+    )
 
 
 def load_oracle(
@@ -147,21 +152,29 @@ class Scorer:
     """Scores in-memory models against ground truth for the gated targets."""
 
     def __init__(self, targets: dict[str, Any], truth_dir: Path) -> None:
+        """Index the gated targets; truths load lazily."""
         self.by_id = {t["id"]: t for t in targets["targets"] if t.get("gated")}
         self.truth_dir = truth_dir
         self.truths: dict[str, Structure] = {}
 
     def __call__(self, tid: str, model: Structure) -> dict[str, float | None]:
+        """Gate metrics of one model of target tid."""
         t = self.by_id[tid]
         if tid not in self.truths:
             self.truths[tid] = score.load_structure(self.truth_dir / t["truth"]["file"])
         cmap = {
-            ch["chain_id"]: ch["truth_chain"] for ch in t["chains"] if ch["entity"] == "protein"
+            ch["chain_id"]: ch["truth_chain"]
+            for ch in t["chains"]
+            if ch["entity"] == "protein"
         }
-        return score.score_model(model, self.truths[tid], cmap, t["truth"].get("unit"), tm=None)
+        return score.score_model(
+            model, self.truths[tid], cmap, t["truth"].get("unit"), tm=None
+        )
 
 
-def _row(tid: str, seed: int, backend: str, m: dict[str, float | None]) -> dict[str, Any]:
+def _row(
+    tid: str, seed: int, backend: str, m: dict[str, float | None]
+) -> dict[str, Any]:
     return {
         "target_id": tid,
         "backend": backend,
@@ -199,7 +212,9 @@ def run_selftest(
     base = {k: scorer(k[0], st) for k, st in structs.items()}
     cpu_rows = [_row(t, s, "cpu", m) for (t, s), m in base.items()]
 
-    def gate_cal(test_rows: list[dict[str, Any]], ref_seeds: Sequence[int]) -> dict[str, Any]:
+    def gate_cal(
+        test_rows: list[dict[str, Any]], ref_seeds: Sequence[int]
+    ) -> dict[str, Any]:
         return score.calibrated_gate(
             cpu_rows + test_rows, {"backend": "test"}, {"backend": "cpu"}, gated,
             ref_seeds=ref_seeds, n_boot=n_boot,
@@ -207,8 +222,14 @@ def run_selftest(
 
     def section2(test: Sequence[int], ref: Sequence[int]) -> dict[str, Any]:
         rows = [
-            {**_row(t, ref.index(s), "ref", m)} for (t, s), m in base.items() if s in ref
-        ] + [{**_row(t, test.index(s), "test", m)} for (t, s), m in base.items() if s in test]
+            {**_row(t, ref.index(s), "ref", m)}
+            for (t, s), m in base.items()
+            if s in ref
+        ] + [
+            {**_row(t, test.index(s), "test", m)}
+            for (t, s), m in base.items()
+            if s in test
+        ]
         res = score.gate(rows, {"backend": "test"}, {"backend": "ref"}, gated)
         return {"test": list(test), "ref": list(ref), "n_pass": res["n_pass"],
                 "n_targets": res["n_targets"], "cap_exceeded": res["cap_exceeded"],
@@ -231,7 +252,9 @@ def run_selftest(
     for test in splits:
         ref = [s for s in seeds if s not in test]
         rows = [_row(t, s, "test", m) for (t, s), m in base.items() if s in test]
-        aa.append({"test": list(test), "ref": ref, **_gate_summary(gate_cal(rows, ref))})
+        aa.append(
+            {"test": list(test), "ref": ref, **_gate_summary(gate_cal(rows, ref))}
+        )
     out["calibrated_aa"] = aa
 
     # Planted defects (E3).
@@ -240,20 +263,30 @@ def run_selftest(
         if only_defects and name not in only_defects:
             continue
         trials = []
-        reps = 1 if kind == "fixed" else (local_replicates if kind == "local" else replicates)
+        reps = (
+            1
+            if kind == "fixed"
+            else (local_replicates if kind == "local" else replicates)
+        )
         for test in splits:
             ref = [s for s in seeds if s not in test]
             for _ in range(reps):
                 hit: list[str] = []
                 if kind == "local":
                     n = int(name.split(":")[1])
-                    hit = sorted(rng.choice(list(gated), size=n, replace=False).tolist())
+                    hit = sorted(
+                        rng.choice(list(gated), size=n, replace=False).tolist()
+                    )
                 rows = []
                 for (t, s), st in structs.items():
                     if s not in test:
                         continue
                     if kind == "local":
-                        m = scorer(t, add_noise(st, LOCAL_SIGMA, rng)) if t in hit else base[(t, s)]
+                        m = (
+                            scorer(t, add_noise(st, LOCAL_SIGMA, rng))
+                            if t in hit
+                            else base[(t, s)]
+                        )
                     else:
                         assert fn is not None
                         m = scorer(t, fn(st, rng))
@@ -323,7 +356,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--local-replicates", type=int, default=5)
     ap.add_argument("--rng-seed", type=int, default=0)
     ap.add_argument("--defects", nargs="*", help="restrict to these planted defects")
-    ap.add_argument("--out", type=Path, required=True, help="output stem (.json and .md)")
+    ap.add_argument(
+        "--out", type=Path, required=True, help="output stem (.json and .md)"
+    )
     ns = ap.parse_args(argv)
     targets = json.loads(ns.targets.read_text())
     gated = [t["id"] for t in targets["targets"] if t.get("gated")]
