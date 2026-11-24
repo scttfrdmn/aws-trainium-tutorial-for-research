@@ -42,6 +42,6 @@ DIFFUSION_SAMPLES = (1, 5)
 SEEDS = (0, 1)
 # The CPU fp32 oracle alone may run extra seeds: they calibrate the accuracy gate against the
 # reference's own seed-to-seed spread (#103). Comparison rows stay on SEEDS.
-ORACLE_SEEDS = (0, 1, 2, 3, 4)
+ORACLE_SEEDS = tuple(range(10))
 # Reproduction target only (Phase A task 0), never a comparison row.
 REPRO_SAMPLING_STEPS = 50
