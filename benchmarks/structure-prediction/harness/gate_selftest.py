@@ -37,12 +37,13 @@ from typing import Any
 
 import numpy as np
 
-from harness import pins, score
+from harness import score
 from harness.score import Chain, Structure
 
 Perturb = Callable[[Structure, np.random.Generator], Structure]
 LOCAL_SIGMA = 2.0
 REGISTER_SHIFT = 3
+EXPLODE_SCALE = 5.0
 
 
 def copy_structure(st: Structure) -> Structure:
@@ -91,18 +92,41 @@ def register_shift(st: Structure, shift: int = REGISTER_SHIFT) -> Structure:
     return out
 
 
-def defects() -> dict[str, tuple[Perturb | None, str]]:
-    """Name -> (whole-structure perturbation, or None for the local defect; kind)."""
-    out: dict[str, tuple[Perturb | None, str]] = {}
+def explode(st: Structure, scale: float = EXPLODE_SCALE) -> Structure:
+    """Every atom pushed away from the centroid by `scale` (the trn2 LNC=1 ds=5 failure, #106)."""
+    out = copy_structure(st)
+    c = np.concatenate([ch.ca for ch in out.chains.values()]).mean(0)
+    for ch in out.chains.values():
+        ch.ca[:] = c + scale * (ch.ca - c)
+    for atoms in out.ligands.values():
+        for a in atoms:
+            atoms[a] = c + scale * (atoms[a] - c)
+    return out
+
+
+def defects() -> dict[str, tuple[Perturb, str, int | None]]:
+    """Name -> (perturbation, kind, targets hit).
+
+    kind "fixed" is deterministic (one trial per split); "random" draws noise (`replicates`
+    trials per split); targets hit None = every target, n = n random targets per trial
+    (`local_replicates` trials per split).
+    """
+    out: dict[str, tuple[Perturb, str, int | None]] = {}
     for sigma in (0.25, 0.5, 1.0, 2.0):
         out[f"noise:{sigma}"] = (
             lambda st, rng, s=sigma: add_noise(st, s, rng),
             "random",
+            None,
         )
-    out["mirror"] = (lambda st, rng: mirror(st), "fixed")
-    out["register"] = (lambda st, rng: register_shift(st), "fixed")
-    out["local:1"] = (None, "local")
-    out["local:2"] = (None, "local")
+    out["mirror"] = (lambda st, rng: mirror(st), "fixed", None)
+    out["register"] = (lambda st, rng: register_shift(st), "fixed", None)
+    for n in (1, 2):
+        out[f"local:{n}"] = (
+            lambda st, rng: add_noise(st, LOCAL_SIGMA, rng),
+            "random",
+            n,
+        )
+    out["explode:1"] = (lambda st, rng: explode(st), "fixed", 1)
     return out
 
 
@@ -206,8 +230,14 @@ def run_selftest(
     rng_seed: int = 0,
     n_boot: int = score.CAL_BOOTSTRAP,
     only_defects: Sequence[str] | None = None,
+    method: str = score.CAL_DEFAULT,
+    ref_pool: Sequence[int] | None = None,
 ) -> dict[str, Any]:
-    """A/A and planted-defect results for both gates."""
+    """A/A and planted-defect results for both gates.
+
+    Without `ref_pool`, every pair of `seeds` is a test against the remaining seeds. With it
+    (held-out validation), every pair of `seeds` is a test against all of `ref_pool`.
+    """
     rng = np.random.default_rng(rng_seed)
     base = {k: scorer(k[0], st) for k, st in structs.items()}
     cpu_rows = [_row(t, s, "cpu", m) for (t, s), m in base.items()]
@@ -217,7 +247,7 @@ def run_selftest(
     ) -> dict[str, Any]:
         return score.calibrated_gate(
             cpu_rows + test_rows, {"backend": "test"}, {"backend": "cpu"}, gated,
-            ref_seeds=ref_seeds, n_boot=n_boot,
+            ref_seeds=ref_seeds, n_boot=n_boot, method=method,
         )  # fmt: skip
 
     def section2(test: Sequence[int], ref: Sequence[int]) -> dict[str, Any]:
@@ -235,14 +265,28 @@ def run_selftest(
                 "n_targets": res["n_targets"], "cap_exceeded": res["cap_exceeded"],
                 "pass": res["phase_pass"]}  # fmt: skip
 
+    if ref_pool is not None and set(ref_pool) & set(seeds):
+        raise ValueError("ref_pool and test seeds overlap")
     splits = [tuple(p) for p in itertools.combinations(seeds, 2)]
-    out: dict[str, Any] = {"seeds": list(seeds), "splits": [list(s) for s in splits]}
+
+    def ref_for(test: Sequence[int]) -> list[int]:
+        if ref_pool is not None:
+            return list(ref_pool)
+        return [s for s in seeds if s not in test]
+
+    out: dict[str, Any] = {
+        "method": method,
+        "seeds": list(seeds),
+        "ref_pool": list(ref_pool) if ref_pool is not None else None,
+        "splits": [list(s) for s in splits],
+    }
 
     # Section-2 gate, A/A. Pre-registered (E1): test 2,3 vs ref 0,1.
     s2 = []
     for test in splits:
-        rest = [s for s in seeds if s not in test]
-        s2 += [section2(test, list(ref)) for ref in itertools.combinations(rest, 2)]
+        s2 += [
+            section2(test, list(r)) for r in itertools.combinations(ref_for(test), 2)
+        ]
     out["section2_aa"] = s2
     pre = [r for r in s2 if r["test"] == [2, 3] and r["ref"] == [0, 1]]
     out["section2_aa_preregistered"] = pre[0] if pre else None
@@ -250,7 +294,7 @@ def run_selftest(
     # Calibrated gate, A/A (E2).
     aa = []
     for test in splits:
-        ref = [s for s in seeds if s not in test]
+        ref = ref_for(test)
         rows = [_row(t, s, "test", m) for (t, s), m in base.items() if s in test]
         aa.append(
             {"test": list(test), "ref": ref, **_gate_summary(gate_cal(rows, ref))}
@@ -259,40 +303,36 @@ def run_selftest(
 
     # Planted defects (E3).
     planted: dict[str, Any] = {}
-    for name, (fn, kind) in defects().items():
+    for name, (fn, kind, n_hit) in defects().items():
         if only_defects and name not in only_defects:
             continue
         trials = []
-        reps = (
-            1
-            if kind == "fixed"
-            else (local_replicates if kind == "local" else replicates)
-        )
+        if n_hit is not None:
+            reps = local_replicates
+        else:
+            reps = 1 if kind == "fixed" else replicates
         for test in splits:
-            ref = [s for s in seeds if s not in test]
+            ref = ref_for(test)
             for _ in range(reps):
-                hit: list[str] = []
-                if kind == "local":
-                    n = int(name.split(":")[1])
+                hit: list[str] = list(gated)
+                if n_hit is not None:
                     hit = sorted(
-                        rng.choice(list(gated), size=n, replace=False).tolist()
+                        rng.choice(list(gated), size=n_hit, replace=False).tolist()
                     )
                 rows = []
                 for (t, s), st in structs.items():
                     if s not in test:
                         continue
-                    if kind == "local":
-                        m = (
-                            scorer(t, add_noise(st, LOCAL_SIGMA, rng))
-                            if t in hit
-                            else base[(t, s)]
-                        )
-                    else:
-                        assert fn is not None
-                        m = scorer(t, fn(st, rng))
+                    m = scorer(t, fn(st, rng)) if t in hit else base[(t, s)]
                     rows.append(_row(t, s, "test", m))
                 g = gate_cal(rows, ref)
-                trials.append({"test": list(test), "targets": hit, **_gate_summary(g)})
+                trials.append(
+                    {
+                        "test": list(test),
+                        "targets": hit if n_hit else [],
+                        **_gate_summary(g),
+                    }
+                )
         rejected = sum(not t["pass"] for t in trials)
         why: Counter[str] = Counter()
         for t in trials:
@@ -311,7 +351,18 @@ def run_selftest(
 
 def selftest_markdown(res: dict[str, Any]) -> str:
     """Summary tables for the issue comment."""
-    lines = ["**Section-2 gate, A/A**", ""]
+    pool = res.get("ref_pool")
+    lines = [
+        f"Calibrated gate method `{res.get('method')}`; test seeds {res['seeds']}"
+        + (
+            f", each pair gated against reference seeds {pool}"
+            if pool
+            else ", leave-pair-out"
+        ),
+        "",
+        "**Section-2 gate, A/A**",
+        "",
+    ]
     pre = res.get("section2_aa_preregistered")
     if pre:
         lines.append(
@@ -351,7 +402,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--oracle-root", type=Path, required=True)
     ap.add_argument("--targets", type=Path, required=True)
     ap.add_argument("--truth-dir", type=Path, required=True)
-    ap.add_argument("--seeds", type=int, nargs="+", default=list(pins.ORACLE_SEEDS))
+    ap.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=[0, 1, 2, 3, 4],
+        help="test seeds (pairs of them); also the reference without --ref-pool",
+    )
+    ap.add_argument(
+        "--ref-pool",
+        type=int,
+        nargs="+",
+        help="held-out validation: gate every test pair against all these seeds",
+    )
+    ap.add_argument(
+        "--method", choices=sorted(score.CAL_METHODS), default=score.CAL_DEFAULT
+    )
     ap.add_argument("--replicates", type=int, default=3)
     ap.add_argument("--local-replicates", type=int, default=5)
     ap.add_argument("--rng-seed", type=int, default=0)
@@ -362,15 +428,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     ns = ap.parse_args(argv)
     targets = json.loads(ns.targets.read_text())
     gated = [t["id"] for t in targets["targets"] if t.get("gated")]
-    structs = load_oracle(ns.oracle_root, targets, ns.seeds)
-    missing = [(t, s) for t in gated for s in ns.seeds if (t, s) not in structs]
+    seeds = list(ns.seeds) + list(ns.ref_pool or [])
+    structs = load_oracle(ns.oracle_root, targets, seeds)
+    missing = [(t, s) for t in gated for s in seeds if (t, s) not in structs]
     if missing:
         print(f"missing oracle results: {missing}", file=sys.stderr)
         return 2
     res = run_selftest(
         structs, Scorer(targets, ns.truth_dir), gated, ns.seeds,
         replicates=ns.replicates, local_replicates=ns.local_replicates,
-        rng_seed=ns.rng_seed, only_defects=ns.defects,
+        rng_seed=ns.rng_seed, only_defects=ns.defects, method=ns.method,
+        ref_pool=ns.ref_pool,
     )  # fmt: skip
     ns.out.parent.mkdir(parents=True, exist_ok=True)
     Path(f"{ns.out}.json").write_text(json.dumps(res, indent=2) + "\n")

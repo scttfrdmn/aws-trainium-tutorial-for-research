@@ -573,11 +573,28 @@ def gate(
 #   * bias:    the two-sided (1 - 2 alpha) bootstrap interval of mean_t b(t) inside +-delta_m;
 #   * cap:     no target with d_acc(t) > max(CAL_CAP_FLOOR x delta_m, CAL_CAP_FACTOR x d_ref(t));
 # and complete data for every gated target. delta_m = FLOORS. Bootstrap resamples targets.
+#
+# calibrated/1 applies all three tests to every metric. On the 5-seed CPU oracle it rejected the
+# reference against itself in 7 of 10 A/A splits, all through CA-RMSD vs truth: at ~15 Å from
+# truth that metric is dominated by domain placement and is multimodal across seeds (#103).
+# calibrated/2 keeps lDDT-CA exactly as above and makes CA-RMSD and ligand RMSD *coarse* checks,
+# which only look for gross defects (mirror images, exploded structures):
+#   * population: the one-sided (1 - alpha) bootstrap upper bound of mean_t e(t) <= COARSE_POP;
+#   * per target: e(t) <= COARSE_TARGET;  no bias test.
+# Thresholds were set from seeds 0-4 (A/A per-target CA excess max 4.3 Å, mean max 0.23 Å;
+# mirror mean ~5 Å; explosions > 70 Å) and are validated on held-out seeds 5-9.
 CAL_ALPHA = 0.05
 CAL_BOOTSTRAP = 10_000
 CAL_CAP_FACTOR = 3.0
 CAL_CAP_FLOOR = 2.0
 WORSE_SIGN = {"ca_rmsd": 1.0, "lddt_ca": -1.0, "ligand_rmsd": 1.0}
+COARSE_POP = 2.0
+COARSE_TARGET = 10.0
+CAL_METHODS: dict[str, dict[str, str]] = {
+    "calibrated/1": dict.fromkeys(GATE_METRICS, "fine"),
+    "calibrated/2": {"ca_rmsd": "coarse", "lddt_ca": "fine", "ligand_rmsd": "coarse"},
+}
+CAL_DEFAULT = "calibrated/2"
 
 
 def _seed_values(
@@ -628,8 +645,12 @@ def calibrated_gate(
     n_boot: int = CAL_BOOTSTRAP,
     alpha: float = CAL_ALPHA,
     rng_seed: int = 0,
+    method: str = CAL_DEFAULT,
 ) -> dict[str, Any]:
     """Spread-calibrated gate (see the block comment above). Seeds default to all present."""
+    if method not in CAL_METHODS:
+        raise ValueError(f"unknown gate method {method!r}")
+    kinds = CAL_METHODS[method]
     deltas = deltas or FLOORS
     acc = {"variant": "", **acc}
     ref = {"variant": "", **ref}
@@ -657,9 +678,15 @@ def calibrated_gate(
                 entry["complete"] = False
             else:
                 dev = target_deviation(rv, av)
-                cap = max(CAL_CAP_FLOOR * deltas[metric], CAL_CAP_FACTOR * dev["d_ref"])
                 bias = WORSE_SIGN[metric] * dev["shift"]
-                m.update(dev, bias=bias, cap=cap, cap_exceeded=dev["d_acc"] > cap)
+                if kinds[metric] == "coarse":  # cap on the excess itself
+                    cap, over = COARSE_TARGET, dev["excess"] > COARSE_TARGET
+                else:
+                    cap = max(
+                        CAL_CAP_FLOOR * deltas[metric], CAL_CAP_FACTOR * dev["d_ref"]
+                    )
+                    over = dev["d_acc"] > cap
+                m.update(dev, bias=bias, cap=cap, cap_exceeded=over, kind=kinds[metric])
                 entry["cap_exceeded"] |= m["cap_exceeded"]
                 per_metric[metric]["excess"].append(dev["excess"])
                 per_metric[metric]["bias"].append(bias)
@@ -673,8 +700,10 @@ def calibrated_gate(
         bex, bbi = _bootstrap_means(ex, n_boot, rng), _bootstrap_means(bi, n_boot, rng)
         ex_ub = float(np.quantile(bex, 1 - alpha))
         bi_lo, bi_hi = (float(q) for q in np.quantile(bbi, [alpha, 1 - alpha]))
-        delta = deltas[metric]
+        coarse = kinds[metric] == "coarse"
+        delta = COARSE_POP if coarse else deltas[metric]
         metrics[metric] = {
+            "kind": kinds[metric],
             "n_targets": len(ex),
             "delta": delta,
             "mean_excess": float(ex.mean()),
@@ -682,7 +711,7 @@ def calibrated_gate(
             "excess_pass": ex_ub <= delta,
             "mean_bias": float(bi.mean()),
             "bias_interval": [bi_lo, bi_hi],
-            "bias_pass": -delta <= bi_lo and bi_hi <= delta,
+            "bias_pass": True if coarse else (-delta <= bi_lo and bi_hi <= delta),
         }
     incomplete = [t["target_id"] for t in targets if not t["complete"]]
     capped = [t["target_id"] for t in targets if t["cap_exceeded"]]
@@ -704,7 +733,7 @@ def calibrated_gate(
                 f"{metric} bias interval [{lo:.3f}, {hi:.3f}] not within +-{s['delta']}"
             )
     return {
-        "method": "calibrated/1",
+        "method": method,
         "acc": acc,
         "ref": ref,
         "acc_seeds": list(acc_seeds) if acc_seeds is not None else None,
@@ -715,6 +744,9 @@ def calibrated_gate(
             "cap_factor": CAL_CAP_FACTOR,
             "cap_floor": CAL_CAP_FLOOR,
             "deltas": deltas,
+            "kinds": kinds,
+            "coarse_pop": COARSE_POP,
+            "coarse_target": COARSE_TARGET,
             "rng_seed": rng_seed,
         },
         "targets": targets,
@@ -737,7 +769,7 @@ def calibrated_gate_markdown(res: dict[str, Any]) -> str:
         "**PASS**" if res["phase_pass"] else "**FAIL** — " + "; ".join(res["reasons"])
     )
     lines = [
-        f"Calibrated gate: acc `{res['acc']}` vs ref `{res['ref']}` — {verdict}",
+        f"Calibrated gate ({res['method']}): acc `{res['acc']}` vs ref `{res['ref']}` — {verdict}",
         "",
         "| metric | targets | mean excess | excess upper bound | delta | mean bias | bias interval | pass |",
         "|---|---:|---:|---:|---:|---:|---|---|",
@@ -854,6 +886,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     pc.add_argument("--ref", required=True)
     pc.add_argument("--acc-seeds", type=int, nargs="+")
     pc.add_argument("--ref-seeds", type=int, nargs="+")
+    pc.add_argument("--method", choices=sorted(CAL_METHODS), default=CAL_DEFAULT)
     pc.add_argument(
         "--prereq", type=Path, help="ds=5: the g7e ds=1 vs CPU gate-cal result"
     )
@@ -875,6 +908,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         cres = calibrated_gate(
             _read_csv(ns.scores), acc, ref, gated,
             acc_seeds=ns.acc_seeds, ref_seeds=ns.ref_seeds, timing_only=timing_only,
+            method=ns.method,
         )  # fmt: skip
         ns.out.parent.mkdir(parents=True, exist_ok=True)
         Path(f"{ns.out}.json").write_text(json.dumps(cres, indent=2) + "\n")

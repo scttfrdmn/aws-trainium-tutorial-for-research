@@ -54,7 +54,8 @@ def test_calibrated_gate_accepts_same_distribution_and_rejects_defects():
     assert not biased["phase_pass"]
     assert any(r.startswith("lddt_ca") for r in biased["reasons"])
     one_bad = s.calibrated_gate(ref + _rows("x", (0, 1), bad=("T3",), rng=rng),
-                                {"backend": "x"}, {"backend": "cpu"}, GATED, n_boot=2000)  # fmt: skip
+                                {"backend": "x"}, {"backend": "cpu"}, GATED, n_boot=2000,
+                                method="calibrated/1")  # fmt: skip
     assert one_bad["cap_exceeded"] == ["T3"] and not one_bad["phase_pass"]
 
 
@@ -112,3 +113,53 @@ def test_selftest_end_to_end_on_synthetic_targets():
     assert res["planted"]["noise:2.0"]["rejection_rate"] == 1.0
     assert set(res["planted"]) == {"mirror", "noise:2.0", "local:1"}
     assert "planted defects" in gs.selftest_markdown(res)
+
+
+def test_calibrated2_ca_rmsd_is_a_coarse_check():
+    rng = np.random.default_rng(11)
+    ref = _rows("cpu", range(5), rng=rng)
+    kw = {"n_boot": 2000, "method": "calibrated/2"}
+    # a 5 Å CA-RMSD swing on one target: calibrated/1 rejects it, calibrated/2 does not
+    swing = ref + _rows("x", (0, 1), bad=("T3",), rng=rng)
+    assert s.calibrated_gate(swing, {"backend": "x"}, {"backend": "cpu"}, GATED, **kw)[
+        "phase_pass"
+    ]
+    # an exploded target (+80 Å) is still caught, per target
+    rows = ref + _rows("x", (0, 1), rng=rng)
+    for r in rows:
+        if r["backend"] == "x" and r["target_id"] == "T4":
+            r["ca_rmsd"] += 80.0
+    res = s.calibrated_gate(rows, {"backend": "x"}, {"backend": "cpu"}, GATED, **kw)
+    assert (
+        res["cap_exceeded"] == ["T4"] and res["metrics"]["ca_rmsd"]["kind"] == "coarse"
+    )
+    with pytest.raises(ValueError):
+        s.calibrated_gate(
+            rows, {"backend": "x"}, {"backend": "cpu"}, GATED, method="nope"
+        )
+
+
+def test_explode_and_held_out_reference_pool():
+    x = helix(30)
+    e = gs.explode(_struct(x.copy()), 5.0)
+    c = x.mean(0)
+    assert np.allclose(e.chains["A"].ca - c, 5.0 * (x - c))
+    rng = np.random.default_rng(5)
+    truths = {f"T{t}": _struct(helix(40 + 5 * t)) for t in range(6)}
+    structs = {
+        (tid, seed): _struct(tr.chains["A"].ca + rng.normal(0, 0.6, tr.chains["A"].ca.shape))
+        for tid, tr in truths.items() for seed in range(7)
+    }  # fmt: skip
+
+    def scorer(tid, model):
+        return s.score_model(model, truths[tid], {"A": "A"}, tm=None)
+
+    res = gs.run_selftest(structs, scorer, list(truths), [4, 5, 6], ref_pool=[0, 1, 2, 3],
+                          replicates=1, local_replicates=2, n_boot=300,
+                          only_defects=["explode:1"])  # fmt: skip
+    assert [r["ref"] for r in res["calibrated_aa"]] == [[0, 1, 2, 3]] * 3
+    assert len(res["section2_aa"]) == 3 * 6
+    assert res["planted"]["explode:1"]["trials"] == 6
+    assert res["planted"]["explode:1"]["rejection_rate"] == 1.0
+    with pytest.raises(ValueError):
+        gs.run_selftest(structs, scorer, list(truths), [3, 4], ref_pool=[0, 3])
