@@ -521,7 +521,8 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
 # workers starting on an empty cache can load a half-written checkpoint. Fetch once, serially.
 PREFETCH = (
     "import os, pathlib; from boltz.main import download_boltz2; "
-    "download_boltz2(pathlib.Path(os.environ.get('BOLTZ_CACHE', '~/.boltz')).expanduser())"
+    "c = pathlib.Path(os.environ.get('BOLTZ_CACHE', '~/.boltz')).expanduser(); "
+    "c.mkdir(parents=True, exist_ok=True); download_boltz2(c)"
 )
 
 
