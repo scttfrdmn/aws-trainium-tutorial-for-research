@@ -381,3 +381,12 @@ def test_score_results_top_ranked_and_best_of_n(tmp_path, seq30):
     assert row["ca_rmsd"] > 0.5  # top-ranked (model_0) is what is gated
     assert row["best_ca_rmsd"] == pytest.approx(0.0, abs=1e-3)
     assert row["n_samples"] == 2
+
+
+def test_reference_only_ligands_are_not_scored(tmp_path, seq30):
+    xyz = helix(30)
+    ion = {"CL": xyz[5] + [3, 0, 0]}
+    truth = s.load_structure(write_ca_cif(tmp_path / "t.cif", seq30, xyz, ligand=ion))
+    pred = write_ca_cif(tmp_path / "p.cif", seq30, xyz)  # protein-only prediction
+    out = s.score_prediction(pred, truth, {"A": "A"}, tm=lambda c: None)
+    assert out["ligand_rmsd"] is None and out["ca_rmsd"] == pytest.approx(0.0, abs=1e-3)
