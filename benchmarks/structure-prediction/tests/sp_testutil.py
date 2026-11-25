@@ -96,6 +96,10 @@ class FakeHost:
             return f"{argv[-1]}\t2.28.10.0\n"
         if cmd == "git":
             return "0123456789abcdef0123456789abcdef01234567\n"
+        if argv[1] == "-c" and "m.distributions()" in argv[2]:
+            return json.dumps(
+                [["boltz", "2.2.1"], ["rdkit", "2026.9.2"], ["torch", "2.14.0"]]
+            )
         if argv[1] == "-c" and "importlib.metadata" in argv[2]:
             name = argv[2].split("m.version(")[1].strip("')\"")
             versions = {

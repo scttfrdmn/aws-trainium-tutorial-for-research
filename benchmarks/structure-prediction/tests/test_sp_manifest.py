@@ -115,3 +115,26 @@ def test_unknown_accelerator_rejected(fake_manifest_kwargs):
 def test_unknown_region_has_no_price_location():
     with pytest.raises(ValueError, match="no Price List location"):
         m.on_demand_price(FakePricing(), "g7e.2xlarge", "mars-1")
+
+
+def test_manifest_records_distributions_and_cache_hashes(
+    fake_manifest_kwargs, tmp_path
+):
+    cache = tmp_path / "boltz"
+    cache.mkdir()
+    (cache / "boltz2_conf.ckpt").write_bytes(b"weights")
+    (cache / "mols.tar").write_bytes(b"ccd")
+    (cache / "mols").mkdir()  # directories are not hashed
+    kw = {**fake_manifest_kwargs, "environ": {"BOLTZ_CACHE": str(cache)}}
+    doc = m.capture_manifest(accelerator="cpu", **kw)
+    assert doc["schema"] == "sp-manifest/1.1"
+    assert doc["distributions"]["rdkit"] == "2026.9.2"
+    import hashlib
+
+    assert doc["boltz_cache_sha256"] == {
+        "boltz2_conf.ckpt": hashlib.sha256(b"weights").hexdigest(),
+        "mols.tar": hashlib.sha256(b"ccd").hexdigest(),
+    }
+    assert (cache / ".sp-sha256.json").exists()  # memoised for the next run
+    assert "kernel" in doc["os"]
+    assert m.cache_hashes(tmp_path / "missing") is None

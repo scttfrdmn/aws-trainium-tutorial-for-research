@@ -371,6 +371,14 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
         "--threads", type=int, required=True, help="intra-op threads per worker"
     )
     po.add_argument("--only", nargs="*", help="restrict to these target IDs")
+    po.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        choices=pins.ORACLE_SEEDS,
+        default=list(pins.SEEDS),
+        help="oracle seeds (default: the comparison seeds; extras calibrate the gate)",
+    )
     po.add_argument("--variant")
     po.add_argument("--max-msa-seqs", type=int)
     po.add_argument("--no-pin", action="store_true", help="do not taskset-pin workers")
@@ -509,6 +517,22 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
         return 2
 
 
+# Boltz downloads its weights on first use with an exists-check and an in-place write, so N
+# workers starting on an empty cache can load a half-written checkpoint. Fetch once, serially.
+PREFETCH = (
+    "import os, pathlib; from boltz.main import download_boltz2; "
+    "c = pathlib.Path(os.environ.get('BOLTZ_CACHE', '~/.boltz')).expanduser(); "
+    "c.mkdir(parents=True, exist_ok=True); download_boltz2(c)"
+)
+
+
+def prefetch_weights(executor: Executor) -> None:
+    """Populate the Boltz cache before parallel workers start (raises if it fails)."""
+    rc, out, _ = executor([sys.executable, "-c", PREFETCH], {})
+    if rc != 0:
+        raise RuntimeError(f"Boltz weight prefetch failed: {out[-2000:]}")
+
+
 def _extra_command(ns: argparse.Namespace, executor: Executor) -> int:
     """Oracle / oracle-calibrate / directory."""
     from harness import directory, oracle
@@ -522,7 +546,9 @@ def _extra_command(ns: argparse.Namespace, executor: Executor) -> int:
         if (ns.variant is None) != (ns.max_msa_seqs is None):
             raise backends.ConfigError("--variant and --max-msa-seqs go together")
         targets = json.loads(ns.targets_json.read_text())
-        jobs = oracle.oracle_jobs(targets, ns.only)
+        jobs = oracle.oracle_jobs(targets, ns.only, seeds=ns.seeds)
+        if not ns.dry_run:
+            prefetch_weights(executor)
         res = oracle.run_oracle(
             jobs,
             inputs=ns.inputs,
@@ -544,6 +570,8 @@ def _extra_command(ns: argparse.Namespace, executor: Executor) -> int:
         )
         return 1 if bad else 0
     if ns.cmd == "oracle-calibrate":
+        if not getattr(ns, "dry_run", False):
+            prefetch_weights(executor)
         res = oracle.calibrate(
             target_id=ns.target_id,
             input_path=ns.input,
