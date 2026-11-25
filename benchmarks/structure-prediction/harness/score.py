@@ -583,6 +583,15 @@ def gate(
 #   * per target: e(t) <= COARSE_TARGET;  no bias test.
 # Thresholds were set from seeds 0-4 (A/A per-target CA excess max 4.3 Å, mean max 0.23 Å;
 # mirror mean ~5 Å; explosions > 70 Å) and are validated on held-out seeds 5-9.
+#
+# calibrated/2 failed held-out A/A 10/20, every failure the lDDT per-target cap, and failed
+# g7e ds=1, every component in the "g7e is better" direction (#103). calibrated/3 asks the
+# question the project asks, non-inferiority ("not worse than the reference"), for lDDT-CA:
+#   * bias: the one-sided (1 - alpha) bootstrap upper bound of mean_t b(t) <= delta (b > 0 = worse);
+#   * cap:  only targets where the run is worse (b(t) > 0) and d_acc(t) > the calibrated/1 cap;
+#   * no two-sided excess test (better than the reference is reported, not failed).
+# CA-RMSD and ligand RMSD stay the calibrated/2 coarse checks. Use every reference seed available
+# (the CPU oracle has seeds 0-9); validated on held-out seeds 10-14.
 CAL_ALPHA = 0.05
 CAL_BOOTSTRAP = 10_000
 CAL_CAP_FACTOR = 3.0
@@ -593,8 +602,13 @@ COARSE_TARGET = 10.0
 CAL_METHODS: dict[str, dict[str, str]] = {
     "calibrated/1": dict.fromkeys(GATE_METRICS, "fine"),
     "calibrated/2": {"ca_rmsd": "coarse", "lddt_ca": "fine", "ligand_rmsd": "coarse"},
+    "calibrated/3": {
+        "ca_rmsd": "coarse",
+        "lddt_ca": "noninferior",
+        "ligand_rmsd": "coarse",
+    },
 }
-CAL_DEFAULT = "calibrated/2"
+CAL_DEFAULT = "calibrated/3"
 
 
 def _seed_values(
@@ -686,6 +700,8 @@ def calibrated_gate(
                         CAL_CAP_FLOOR * deltas[metric], CAL_CAP_FACTOR * dev["d_ref"]
                     )
                     over = dev["d_acc"] > cap
+                    if kinds[metric] == "noninferior":
+                        over = over and bias > 0
                 m.update(dev, bias=bias, cap=cap, cap_exceeded=over, kind=kinds[metric])
                 entry["cap_exceeded"] |= m["cap_exceeded"]
                 per_metric[metric]["excess"].append(dev["excess"])
@@ -708,10 +724,16 @@ def calibrated_gate(
             "delta": delta,
             "mean_excess": float(ex.mean()),
             "excess_upper": ex_ub,
-            "excess_pass": ex_ub <= delta,
+            "excess_pass": True if kinds[metric] == "noninferior" else ex_ub <= delta,
             "mean_bias": float(bi.mean()),
             "bias_interval": [bi_lo, bi_hi],
-            "bias_pass": True if coarse else (-delta <= bi_lo and bi_hi <= delta),
+            "bias_pass": (
+                True
+                if coarse
+                else bi_hi <= delta
+                if kinds[metric] == "noninferior"
+                else (-delta <= bi_lo and bi_hi <= delta)
+            ),
         }
     incomplete = [t["target_id"] for t in targets if not t["complete"]]
     capped = [t["target_id"] for t in targets if t["cap_exceeded"]]

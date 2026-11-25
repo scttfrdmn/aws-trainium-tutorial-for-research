@@ -163,3 +163,30 @@ def test_explode_and_held_out_reference_pool():
     assert res["planted"]["explode:1"]["rejection_rate"] == 1.0
     with pytest.raises(ValueError):
         gs.run_selftest(structs, scorer, list(truths), [3, 4], ref_pool=[0, 3])
+
+
+def test_calibrated3_is_one_sided_on_lddt():
+    rng = np.random.default_rng(13)
+    ref = _rows("cpu", range(10), rng=rng)
+    kw = {"n_boot": 2000, "method": "calibrated/3"}
+    better = ref + _rows("x", (0, 1), lddt_shift=+0.03, rng=rng)
+    assert s.calibrated_gate(better, {"backend": "x"}, {"backend": "cpu"}, GATED, **kw)[
+        "phase_pass"
+    ]
+    for m in ("calibrated/1", "calibrated/2"):  # the equivalence gates reject "better"
+        res = s.calibrated_gate(better, {"backend": "x"}, {"backend": "cpu"}, GATED,
+                                n_boot=2000, method=m)  # fmt: skip
+        assert not res["phase_pass"]
+    worse = ref + _rows("x", (0, 1), lddt_shift=-0.03, rng=rng)
+    res = s.calibrated_gate(worse, {"backend": "x"}, {"backend": "cpu"}, GATED, **kw)
+    assert not res["phase_pass"] and any(
+        r.startswith("lddt_ca bias") for r in res["reasons"]
+    )
+    # one much-worse target trips the cap; the same amount better does not
+    for sign, capped in ((-1, ["T2"]), (+1, [])):
+        rows = ref + _rows("x", (0, 1), rng=rng)
+        for r in rows:
+            if r["backend"] == "x" and r["target_id"] == "T2":
+                r["lddt_ca"] += sign * 0.1
+        res = s.calibrated_gate(rows, {"backend": "x"}, {"backend": "cpu"}, GATED, **kw)
+        assert res["cap_exceeded"] == capped
