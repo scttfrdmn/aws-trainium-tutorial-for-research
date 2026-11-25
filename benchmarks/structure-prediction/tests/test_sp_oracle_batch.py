@@ -356,7 +356,7 @@ def test_cli_oracle_extra_seeds_cpu_only(tmp_path, monkeypatch):
     seen = sorted(p.name for p in (tmp_path / "o" / "T_small").iterdir())
     assert seen == ["seed2", "seed3", "seed4"]
     with pytest.raises(SystemExit):
-        run.main(argv[:-4] + ["12", "--dry-run"])
+        run.main(argv[:-4] + ["99", "--dry-run"])
     with pytest.raises(backends.ConfigError, match="seed must be one of"):
         backends.build(backends.RunConfig(backend="gpu", target_id="T", input_path=tmp_path / "x.yaml",
                                           out_dir=tmp_path / "g", seed=2))  # fmt: skip

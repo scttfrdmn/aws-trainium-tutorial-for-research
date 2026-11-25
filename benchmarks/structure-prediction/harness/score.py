@@ -48,6 +48,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +131,12 @@ def load_structure(path: str | Path) -> Structure:
 
 
 def align_sequences(a: str, b: str) -> list[tuple[int, int]]:
+    """Global alignment of two sequences (cached: it depends on the sequences only)."""
+    return list(_align_cached(a, b))
+
+
+@lru_cache(maxsize=4096)
+def _align_cached(a: str, b: str) -> tuple[tuple[int, int], ...]:
     """Global (Needleman-Wunsch) alignment; returns matched index pairs (i in a, j in b).
 
     Scoring: +2 identity, -1 mismatch, -2 gap. Only aligned identical-or-mismatched columns are
@@ -163,7 +170,7 @@ def align_sequences(a: str, b: str) -> list[tuple[int, int]]:
             i -= 1
         else:
             j -= 1
-    return pairs[::-1]
+    return tuple(pairs[::-1])
 
 
 def kabsch(p: np.ndarray, q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -326,13 +333,23 @@ def score_prediction(
     tm: Callable[[Correspondence], float | None] = tm_score,
 ) -> dict[str, float | None]:
     """All metrics for one predicted model."""
-    model = load_structure(pred)
+    return score_model(load_structure(pred), truth, chain_map, unit, tm)
+
+
+def score_model(
+    model: Structure,
+    truth: Structure,
+    chain_map: dict[str, str],
+    unit: dict[str, list[list[int]]] | None = None,
+    tm: Callable[[Correspondence], float | None] | None = tm_score,
+) -> dict[str, float | None]:
+    """All metrics for one in-memory model (tm=None skips TM-score)."""
     corr = correspond(model, truth, chain_map, unit)
     return {
         "ca_rmsd": rmsd_superposed(corr.model_ca, corr.ref_ca),
         "lddt_ca": lddt_ca(corr.model_ca, corr.ref_ca),
         "ligand_rmsd": ligand_rmsd(model, truth, corr),
-        "tm_score": tm(corr),
+        "tm_score": tm(corr) if tm is not None else None,
         "n_residues": float(len(corr.ref_keys)),
     }
 
@@ -539,6 +556,272 @@ def gate(
     }
 
 
+# ----------------------------------------------------------------------------- calibrated gate
+# Spread-calibrated gate (#103). It sits beside the section-2 gate above and does not replace it
+# until the charter is changed. The tolerance comes from the reference's own seed-to-seed spread
+# (>= 2 reference seeds, ideally the 5 CPU oracle seeds), not from two seeds' difference.
+#
+# Per target t and metric m, with reference seed values R_1..R_k and accuracy-run values A_s:
+#   c_j      = median of R without R_j            (leave-one-out centre)
+#   d_ref(t) = mean_j |R_j - c_j|                  (how far a fresh reference seed lands)
+#   d_acc(t) = mean_{s,j} |A_s - c_j|              (same quantity for the accuracy run)
+#   e(t)     = d_acc - d_ref                       (excess deviation; ~0 if A behaves like R)
+#   b(t)     = sign_m * (mean_s A_s - median R)    (bias, positive = accuracy run is worse)
+# A_s and R_j are both independent of c_j, so under "A is distributed like R" E[e(t)] = 0.
+# Phase pass needs, for every metric with data:
+#   * excess:  the one-sided (1 - alpha) bootstrap upper bound of mean_t e(t) <= delta_m;
+#   * bias:    the two-sided (1 - 2 alpha) bootstrap interval of mean_t b(t) inside +-delta_m;
+#   * cap:     no target with d_acc(t) > max(CAL_CAP_FLOOR x delta_m, CAL_CAP_FACTOR x d_ref(t));
+# and complete data for every gated target. delta_m = FLOORS. Bootstrap resamples targets.
+#
+# calibrated/1 applies all three tests to every metric. On the 5-seed CPU oracle it rejected the
+# reference against itself in 7 of 10 A/A splits, all through CA-RMSD vs truth: at ~15 Å from
+# truth that metric is dominated by domain placement and is multimodal across seeds (#103).
+# calibrated/2 keeps lDDT-CA exactly as above and makes CA-RMSD and ligand RMSD *coarse* checks,
+# which only look for gross defects (mirror images, exploded structures):
+#   * population: the one-sided (1 - alpha) bootstrap upper bound of mean_t e(t) <= COARSE_POP;
+#   * per target: e(t) <= COARSE_TARGET;  no bias test.
+# Thresholds were set from seeds 0-4 (A/A per-target CA excess max 4.3 Å, mean max 0.23 Å;
+# mirror mean ~5 Å; explosions > 70 Å) and are validated on held-out seeds 5-9.
+#
+# calibrated/2 failed held-out A/A 10/20, every failure the lDDT per-target cap, and failed
+# g7e ds=1, every component in the "g7e is better" direction (#103). calibrated/3 asks the
+# question the project asks, non-inferiority ("not worse than the reference"), for lDDT-CA:
+#   * bias: the one-sided (1 - alpha) bootstrap upper bound of mean_t b(t) <= delta (b > 0 = worse);
+#   * cap:  only targets where the run is worse (b(t) > 0) and d_acc(t) > the calibrated/1 cap;
+#   * no two-sided excess test (better than the reference is reported, not failed).
+# CA-RMSD and ligand RMSD stay the calibrated/2 coarse checks. Use every reference seed available
+# (the CPU oracle has seeds 0-9); validated on held-out seeds 10-14.
+CAL_ALPHA = 0.05
+CAL_BOOTSTRAP = 10_000
+CAL_CAP_FACTOR = 3.0
+CAL_CAP_FLOOR = 2.0
+WORSE_SIGN = {"ca_rmsd": 1.0, "lddt_ca": -1.0, "ligand_rmsd": 1.0}
+COARSE_POP = 2.0
+COARSE_TARGET = 10.0
+CAL_METHODS: dict[str, dict[str, str]] = {
+    "calibrated/1": dict.fromkeys(GATE_METRICS, "fine"),
+    "calibrated/2": {"ca_rmsd": "coarse", "lddt_ca": "fine", "ligand_rmsd": "coarse"},
+    "calibrated/3": {
+        "ca_rmsd": "coarse",
+        "lddt_ca": "noninferior",
+        "ligand_rmsd": "coarse",
+    },
+}
+CAL_DEFAULT = "calibrated/3"
+
+
+def _seed_values(
+    sel: dict[tuple[str, int], dict[str, Any]],
+    tid: str,
+    metric: str,
+    seeds: Sequence[int] | None,
+) -> list[float]:
+    keys = sorted(k for k in sel if k[0] == tid and (seeds is None or k[1] in seeds))
+    return [v for k in keys if (v := _num(sel[k][metric])) is not None]
+
+
+def target_deviation(
+    ref_vals: Sequence[float], acc_vals: Sequence[float]
+) -> dict[str, float]:
+    """d_ref, d_acc, excess and raw bias for one target and metric (needs >= 2 refs, >= 1 acc)."""
+    ref = np.asarray(ref_vals, dtype=float)
+    acc = np.asarray(acc_vals, dtype=float)
+    k = len(ref)
+    if k < 2 or len(acc) < 1:
+        raise ValueError("need >= 2 reference values and >= 1 accuracy value")
+    centres = np.array([np.median(np.delete(ref, j)) for j in range(k)])
+    d_ref = float(np.mean(np.abs(ref - centres)))
+    d_acc = float(np.mean(np.abs(acc[:, None] - centres[None, :])))
+    return {
+        "d_ref": d_ref,
+        "d_acc": d_acc,
+        "excess": d_acc - d_ref,
+        "shift": float(acc.mean() - np.median(ref)),
+    }
+
+
+def _bootstrap_means(x: np.ndarray, n: int, rng: np.random.Generator) -> np.ndarray:
+    idx = rng.integers(0, len(x), size=(n, len(x)))
+    return x[idx].mean(axis=1)
+
+
+def calibrated_gate(
+    rows: list[dict[str, Any]],
+    acc: dict[str, str],
+    ref: dict[str, str],
+    gated_ids: Sequence[str],
+    *,
+    acc_seeds: Sequence[int] | None = None,
+    ref_seeds: Sequence[int] | None = None,
+    timing_only: Sequence[str] = (),
+    deltas: dict[str, float] | None = None,
+    n_boot: int = CAL_BOOTSTRAP,
+    alpha: float = CAL_ALPHA,
+    rng_seed: int = 0,
+    method: str = CAL_DEFAULT,
+) -> dict[str, Any]:
+    """Spread-calibrated gate (see the block comment above). Seeds default to all present."""
+    if method not in CAL_METHODS:
+        raise ValueError(f"unknown gate method {method!r}")
+    kinds = CAL_METHODS[method]
+    deltas = deltas or FLOORS
+    acc = {"variant": "", **acc}
+    ref = {"variant": "", **ref}
+    a, r = _select(rows, acc), _select(rows, ref)
+    rng = np.random.default_rng(rng_seed)
+    targets: list[dict[str, Any]] = []
+    per_metric: dict[str, dict[str, list[float]]] = {
+        m: {"excess": [], "bias": []} for m in GATE_METRICS
+    }
+    for tid in gated_ids:
+        entry: dict[str, Any] = {
+            "target_id": tid,
+            "metrics": {},
+            "complete": True,
+            "cap_exceeded": False,
+        }
+        for metric in GATE_METRICS:
+            rv = _seed_values(r, tid, metric, ref_seeds)
+            av = _seed_values(a, tid, metric, acc_seeds)
+            if metric == "ligand_rmsd" and not rv:
+                continue  # no ligand scored for this target
+            m: dict[str, Any] = {"ref": rv, "acc": av}
+            if len(rv) < 2 or not av:
+                m["reason"] = f"missing data ({len(rv)} ref, {len(av)} acc values)"
+                entry["complete"] = False
+            else:
+                dev = target_deviation(rv, av)
+                bias = WORSE_SIGN[metric] * dev["shift"]
+                if kinds[metric] == "coarse":  # cap on the excess itself
+                    cap, over = COARSE_TARGET, dev["excess"] > COARSE_TARGET
+                else:
+                    cap = max(
+                        CAL_CAP_FLOOR * deltas[metric], CAL_CAP_FACTOR * dev["d_ref"]
+                    )
+                    over = dev["d_acc"] > cap
+                    if kinds[metric] == "noninferior":
+                        over = over and bias > 0
+                m.update(dev, bias=bias, cap=cap, cap_exceeded=over, kind=kinds[metric])
+                entry["cap_exceeded"] |= m["cap_exceeded"]
+                per_metric[metric]["excess"].append(dev["excess"])
+                per_metric[metric]["bias"].append(bias)
+            entry["metrics"][metric] = m
+        targets.append(entry)
+    metrics: dict[str, Any] = {}
+    for metric, d in per_metric.items():
+        ex, bi = np.array(d["excess"]), np.array(d["bias"])
+        if len(ex) == 0:
+            continue
+        bex, bbi = _bootstrap_means(ex, n_boot, rng), _bootstrap_means(bi, n_boot, rng)
+        ex_ub = float(np.quantile(bex, 1 - alpha))
+        bi_lo, bi_hi = (float(q) for q in np.quantile(bbi, [alpha, 1 - alpha]))
+        coarse = kinds[metric] == "coarse"
+        delta = COARSE_POP if coarse else deltas[metric]
+        metrics[metric] = {
+            "kind": kinds[metric],
+            "n_targets": len(ex),
+            "delta": delta,
+            "mean_excess": float(ex.mean()),
+            "excess_upper": ex_ub,
+            "excess_pass": True if kinds[metric] == "noninferior" else ex_ub <= delta,
+            "mean_bias": float(bi.mean()),
+            "bias_interval": [bi_lo, bi_hi],
+            "bias_pass": (
+                True
+                if coarse
+                else bi_hi <= delta
+                if kinds[metric] == "noninferior"
+                else (-delta <= bi_lo and bi_hi <= delta)
+            ),
+        }
+    incomplete = [t["target_id"] for t in targets if not t["complete"]]
+    capped = [t["target_id"] for t in targets if t["cap_exceeded"]]
+    reasons = []
+    if not targets:
+        reasons.append("no gated targets")
+    if incomplete:
+        reasons.append(f"incomplete: {', '.join(incomplete)}")
+    if capped:
+        reasons.append(f"per-target cap exceeded: {', '.join(capped)}")
+    for metric, s in metrics.items():
+        if not s["excess_pass"]:
+            reasons.append(
+                f"{metric} excess upper bound {s['excess_upper']:.3f} > {s['delta']}"
+            )
+        if not s["bias_pass"]:
+            lo, hi = s["bias_interval"]
+            reasons.append(
+                f"{metric} bias interval [{lo:.3f}, {hi:.3f}] not within +-{s['delta']}"
+            )
+    return {
+        "method": method,
+        "acc": acc,
+        "ref": ref,
+        "acc_seeds": list(acc_seeds) if acc_seeds is not None else None,
+        "ref_seeds": list(ref_seeds) if ref_seeds is not None else None,
+        "params": {
+            "alpha": alpha,
+            "n_boot": n_boot,
+            "cap_factor": CAL_CAP_FACTOR,
+            "cap_floor": CAL_CAP_FLOOR,
+            "deltas": deltas,
+            "kinds": kinds,
+            "coarse_pop": COARSE_POP,
+            "coarse_target": COARSE_TARGET,
+            "rng_seed": rng_seed,
+        },
+        "targets": targets,
+        "timing_only": list(timing_only),
+        "metrics": metrics,
+        "incomplete": incomplete,
+        "cap_exceeded": capped,
+        "reasons": reasons,
+        "phase_pass": not reasons,
+    }
+
+
+def calibrated_gate_markdown(res: dict[str, Any]) -> str:
+    """Summary and per-target table for a calibrated gate result."""
+
+    def f(v: Any, nd: int = 3) -> str:
+        return "—" if v is None else f"{v:.{nd}f}"
+
+    verdict = (
+        "**PASS**" if res["phase_pass"] else "**FAIL** — " + "; ".join(res["reasons"])
+    )
+    lines = [
+        f"Calibrated gate ({res['method']}): acc `{res['acc']}` vs ref `{res['ref']}` — {verdict}",
+        "",
+        "| metric | targets | mean excess | excess upper bound | delta | mean bias | bias interval | pass |",
+        "|---|---:|---:|---:|---:|---:|---|---|",
+    ]
+    for metric, s in res["metrics"].items():
+        lo, hi = s["bias_interval"]
+        lines.append(
+            f"| {metric} | {s['n_targets']} | {f(s['mean_excess'])} | {f(s['excess_upper'])} | "
+            f"{s['delta']} | {f(s['mean_bias'])} | [{f(lo)}, {f(hi)}] | "
+            f"{'yes' if s['excess_pass'] and s['bias_pass'] else 'no'} |"
+        )
+    lines += [
+        "",
+        "| target | metric | ref values | acc values | d_ref | d_acc | excess | cap | over cap |",
+        "|---|---|---|---|---:|---:|---:|---:|---|",
+    ]
+    for t in res["targets"]:
+        for metric, m in t["metrics"].items():
+            rv = ", ".join(f(v) for v in m["ref"])
+            av = ", ".join(f(v) for v in m["acc"])
+            lines.append(
+                f"| {t['target_id']} | {metric} | {rv} | {av} | {f(m.get('d_ref'))} | "
+                f"{f(m.get('d_acc'))} | {f(m.get('excess'))} | {f(m.get('cap'))} | "
+                f"{'YES' if m.get('cap_exceeded') else ''}{m.get('reason', '')} |"
+            )
+    for tid in res.get("timing_only", []):
+        lines.append(f"| {tid} | — | | | | | | | no ground truth, timing only |")
+    return "\n".join(lines) + "\n"
+
+
 def check_prereq(acc: dict[str, str], ref: dict[str, str], prereq: Path | None) -> None:
     """ds=5 gating is only valid against a g7e ds=5 ref whose ds=1 run passed against CPU."""
     if acc.get("diffusion_samples") != "5":
@@ -618,6 +901,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     pg.add_argument(
         "--out", type=Path, required=True, help="output stem (.json and .md)"
     )
+    pc = sub.add_parser("gate-cal", help="spread-calibrated gate (#103)")
+    pc.add_argument("--scores", type=Path, required=True)
+    pc.add_argument("--targets", type=Path, required=True)
+    pc.add_argument("--acc", required=True)
+    pc.add_argument("--ref", required=True)
+    pc.add_argument("--acc-seeds", type=int, nargs="+")
+    pc.add_argument("--ref-seeds", type=int, nargs="+")
+    pc.add_argument("--method", choices=sorted(CAL_METHODS), default=CAL_DEFAULT)
+    pc.add_argument(
+        "--prereq", type=Path, help="ds=5: the g7e ds=1 vs CPU gate-cal result"
+    )
+    pc.add_argument(
+        "--out", type=Path, required=True, help="output stem (.json and .md)"
+    )
     ns = ap.parse_args(argv)
     targets = json.loads(ns.targets.read_text())
     if ns.cmd == "score":
@@ -626,9 +923,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{len(rows)} rows -> {ns.out}")
         return 0
     acc, ref = parse_filter(ns.acc), parse_filter(ns.ref)
-    check_prereq(acc, ref, ns.prereq)
     gated = [t["id"] for t in targets["targets"] if t.get("gated")]
     timing_only = [t["id"] for t in targets["targets"] if t.get("timing_only")]
+    if ns.cmd == "gate-cal":
+        check_prereq(acc, ref, ns.prereq)
+        cres = calibrated_gate(
+            _read_csv(ns.scores), acc, ref, gated,
+            acc_seeds=ns.acc_seeds, ref_seeds=ns.ref_seeds, timing_only=timing_only,
+            method=ns.method,
+        )  # fmt: skip
+        ns.out.parent.mkdir(parents=True, exist_ok=True)
+        Path(f"{ns.out}.json").write_text(json.dumps(cres, indent=2) + "\n")
+        Path(f"{ns.out}.md").write_text(calibrated_gate_markdown(cres))
+        print(("PASS" if cres["phase_pass"] else "FAIL ") + "; ".join(cres["reasons"]))
+        return 0 if cres["phase_pass"] else 1
+    check_prereq(acc, ref, ns.prereq)
     res = gate(_read_csv(ns.scores), acc, ref, gated, timing_only)
     ns.out.parent.mkdir(parents=True, exist_ok=True)
     Path(f"{ns.out}.json").write_text(json.dumps(res, indent=2) + "\n")
