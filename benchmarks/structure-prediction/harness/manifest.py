@@ -13,6 +13,7 @@ GetProducts), spot from EC2 `describe-spot-price-history` for the run's AZ.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import json
 import os
@@ -24,7 +25,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-MANIFEST_SCHEMA = "sp-manifest/1.0"
+MANIFEST_SCHEMA = "sp-manifest/1.1"  # 1.1 adds distributions, os, boltz_cache_sha256
 IMDS = "http://169.254.169.254/latest"
 ENV_PREFIXES = (
     "BOLTZ_NEURON_",
@@ -199,6 +200,61 @@ def _pip_versions(run: Runner, names: tuple[str, ...]) -> dict[str, str | None]:
     return out
 
 
+DISTRIBUTIONS_CODE = (
+    "import importlib.metadata as m, json; "
+    "print(json.dumps(sorted({d.metadata['Name']: d.version for d in m.distributions()}.items())))"
+)
+
+
+def installed_distributions(run: Runner) -> dict[str, str]:
+    """Every installed distribution and version in the run's interpreter (a `pip freeze`).
+
+    Boltz leaves most dependencies unpinned, so they resolve at install time; a reference run is
+    only reproducible if the whole set is recorded (#103).
+    """
+    return dict(json.loads(run([sys.executable, "-c", DISTRIBUTIONS_CODE])))
+
+
+def _sha256(path: Path) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(1 << 22), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def cache_hashes(cache: str | os.PathLike[str] | None) -> dict[str, str] | None:
+    """sha256 of every top-level file in the Boltz cache (weights, CCD archive).
+
+    Hashes are memoised in `<cache>/.sp-sha256.json` keyed by size and mtime, so the multi-GB
+    checkpoints are read once per host, not once per run.
+    """
+    if not cache:
+        return None
+    root = Path(cache).expanduser()
+    if not root.is_dir():
+        return None
+    memo_path = root / ".sp-sha256.json"
+    try:
+        memo = json.loads(memo_path.read_text())
+    except (OSError, ValueError):
+        memo = {}
+    out: dict[str, str] = {}
+    for f in sorted(root.iterdir()):
+        if not f.is_file() or f.name.startswith("."):
+            continue
+        st = f.stat()
+        key = f"{f.name}:{st.st_size}:{int(st.st_mtime)}"
+        if key not in memo:
+            memo[key] = _sha256(f)
+        out[f.name] = memo[key]
+    with contextlib.suppress(OSError):
+        memo_path.write_text(json.dumps(memo, indent=1))
+    return out
+
+
 def git_commit(run: Runner, path: str | os.PathLike[str] | None) -> str | None:
     """HEAD commit of the checkout at `path` (None if not a checkout)."""
     if not path:
@@ -323,6 +379,12 @@ def capture_manifest(
         raise ValueError(f"unknown accelerator {accelerator!r}")
 
     commits = {name: git_commit(run, path) for name, path in (repo_paths or {}).items()}
+    dists = _try(errors, "distributions", lambda: installed_distributions(run))
+    cache = _try(
+        errors,
+        "boltz_cache",
+        lambda: cache_hashes(environ.get("BOLTZ_CACHE") or Path.home() / ".boltz"),
+    )
 
     prices: dict[str, Any] = {"on_demand": None, "spot": None}
     if ident:
@@ -362,6 +424,9 @@ def capture_manifest(
         "instance": ident,
         "host": hostres,
         "python": platform.python_version(),
+        "os": {"kernel": platform.release(), "libc": "-".join(platform.libc_ver())},
+        "distributions": dists,
+        "boltz_cache_sha256": cache,
         "accelerator": inventory,
         "lnc": lnc,
         "git_commits": commits,
