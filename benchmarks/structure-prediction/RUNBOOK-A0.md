@@ -64,6 +64,18 @@ timed per prediction by `harness.entry`.
    source /opt/aws_neuronx_venv_torch_neuronx_2_14_0/bin/activate
    ```
 
+   **On a shared host** (any other user or lane on the box), do not run `setup.sh` against the DLAMI
+   venv. On the 2.33 DLAMI, `torch_neuronx` is an editable install from a shared source tree, and
+   `setup.sh` patches it in place for every user of the host (#107). Use a private venv and a
+   private `torch_neuronx` copy instead, then verify the shared tree is unchanged:
+
+   ```bash
+   D=~/agent-sp; bash ~/repo/benchmarks/structure-prediction/infra/private_neuron_venv.sh $D
+   cd ~/boltz-neuron && BOLTZ_NEURON_VENV=$D/venv BOLTZ_NEURON_SKIP_SWAP=1 bash scripts/setup.sh
+   bash ~/repo/benchmarks/structure-prediction/infra/private_neuron_venv.sh --check $D   # must print OK
+   source $D/venv/bin/activate
+   ```
+
 6. Restore the port's prebuilt LNC=2 cache.
 
    ```bash

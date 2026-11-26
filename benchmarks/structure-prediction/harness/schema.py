@@ -57,6 +57,9 @@ RESULT_FIELDS: dict[str, tuple[tuple[Any, ...], bool]] = {
         (str, None),
         False,
     ),  # "in-process-warm" (harness.warmbatch) or absent
+    # diagnostics (#106), optional
+    "max_parallel_samples": ((int, None), False),
+    "step_dump": ((str, None), False),
 }
 
 COST_COLUMNS = (

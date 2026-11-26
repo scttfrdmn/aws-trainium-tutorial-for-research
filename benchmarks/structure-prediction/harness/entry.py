@@ -223,8 +223,71 @@ def _record_id(batch: Any) -> str | None:
         return None
 
 
+class StepDump:
+    """Every denoising call's output coordinates, one .npz per predict record (#106).
+
+    Wraps the diffusion module's `preconditioned_network_forward` on the *instance* at predict
+    start, i.e. after boltz-neuron's class-level patches and after `torch.compile` of the score
+    model, so the compiled graph is not touched. Per record: `denoised` is the concatenation of
+    every call's output (chunk samples x atoms x 3, float32), `chunk` the samples in each call
+    (calls per step = chunks per step) and `sigma` each call's noise level.
+    """
+
+    def __init__(self, out: Path) -> None:
+        """Write .npz files under `out`."""
+        self.out = out
+        self.rec: str | None = None
+        self.calls: list[Any] = []
+        self.sigma: list[float] = []
+
+    def attach(self, pl_module: Any) -> None:
+        """Wrap the diffusion module of a Boltz-2 Lightning module."""
+        mod = getattr(pl_module, "structure_module", None)
+        if mod is None or not hasattr(mod, "preconditioned_network_forward"):
+            raise RuntimeError(
+                "no structure_module.preconditioned_network_forward to wrap"
+            )
+        orig = mod.preconditioned_network_forward
+
+        def _wrapped(*args: Any, **kwargs: Any) -> Any:
+            out = orig(*args, **kwargs)
+            sigma = args[1] if len(args) > 1 else kwargs.get("sigma")
+            self.calls.append(out.detach().float().cpu().numpy())
+            self.sigma.append(
+                float(sigma)
+                if isinstance(sigma, int | float)
+                else float(sigma.flatten()[0])
+            )
+            return out
+
+        mod.preconditioned_network_forward = _wrapped
+
+    def start(self, record: str | None) -> None:
+        """Begin a predict record."""
+        self.rec, self.calls, self.sigma = record, [], []
+
+    def end(self) -> Path | None:
+        """Write the record's calls (None if there were none)."""
+        if not self.calls:
+            return None
+        import numpy as np
+
+        self.out.mkdir(parents=True, exist_ok=True)
+        path = self.out / f"{self.rec or 'record'}.npz"
+        np.savez_compressed(
+            path,
+            denoised=np.concatenate(self.calls, axis=0),
+            chunk=np.array([c.shape[0] for c in self.calls]),
+            sigma=np.array(self.sigma),
+        )
+        return path
+
+
 def install(
-    recorder: TimingRecorder, fp32_cpu: bool, dtype_audit: bool = False
+    recorder: TimingRecorder,
+    fp32_cpu: bool,
+    dtype_audit: bool = False,
+    dump: StepDump | None = None,
 ) -> None:
     """Wrap Trainer.__init__ to add the timing callback (and fp32 CPU for the oracle).
 
@@ -239,14 +302,20 @@ def install(
         def on_predict_start(self, trainer: Any, pl_module: Any) -> None:
             if audit is not None:
                 audit.attach(pl_module)
+            if dump is not None:
+                dump.attach(pl_module)
 
         def on_predict_batch_start(
             self, trainer: Any, pl_module: Any, batch: Any, *a: Any, **k: Any
         ) -> None:
             recorder.start(_record_id(batch))
+            if dump is not None:
+                dump.start(_record_id(batch))
 
         def on_predict_batch_end(self, *a: Any, **k: Any) -> None:
             recorder.end()
+            if dump is not None:
+                dump.end()
 
         def on_predict_end(self, trainer: Any, pl_module: Any) -> None:
             dtype = next((str(p.dtype) for p in pl_module.parameters()), None)
@@ -307,6 +376,12 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="record submodule output dtypes (always on for boltz_fp32)",
     )
+    p.add_argument(
+        "--dump-steps",
+        type=Path,
+        default=None,
+        help="write every denoising step's coordinates here, one .npz per record (diagnostics)",
+    )
     ns = p.parse_args(argv[:split])
     rest = argv[split + 1 :]
 
@@ -315,6 +390,7 @@ def main(argv: list[str] | None = None) -> None:
         TimingRecorder(ns.timing_out),
         fp32_cpu=ns.target == "boltz_fp32",
         dtype_audit=ns.dtype_audit,
+        dump=StepDump(ns.dump_steps) if ns.dump_steps else None,
     )
 
     def _run() -> None:

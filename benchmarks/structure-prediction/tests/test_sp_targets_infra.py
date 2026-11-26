@@ -3,6 +3,7 @@
 import importlib.util
 import io
 import json
+import os
 import sys
 import tarfile
 from pathlib import Path
@@ -286,3 +287,112 @@ def test_ami_resolved_in_the_hosts_region(capsys):
     assert launch.main(["plan", "trn2", "--reservation-id", "cr-1"], runner=fake) == 0
     assert seen[0][seen[0].index("--region") + 1] == "sa-east-1"
     assert "capacity-block" in capsys.readouterr().out
+
+
+def test_step_dump_records_every_denoising_call(tmp_path):
+    np = pytest.importorskip("numpy")
+
+    class _T:  # minimal tensor stand-in
+        def __init__(self, a):
+            self.a = a
+
+        def detach(self):
+            return self
+
+        def float(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            return self.a
+
+    class _Diff:
+        def preconditioned_network_forward(
+            self, noised, sigma, network_condition_kwargs
+        ):
+            return _T(noised.a * 0.5)
+
+    class _Mod:
+        structure_module = _Diff()
+
+    dump = entry.StepDump(tmp_path / "d")
+    mod = _Mod()
+    dump.attach(mod)
+    dump.start("T1037")
+    for step, sigma in enumerate((160.0, 80.0)):
+        for chunk in (2, 3):  # two chunks per step
+            out = mod.structure_module.preconditioned_network_forward(
+                _T(np.full((chunk, 4, 3), step + 1.0)),
+                sigma,
+                network_condition_kwargs={},
+            )
+            assert out.a.shape == (chunk, 4, 3)
+    path = dump.end()
+    z = np.load(path)
+    assert path.name == "T1037.npz" and z["denoised"].shape == (10, 4, 3)
+    assert z["chunk"].tolist() == [2, 3, 2, 3] and z["sigma"].tolist() == [
+        160.0,
+        160.0,
+        80.0,
+        80.0,
+    ]
+    assert z["denoised"][0, 0, 0] == 0.5 and z["denoised"][-1, 0, 0] == 1.0
+    dump.start("empty")
+    assert dump.end() is None
+    with pytest.raises(RuntimeError):
+        entry.StepDump(tmp_path).attach(object())
+
+
+def test_private_neuron_venv_isolates_editable_torch_neuronx(tmp_path):
+    # #107: a copied DLAMI venv still imports the shared editable torch_neuronx tree.
+    import subprocess
+
+    script = Path(__file__).resolve().parents[1] / "infra" / "private_neuron_venv.sh"
+    shared = tmp_path / "source-repos" / "torch-neuronx"
+    (shared / "torch_neuronx").mkdir(parents=True)
+    (shared / "torch_neuronx" / "__init__.py").write_text("x = 1\n")
+    subprocess.run(["git", "init", "-q", str(shared)], check=True)
+    subprocess.run(["git", "-C", str(shared), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(shared), "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-qm", "init"], check=True)  # fmt: skip
+    venv = tmp_path / "opt-venv"
+    site = venv / "lib" / "python3.12" / "site-packages"
+    site.mkdir(parents=True)
+    (venv / "bin").mkdir()
+    (venv / "bin" / "activate").write_text(f"VIRTUAL_ENV={venv}\n")
+    finder = site / "__editable___torch_neuronx_2_14_3_finder.py"
+    finder.write_text(
+        f"MAPPING: dict[str, str] = {{'torch_mlir': '/x', 'torch_neuronx': "
+        f"'{shared / 'torch_neuronx'}'}}\nNAMESPACES = {{}}\n"
+    )
+    dest = tmp_path / "agent"
+    env = {**os.environ, "NEURON_VENV": str(venv), "SKIP_IMPORT_CHECK": "1"}
+    subprocess.run(
+        ["bash", str(script), str(dest)], check=True, env=env, capture_output=True
+    )
+    own = dest / "venv" / "lib" / "python3.12" / "site-packages" / finder.name
+    assert f"'torch_neuronx': '{dest / 'tn-src' / 'torch_neuronx'}'" in own.read_text()
+    assert "'torch_mlir': '/x'" in own.read_text()  # other mappings untouched
+    assert (
+        str(shared / "torch_neuronx") in finder.read_text()
+    )  # the shared venv is untouched
+    assert str(dest / "venv") in (dest / "venv" / "bin" / "activate").read_text()
+    ok = subprocess.run(
+        ["bash", str(script), "--check", str(dest)],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    (shared / "torch_neuronx" / "__init__.py").write_text(
+        "x = 2  # SHIM\n"
+    )  # setup.sh-style edit
+    bad = subprocess.run(
+        ["bash", str(script), "--check", str(dest)],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert bad.returncode == 1 and "shared torch_neuronx source modified" in bad.stdout

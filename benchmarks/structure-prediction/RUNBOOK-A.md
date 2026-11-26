@@ -223,6 +223,7 @@ T1047s1 has no ground truth: it is run and timed like every other target, but no
     ```bash
     cd ~/repo/benchmarks/structure-prediction && PYTHONPATH=. python -m harness.stages boot --out ~/stages.json --role trn2
     # (RUNBOOK-A0 step 5's setup.sh, run as: python -m harness.stages time setup --out ~/stages.json -- bash ~/boltz-neuron/scripts/setup.sh)
+    # on a shared host use RUNBOOK-A0 step 5's private-venv variant (infra/private_neuron_venv.sh, #107)
     aws s3 sync s3://<BUCKET>/sp/msas/ ~/msas/
     cd ~/repo/benchmarks/structure-prediction
     PYTHONPATH=. python -m harness.run inputs --targets targets/targets.json --msa-dir ~/msas --out ~/inputs
