@@ -472,3 +472,20 @@ def test_warmbatch_group_manifest_is_found_one_level_up(tmp_path):
         break
     rows = ct.build_rows(tmp_path, TARGETS, {}, {})
     assert next(r for r in rows if r["target_id"] == "T1")["price_od_usd_per_h"] == 4.0
+
+
+def test_shared_gpu_rows_are_labelled_by_worker_count(tmp_path):
+    for w in (1, 2):
+        for s in (0, 1):
+            write_result(
+                tmp_path / f"w{w}",
+                "T1",
+                s,
+                backend="gpu",
+                lnc=None,
+                workers=w,
+                inst="g7e.2xlarge",
+            )
+    rows = ct.build_rows(tmp_path, TARGETS, {}, {})
+    plats = {r["platform"] for r in rows}
+    assert plats == {"g7e.2xlarge gpu", "g7e.2xlarge gpu x2 (shared GPU)"}

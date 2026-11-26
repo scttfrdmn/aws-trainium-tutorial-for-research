@@ -69,6 +69,14 @@ def order_from_timing(per_record: dict[str, float], tid: str) -> tuple[str, str]
     return (seen[0], seen[1]) if len(seen) == 2 else None
 
 
+def _mps_active() -> bool:
+    """True when an NVIDIA MPS control daemon is running (its pipe directory exists)."""
+    import os
+
+    pipe = os.environ.get("CUDA_MPS_PIPE_DIRECTORY", "/tmp/nvidia-mps")
+    return os.path.exists(os.path.join(pipe, "control"))
+
+
 def run_warmbatch(
     *,
     backend: str,
@@ -89,15 +97,26 @@ def run_warmbatch(
     vcpus: int | None = None,
     dry_run: bool = False,
     repo_paths: dict[str, str | None] | None = None,
+    gpu_share: bool = False,
 ) -> dict[str, Any]:
-    """Run the in-process warm batch and write one result.json per target plus group.json."""
+    """Run the in-process warm batch and write one result.json per target plus group.json.
+
+    gpu_share: allow N > 1 gpu workers as N concurrent processes on the one GPU (run under
+    MPS for real concurrency). It measures device throughput the way the neuron rows do (N
+    workers per device; harness.cost_table divides model_s by workers), so the comparison with
+    4-8 concurrent trn2 workers is like for like (#75).
+    """
     from harness.manifest import write_manifest
     from harness.run import ACCEL, OOM_PATTERNS
 
     if backend not in ("neuron", "gpu"):
         raise backends.ConfigError("warmbatch is for the neuron and gpu backends")
-    if backend == "gpu" and workers != 1:
-        raise backends.ConfigError("one GPU per process: --workers 1 on g7e.2xlarge")
+    if backend == "gpu" and workers != 1 and not gpu_share:
+        raise backends.ConfigError(
+            "--workers > 1 on one GPU needs --gpu-share (N concurrent processes on the GPU)"
+        )
+    if backend == "gpu" and not 1 <= workers <= 8:
+        raise backends.ConfigError("--workers must be 1..8 for gpu")
     if backend == "neuron":
         cap = 8 if lnc == 1 else 4
         if not 1 <= workers <= cap:
@@ -262,6 +281,8 @@ def run_warmbatch(
         "diffusion_samples": ds,
         "seed": seed,
         "threads_per_worker": threads if backend == "neuron" else None,
+        "gpu_share": bool(backend == "gpu" and workers > 1),
+        "mps": _mps_active() if backend == "gpu" else None,
         "cpu_sets": cpus,
         "shards": shards,
         "dry_run": dry_run,

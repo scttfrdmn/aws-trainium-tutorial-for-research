@@ -118,7 +118,7 @@ def test_only_variant_and_validation(tmp_path):
     g = tmp_path / "out" / res["run_group"]
     a = json.loads((g / "A" / "result.json").read_text())
     assert a["variant"] == "msa2048" and "--max_msa_seqs" in a["command"]
-    with pytest.raises(backends.ConfigError, match="one GPU"):
+    with pytest.raises(backends.ConfigError, match="needs --gpu-share"):
         go(tmp_path, fake_exec(), backend="gpu", lnc=None, workers=2)
     with pytest.raises(backends.ConfigError, match="1..4"):
         go(tmp_path, fake_exec(), workers=5)
@@ -131,3 +131,21 @@ def test_cli_dry_run(tmp_path, monkeypatch):
     rc = run.main(["warmbatch", "--backend", "gpu", "--inputs", str(inputs(tmp_path)), "--targets-json", str(tj),
                    "--out-root", str(tmp_path / "o"), "--seed", "1", "--ds", "5", "--dry-run"])  # fmt: skip
     assert rc == 0
+
+
+def test_gpu_share_runs_concurrent_workers_on_one_gpu(tmp_path, monkeypatch):
+    # #75: g7e device throughput with N concurrent processes, like the N trn2 workers
+    monkeypatch.setattr(warmbatch, "_mps_active", lambda: True)
+    res = go(tmp_path, fake_exec(), backend="gpu", lnc=None, workers=2, gpu_share=True)
+    assert res["workers"] == 2 and res["gpu_share"] is True and res["mps"] is True
+    assert res["measured"] == res["of"] == 5
+    with pytest.raises(backends.ConfigError, match="1..8"):
+        go(tmp_path, fake_exec(), backend="gpu", lnc=None, workers=9, gpu_share=True)
+    # the CLI carries the flag through (dry run)
+    monkeypatch.setattr(run, "capture_manifest", lambda **k: {})
+    tj = tmp_path / "t.json"
+    tj.write_text(json.dumps(TARGETS))
+    argv = ["warmbatch", "--backend", "gpu", "--inputs", str(inputs(tmp_path)), "--targets-json", str(tj),
+            "--out-root", str(tmp_path / "o2"), "--seed", "0", "--ds", "1", "--workers", "4", "--dry-run"]  # fmt: skip
+    assert run.main(argv) == 2  # refused without --gpu-share
+    assert run.main([*argv, "--gpu-share"]) == 0
