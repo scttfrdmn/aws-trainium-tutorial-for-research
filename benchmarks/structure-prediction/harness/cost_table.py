@@ -199,7 +199,11 @@ def build_rows(
     for (inst, backend, lnc, workers, ds, variant), per_target in sorted(
         groups.items(), key=str
     ):
-        platform = f"{inst} {backend}" + (f" LNC={lnc} x{workers}" if lnc else "")
+        platform = f"{inst} {backend}" + (
+            f" LNC={lnc} x{workers}"
+            if lnc
+            else (f" x{workers} (shared GPU)" if workers > 1 else "")
+        )
         ran_tokens = [
             d["tokens"]
             for docs in per_target.values()

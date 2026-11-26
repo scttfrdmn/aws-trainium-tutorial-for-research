@@ -444,6 +444,11 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
     pw.add_argument(
         "--vcpus", type=int, help="host vCPUs to divide among workers (default: all)"
     )
+    pw.add_argument(
+        "--gpu-share",
+        action="store_true",
+        help="gpu: allow --workers > 1 as concurrent processes on one GPU (use with MPS)",
+    )
     pw.add_argument("--dry-run", action="store_true")
     pw.add_argument("--repo", action="append", default=[], metavar="NAME=PATH")
 
@@ -477,6 +482,7 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
                 vcpus=ns.vcpus,
                 dry_run=ns.dry_run,
                 repo_paths=_repo_paths(ns.repo),
+                gpu_share=ns.gpu_share,
             )
         except backends.ConfigError as exc:
             print(f"config error: {exc}", file=sys.stderr)
