@@ -170,6 +170,10 @@ def predict(
     doc["env"] = inv.env
     doc["variant"] = cfg.variant
     doc["max_msa_seqs"] = cfg.max_msa_seqs
+    if cfg.max_parallel_samples is not None:
+        doc["max_parallel_samples"] = cfg.max_parallel_samples
+    if cfg.dump_steps is not None:
+        doc["step_dump"] = str(cfg.dump_steps)
     if cfg.backend == "cpu":
         doc["oracle_key"] = {"boltz": pins.BOLTZ, "targets_sha256": digest}
 
@@ -282,6 +286,8 @@ def _cfg(ns: argparse.Namespace, **over: Any) -> backends.RunConfig:
         "max_msa_seqs": ns.max_msa_seqs,
         "variant": ns.variant,
         "max_parallel_samples_cap": ns.cap_parallel_samples,
+        "max_parallel_samples": ns.max_parallel_samples,
+        "dump_steps": Path(ns.dump_steps) if ns.dump_steps else None,
         "nim": ns.nim,
         "alignment_dir": Path(ns.alignment_dir) if ns.alignment_dir else None,
         "template_mmcif_dir": Path(ns.template_mmcif_dir)
@@ -310,6 +316,15 @@ def _common(p: argparse.ArgumentParser) -> None:
         "--cap-parallel-samples",
         action="store_true",
         help="BOLTZ_FIX_MAX_PARALLEL_SAMPLES=1",
+    )
+    p.add_argument(
+        "--max-parallel-samples",
+        type=int,
+        help="Boltz --max_parallel_samples (diagnostics; with --cap-parallel-samples it caps "
+        "samples per chunk)",
+    )
+    p.add_argument(
+        "--dump-steps", help="directory for per-step denoised coordinates (diagnostics)"
     )
     p.add_argument(
         "--nim", action="store_true", help="Boltz-2 NIM column (off by default)"

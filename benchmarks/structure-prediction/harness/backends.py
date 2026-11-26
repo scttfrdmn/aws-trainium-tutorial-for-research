@@ -37,6 +37,12 @@ class RunConfig:
     atom_graph_break: int | None = None
     max_msa_seqs: int | None = None
     max_parallel_samples_cap: bool = False
+    # Boltz --max_parallel_samples. In Boltz 2.2.1 it is a chunk *count* formula
+    # (chunks = ds % m + 1); with max_parallel_samples_cap (boltz-neuron's
+    # BOLTZ_FIX_MAX_PARALLEL_SAMPLES=1) it caps samples per chunk. Diagnostics only (#106).
+    max_parallel_samples: int | None = None
+    # write every denoising step's coordinates here (harness.entry --dump-steps); diagnostics
+    dump_steps: Path | None = None
     nim: bool = False
     # A labelled secondary run (e.g. "msa2048"); primary rows have no variant.
     variant: str | None = None
@@ -91,6 +97,8 @@ def _boltz_args(c: RunConfig) -> list[str]:
     ]
     if c.max_msa_seqs is not None:
         args += ["--max_msa_seqs", str(c.max_msa_seqs)]
+    if c.max_parallel_samples is not None:
+        args += ["--max_parallel_samples", str(c.max_parallel_samples)]
     return args
 
 
@@ -102,11 +110,17 @@ def _predictions_dir(c: RunConfig) -> Path:
 
 
 def _entry(
-    target: str, timing: Path, boltz_args: list[str], profile: Path | None = None
+    target: str,
+    timing: Path,
+    boltz_args: list[str],
+    profile: Path | None = None,
+    dump_steps: Path | None = None,
 ) -> list[str]:
     argv = [PY, "-m", "harness.entry", "--target", target, "--timing-out", str(timing)]
     if profile is not None:
         argv += ["--torch-profile", str(profile)]
+    if dump_steps is not None:
+        argv += ["--dump-steps", str(dump_steps)]
     return [*argv, "--", *boltz_args]
 
 
@@ -136,7 +150,7 @@ def neuron(c: RunConfig) -> Invocation:
     timing = c.out_dir / "timing.json"
     prof_dir = c.out_dir / "neuron-profile"
     return Invocation(
-        argv=_entry("boltz_neuron", timing, _boltz_args(c)),
+        argv=_entry("boltz_neuron", timing, _boltz_args(c), dump_steps=c.dump_steps),
         env=env,
         timing_json=timing,
         predictions_dir=_predictions_dir(c),
@@ -163,7 +177,7 @@ def gpu(c: RunConfig) -> Invocation:
     prof = c.out_dir / "torch-profile.json"
     args = [*_boltz_args(c), "--accelerator", "gpu", "--devices", "1"]
     return Invocation(
-        argv=_entry("boltz", timing, args),
+        argv=_entry("boltz", timing, args, dump_steps=c.dump_steps),
         env={"CUDA_VISIBLE_DEVICES": "0"},
         timing_json=timing,
         predictions_dir=_predictions_dir(c),
@@ -183,7 +197,7 @@ def cpu(c: RunConfig) -> Invocation:
         )
     timing = c.out_dir / "timing.json"
     args = [*_boltz_args(c), "--accelerator", "cpu"]
-    argv = _entry("boltz_fp32", timing, args)
+    argv = _entry("boltz_fp32", timing, args, dump_steps=c.dump_steps)
     env: dict[str, str] = {}
     if c.threads is not None:
         n = str(c.threads)

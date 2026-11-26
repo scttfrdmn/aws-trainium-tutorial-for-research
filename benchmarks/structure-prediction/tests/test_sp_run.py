@@ -592,3 +592,20 @@ def test_cpu_oracle_rejects_non_fp32(tmp_path):
         and "bf16-mixed" in doc["error"]
         and doc["model_s"] is None
     )
+
+
+def test_diagnostic_options_reach_boltz_and_the_wrapper(tmp_path):
+    # #106: --max_parallel_samples (with the port's cap) and the per-step dump
+    inv = backends.build(
+        cfg(tmp_path, diffusion_samples=5, max_parallel_samples_cap=True,
+            max_parallel_samples=1, dump_steps=tmp_path / "steps")
+    )  # fmt: skip
+    i = inv.argv.index("--")
+    assert inv.argv[inv.argv.index("--dump-steps") + 1] == str(tmp_path / "steps")
+    assert inv.argv.index("--dump-steps") < i  # a wrapper option, not a Boltz one
+    assert inv.argv[inv.argv.index("--max_parallel_samples") + 1] == "1"
+    assert inv.env["BOLTZ_FIX_MAX_PARALLEL_SAMPLES"] == "1"
+    plain = backends.build(cfg(tmp_path))
+    assert (
+        "--dump-steps" not in plain.argv and "--max_parallel_samples" not in plain.argv
+    )
