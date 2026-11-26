@@ -121,11 +121,21 @@ def _prices(
 
 
 def _gate_for(
-    gates: Sequence[dict[str, Any]], backend: str, lnc: Any, ds: Any
+    gates: Sequence[dict[str, Any]], backend: str, lnc: Any, ds: Any, workers: int = 1
 ) -> dict[str, Any] | None:
-    """The calibrated gate result whose accuracy-run filter is this platform (primary rows)."""
+    """The calibrated gate result whose accuracy-run filter is this platform (primary rows).
+
+    A gate result may name the worker count its runs used (`workers`). Without one it covers
+    every neuron worker count (one per LNC) but only single-process gpu rows, so shared-GPU rows
+    are never labelled with a verdict measured on other runs.
+    """
     for g in gates:
         acc = g.get("acc") or {}
+        gw = g.get("workers")
+        if gw is not None and int(gw) != workers:
+            continue
+        if gw is None and backend == "gpu" and workers != 1:
+            continue
         if (
             acc.get("backend") == backend
             and acc.get("diffusion_samples") == str(ds)
@@ -213,7 +223,7 @@ def build_rows(
         ceiling = max(ran_tokens) if ran_tokens else None
         on_gpu_host = backend in ("gpu", "openfold-trt")
         msa = msa_gpu if on_gpu_host else msa_cpu
-        gate = None if variant else _gate_for(gates, backend, lnc, ds)
+        gate = None if variant else _gate_for(gates, backend, lnc, ds, workers)
         plat_rows = []
         for tid, docs in sorted(per_target.items()):
             t = by_id.get(tid, {})

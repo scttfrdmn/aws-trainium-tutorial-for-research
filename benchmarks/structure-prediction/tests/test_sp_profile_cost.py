@@ -489,3 +489,30 @@ def test_shared_gpu_rows_are_labelled_by_worker_count(tmp_path):
     rows = ct.build_rows(tmp_path, TARGETS, {}, {})
     plats = {r["platform"] for r in rows}
     assert plats == {"g7e.2xlarge gpu", "g7e.2xlarge gpu x2 (shared GPU)"}
+
+
+def test_gate_verdict_needs_matching_worker_count_on_gpu(tmp_path):
+    for w in (1, 2):
+        for s in (0, 1):
+            write_result(
+                tmp_path / f"w{w}",
+                "T1",
+                s,
+                backend="gpu",
+                lnc=None,
+                workers=w,
+                inst="g7e.2xlarge",
+            )
+    g1 = {"method": "calibrated/3", "phase_pass": True, "reasons": [], "cap_exceeded": [], "incomplete": [],
+          "acc": {"variant": "", "backend": "gpu", "diffusion_samples": "1"}}  # fmt: skip
+    rows = ct.build_rows(tmp_path, TARGETS, {}, {}, gates=[g1])
+    mean = {
+        r["platform"]: r["accuracy_gate"] for r in rows if r["target_id"] == "__mean__"
+    }
+    assert mean["g7e.2xlarge gpu"] == "calibrated/3 PASS"
+    assert mean["g7e.2xlarge gpu x2 (shared GPU)"] is None  # not inherited
+    rows = ct.build_rows(tmp_path, TARGETS, {}, {}, gates=[g1, {**g1, "workers": 2}])
+    mean = {
+        r["platform"]: r["accuracy_gate"] for r in rows if r["target_id"] == "__mean__"
+    }
+    assert mean["g7e.2xlarge gpu x2 (shared GPU)"] == "calibrated/3 PASS"
