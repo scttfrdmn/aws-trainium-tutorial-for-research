@@ -152,6 +152,17 @@ class FakePricing:
 class FakeEC2:
     """boto3 ec2 client stand-in."""
 
+    def describe_capacity_block_offerings(self, **kwargs: Any) -> dict[str, Any]:
+        """Two canned 24 h offerings; the cheaper one is $48 / 24 h = $2.00/h."""
+        return {
+            "CapacityBlockOfferings": [
+                {"UpfrontFee": "53.64", "CurrencyCode": "USD", "CapacityBlockDurationHours": 24,
+                 "StartDate": "2026-11-27T11:30:00Z", "AvailabilityZone": "sa-east-1b"},
+                {"UpfrontFee": "48.00", "CurrencyCode": "USD", "CapacityBlockDurationHours": 24,
+                 "StartDate": "2026-11-28T11:30:00Z", "AvailabilityZone": "sa-east-1a"},
+            ]
+        }  # fmt: skip
+
     def describe_spot_price_history(self, **kwargs: Any) -> dict[str, Any]:
         """Canned spot price."""
         return {

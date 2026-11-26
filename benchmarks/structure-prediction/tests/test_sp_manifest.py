@@ -84,7 +84,7 @@ def test_off_ec2_records_errors_and_no_prices(fake_manifest_kwargs):
     kw = {**fake_manifest_kwargs, "imds_token": no_imds}
     doc = m.capture_manifest(accelerator="cpu", **kw)
     assert doc["instance"] is None
-    assert doc["prices"] == {"on_demand": None, "spot": None}
+    assert doc["prices"] == {"on_demand": None, "spot": None, "capacity_block": None}
     assert "instance_identity" in doc["errors"]
     assert "prices" in doc["errors"]
 

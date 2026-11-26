@@ -12,9 +12,10 @@ from __future__ import annotations
 from typing import Any
 
 RESULT_SCHEMA = "sp-result/1.1"
-COST_SCHEMA = "sp-cost/1.1"
+COST_SCHEMA = "sp-cost/1.2"
 # 1.1 appends optional fields/columns (variant, max_msa_seqs, precision, dtype_audit; per-sample
-# and end-to-end batch cost columns). 1.0 documents remain valid.
+# and end-to-end batch cost columns). 1.0 documents remain valid. sp-cost/1.2 appends the
+# Capacity Block price basis, the price source and the accuracy-gate verdict (#75, #103).
 RESULT_SCHEMAS = ("sp-result/1.0", RESULT_SCHEMA)
 
 BACKENDS = ("neuron", "gpu", "openfold-trt", "cpu")
@@ -99,6 +100,12 @@ COST_COLUMNS = (
     "batch_billed_s",
     "batch_e2e_usd_per_structure_od",
     "batch_e2e_usd_per_structure_spot",
+    # 1.2
+    "price_cb_usd_per_h",
+    "dl_usd_per_structure_cb",
+    "dl_usd_per_sample_cb",
+    "price_source",
+    "accuracy_gate",
 )
 
 
