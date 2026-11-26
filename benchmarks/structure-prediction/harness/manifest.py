@@ -44,6 +44,13 @@ REGION_LOCATION = {
     "eu-south-2": "EU (Spain)",
     "ap-northeast-1": "Asia Pacific (Tokyo)",
     "ap-northeast-2": "Asia Pacific (Seoul)",
+    "us-west-1": "US West (N. California)",
+    "eu-west-1": "EU (Ireland)",
+    "eu-central-1": "EU (Frankfurt)",
+    "sa-east-1": "South America (Sao Paulo)",
+    "ap-southeast-2": "Asia Pacific (Sydney)",
+    "ap-southeast-4": "Asia Pacific (Melbourne)",
+    "ap-south-1": "Asia Pacific (Mumbai)",
 }
 
 Runner = Callable[[list[str]], str]
@@ -326,6 +333,37 @@ def spot_price(ec2: Any, instance_type: str, availability_zone: str) -> dict[str
     }
 
 
+def capacity_block_price(
+    ec2: Any, instance_type: str, hours: int = 24, count: int = 1
+) -> dict[str, Any]:
+    """Cheapest current Capacity Block offering for one instance, as an effective $/h.
+
+    trn2.3xlarge has no on-demand or spot offering; it is rented as Capacity Blocks (an upfront
+    fee for a fixed block, here 24 h). The effective rate assumes the whole block is used.
+    """
+    resp = ec2.describe_capacity_block_offerings(
+        InstanceType=instance_type, InstanceCount=count, CapacityDurationHours=hours
+    )
+    offers = [
+        o
+        for o in resp.get("CapacityBlockOfferings", [])
+        if o.get("CurrencyCode", "USD") == "USD"
+    ]
+    if not offers:
+        raise ValueError(f"no {hours} h Capacity Block offering for {instance_type}")
+    best = min(offers, key=lambda o: float(o["UpfrontFee"]))
+    fee, dur = float(best["UpfrontFee"]), int(best["CapacityBlockDurationHours"])
+    start = best.get("StartDate")
+    return {
+        "usd_per_hour": fee / dur / count,
+        "upfront_usd": fee,
+        "hours": dur,
+        "start": start.isoformat() if hasattr(start, "isoformat") else start,
+        "availability_zone": best.get("AvailabilityZone"),
+        "source": "ec2:DescribeCapacityBlockOfferings",
+    }
+
+
 def capture_manifest(
     *,
     accelerator: str,
@@ -386,7 +424,7 @@ def capture_manifest(
         lambda: cache_hashes(environ.get("BOLTZ_CACHE") or Path.home() / ".boltz"),
     )
 
-    prices: dict[str, Any] = {"on_demand": None, "spot": None}
+    prices: dict[str, Any] = {"on_demand": None, "spot": None, "capacity_block": None}
     if ident:
         if pricing_client is None or ec2_client is None:
             import boto3
@@ -408,6 +446,11 @@ def capture_manifest(
             lambda: spot_price(
                 ec2_client, ident["instance_type"], ident["availability_zone"]
             ),
+        )
+        prices["capacity_block"] = _try(
+            errors,
+            "price_capacity_block",
+            lambda: capacity_block_price(ec2_client, ident["instance_type"]),
         )
     else:
         errors.setdefault(

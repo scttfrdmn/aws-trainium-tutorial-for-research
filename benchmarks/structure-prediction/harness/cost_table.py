@@ -57,19 +57,99 @@ def _load(path: Path) -> dict[str, Any]:
     return data
 
 
-def _prices(
-    result_path: Path, doc: dict[str, Any]
-) -> tuple[str | None, float | None, float | None]:
-    mpath = Path(doc["manifest_path"]) if doc.get("manifest_path") else None
-    if mpath is None or not mpath.is_absolute():
-        mpath = result_path.parent / "manifest.json"
-    if not mpath.exists():
-        return None, None, None
+def _manifest_path(result_path: Path, doc: dict[str, Any]) -> Path | None:
+    """The run manifest: the recorded path, else beside the result, else one level up.
+
+    warmbatch writes one manifest per worker group, above the per-target results.
+    """
+    rec = Path(doc["manifest_path"]) if doc.get("manifest_path") else None
+    for cand in (
+        rec,
+        result_path.parent / "manifest.json",
+        result_path.parent.parent / "manifest.json",
+    ):
+        if cand is not None and cand.is_absolute() and cand.exists():
+            return cand
+    return None
+
+
+def _price_info(
+    result_path: Path, doc: dict[str, Any], fallback: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Instance, region, on-demand / spot / Capacity Block $/h and where they came from.
+
+    The run manifest's prices come first. Where the manifest has none (the price lookup failed
+    on the host), `fallback` (a `harness.prices fetch` document) fills them, and the row's
+    price_source says so.
+    """
+    info: dict[str, Any] = dict.fromkeys(
+        ("inst", "region", "od", "spot", "cb", "source")
+    )
+    mpath = _manifest_path(result_path, doc)
+    if mpath is None:
+        return info
     m = _load(mpath)
-    inst = (m.get("instance") or {}).get("instance_type")
-    od = ((m.get("prices") or {}).get("on_demand") or {}).get("usd_per_hour")
-    spot = ((m.get("prices") or {}).get("spot") or {}).get("usd_per_hour")
-    return inst, od, spot
+    ident = m.get("instance") or {}
+    prices = m.get("prices") or {}
+    info.update(inst=ident.get("instance_type"), region=ident.get("region"))
+    keys = (("od", "on_demand"), ("spot", "spot"), ("cb", "capacity_block"))
+    for k, key in keys:
+        info[k] = (prices.get(key) or {}).get("usd_per_hour")
+    src = ["manifest"] if any(info[k] is not None for k, _ in keys) else []
+    if fallback and info["inst"]:
+        fb = (fallback.get("prices") or {}).get(
+            f"{info['inst']}@{info['region']}"
+        ) or {}
+        used = False
+        for k, key in keys:
+            v = (fb.get(key) or {}).get("usd_per_hour")
+            if info[k] is None and v is not None:
+                info[k], used = v, True
+        if used:
+            src.append(
+                f"prices.json fetched {str(fallback.get('fetched_at', ''))[:10]}"
+            )
+    info["source"] = " + ".join(src) or None
+    return info
+
+
+def _prices(
+    result_path: Path, doc: dict[str, Any], fallback: dict[str, Any] | None = None
+) -> tuple[str | None, float | None, float | None]:
+    i = _price_info(result_path, doc, fallback)
+    return i["inst"], i["od"], i["spot"]
+
+
+def _gate_for(
+    gates: Sequence[dict[str, Any]], backend: str, lnc: Any, ds: Any
+) -> dict[str, Any] | None:
+    """The calibrated gate result whose accuracy-run filter is this platform (primary rows)."""
+    for g in gates:
+        acc = g.get("acc") or {}
+        if (
+            acc.get("backend") == backend
+            and acc.get("diffusion_samples") == str(ds)
+            and acc.get("lnc", "") == ("" if lnc is None else str(lnc))
+            and not acc.get("variant")
+        ):
+            return g
+    return None
+
+
+def _gate_note(g: dict[str, Any] | None, tid: str | None) -> str | None:
+    if g is None:
+        return None
+    if tid is None:  # the platform's mean row: the phase verdict
+        verdict = f"{g.get('method')} {'PASS' if g.get('phase_pass') else 'FAIL'}"
+        reasons = "; ".join(g.get("reasons") or [])
+        return verdict + (f": {reasons[:240]}" if reasons else "")
+    if tid in (g.get("incomplete") or []):
+        return "incomplete"
+    if tid in (g.get("cap_exceeded") or []):
+        return "over per-target cap"
+    if tid in (g.get("timing_only") or []):
+        return None
+    return "ok"
 
 
 def _msa(path: Path | None) -> dict[str, Any]:
@@ -91,6 +171,8 @@ def build_rows(
     msa_cpu: dict[str, Any],
     stages: Sequence[dict[str, Any]] = (),
     bill_setup: bool = False,
+    prices: dict[str, Any] | None = None,
+    gates: Sequence[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     """All cost rows (per target, then per-platform mean rows)."""
     by_id = {t["id"]: t for t in targets["targets"]}
@@ -127,6 +209,7 @@ def build_rows(
         ceiling = max(ran_tokens) if ran_tokens else None
         on_gpu_host = backend in ("gpu", "openfold-trt")
         msa = msa_gpu if on_gpu_host else msa_cpu
+        gate = None if variant else _gate_for(gates, backend, lnc, ds)
         plat_rows = []
         for tid, docs in sorted(per_target.items()):
             t = by_id.get(tid, {})
@@ -150,6 +233,7 @@ def build_rows(
                 variant=variant or None,
                 max_msa_seqs=docs[0][1].get("max_msa_seqs"),
                 timing_only=bool(t.get("timing_only")),
+                accuracy_gate=_gate_note(gate, tid),
             )
             label = f"secondary ({variant}); " if variant else ""
             label += "no ground truth, timing only; " if t.get("timing_only") else ""
@@ -170,7 +254,8 @@ def build_rows(
                 plat_rows.append(row)
                 continue
             dl = statistics.mean(model) / workers
-            _, od, spot = _prices(*measured[0])
+            pinfo = _price_info(*measured[0], prices)
+            od, spot, cb = pinfo["od"], pinfo["spot"], pinfo["cb"]
             msa_s = (msa.get("per_target_s") or {}).get(tid)
             msa_od = od if on_gpu_host else msa.get("price_od_usd_per_h")
             msa_spot = spot if on_gpu_host else msa.get("price_spot_usd_per_h")
@@ -189,12 +274,17 @@ def build_rows(
                 dl_s_per_sample=dl / ds,
                 dl_usd_per_sample_od=_div(_mul(dl, od), ds),
                 dl_usd_per_sample_spot=_div(_mul(dl, spot), ds),
+                price_cb_usd_per_h=cb,
+                dl_usd_per_structure_cb=_mul(dl, cb),
+                dl_usd_per_sample_cb=_div(_mul(dl, cb), ds),
+                price_source=pinfo["source"],
                 note=label.rstrip("; "),
             )
             plat_rows.append(row)
         rows += plat_rows
         if not variant:  # secondary rows get no mean row
             mean = _mean_row(plat_rows, by_id, platform, ceiling)
+            mean["accuracy_gate"] = _gate_note(gate, None)
             mean.update(
                 _batch_columns(
                     directories,
@@ -206,6 +296,7 @@ def build_rows(
                     workers,
                     ds,
                     bill_setup,
+                    prices,
                 )
             )
             rows.append(mean)
@@ -235,6 +326,7 @@ def _batch_columns(
     workers: int,
     ds: int,
     bill_setup: bool,
+    prices: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """End-to-end batch: billed host time amortised over the directory run's targets.
 
@@ -259,7 +351,7 @@ def _batch_columns(
             ds,
         ) or d.get("status") != "measured":
             continue
-        dinst, od, spot = _prices(p, d)
+        dinst, od, spot = _prices(p, d, prices)
         if dinst == inst:
             runs.append((d, od, spot))
     seeds = sorted(d["seed"] for d, _, _ in runs)
@@ -344,6 +436,7 @@ def _mean_row(
         "dl_s_per_structure", "msa_s", "dl_usd_per_structure_od", "dl_usd_per_structure_spot",
         "e2e_usd_per_structure_od", "e2e_usd_per_structure_spot",
         "dl_s_per_sample", "dl_usd_per_sample_od", "dl_usd_per_sample_spot",
+        "dl_usd_per_structure_cb", "dl_usd_per_sample_cb",
     ):  # fmt: skip
         vals = [r[col] for r in casp if r[col] is not None]
         mean[col] = statistics.mean(vals) if vals and len(vals) == len(casp) else None
@@ -369,21 +462,22 @@ def to_markdown(rows: list[dict[str, Any]]) -> str:
 
     out = [
         "| target | tokens | platform | ds | DL warm s/structure | DL warm $/structure OD "
-        "| DL warm $/structure spot | DL warm $/sample OD | E2E $/structure OD "
-        "| E2E $/structure spot | E2E batch $/structure OD | E2E batch $/structure spot "
-        "| ceiling (tokens) | note |",
-        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| DL warm $/structure spot | DL warm $/structure CB | DL warm $/sample OD "
+        "| E2E $/structure OD | E2E $/structure spot | E2E batch $/structure OD "
+        "| E2E batch $/structure spot | ceiling (tokens) | accuracy gate | note |",
+        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for r in rows:
         name = "**mean**" if r["target_id"] == "__mean__" else r["target_id"]
         out.append(
             f"| {name} | {r['tokens'] or ''} | {r['platform']} | {r['diffusion_samples']} | "
             f"{f(r['dl_s_per_structure'], 2)} | {f(r['dl_usd_per_structure_od'], 5)} | "
-            f"{f(r['dl_usd_per_structure_spot'], 5)} | {f(r.get('dl_usd_per_sample_od'), 5)} | "
+            f"{f(r['dl_usd_per_structure_spot'], 5)} | {f(r.get('dl_usd_per_structure_cb'), 5)} | "
+            f"{f(r.get('dl_usd_per_sample_od'), 5)} | "
             f"{f(r['e2e_usd_per_structure_od'], 5)} | {f(r['e2e_usd_per_structure_spot'], 5)} | "
             f"{f(r.get('batch_e2e_usd_per_structure_od'), 5)} | "
             f"{f(r.get('batch_e2e_usd_per_structure_spot'), 5)} | "
-            f"{r['ceiling_tokens'] or '—'} | {r['note'] or ''} |"
+            f"{r['ceiling_tokens'] or '—'} | {r.get('accuracy_gate') or ''} | {r['note'] or ''} |"
         )
     return "\n".join(out) + "\n"
 
@@ -403,6 +497,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument(
         "--bill-setup", action="store_true", help="also bill setup/db_build/cache_build"
     )
+    ap.add_argument(
+        "--prices",
+        type=Path,
+        help="harness.prices fetch output, for manifests without prices",
+    )
+    ap.add_argument(
+        "--gate", type=Path, action="append", default=[],
+        help="calibrated gate result (harness.score gate-cal .json), one per platform",
+    )  # fmt: skip
     ns = ap.parse_args(argv)
     rows = build_rows(
         ns.results,
@@ -411,6 +514,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         _msa(ns.msa_cpu),
         [_load(s) for s in ns.stages],
         ns.bill_setup,
+        _load(ns.prices) if ns.prices else None,
+        [_load(g) for g in ns.gate],
     )
     write_csv(rows, ns.out)
     ns.markdown.parent.mkdir(parents=True, exist_ok=True)

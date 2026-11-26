@@ -412,3 +412,63 @@ def test_batch_columns_name_what_is_missing(tmp_path):
     )
     assert mean["batch_e2e_usd_per_structure_od"] is None
     assert "seeds 0 and 1" in mean["note"] and "stages.json" in mean["note"]
+
+
+def test_prices_fallback_capacity_block_and_gate_column(tmp_path):
+    # #75: the run manifests had no prices (lookup failed on the host); trn2.3xlarge is
+    # Capacity-Block-only, so its cost basis is the CB effective $/h.
+    for s in (0, 1):
+        write_result(tmp_path, "T1", s, model_s=20.0, od=None, spot=None)
+        write_result(tmp_path, "T2", s, model_s=40.0, tokens=200, od=None, spot=None)
+    for p in tmp_path.rglob("manifest.json"):
+        m = json.loads(p.read_text())
+        m["instance"]["region"] = "sa-east-1"
+        p.write_text(json.dumps(m))
+    prices = {"fetched_at": "2026-11-25T12:00:00+00:00", "prices": {
+        "trn2.3xlarge@sa-east-1": {"on_demand": None, "spot": None,
+                                   "capacity_block": {"usd_per_hour": 2.235}}}}  # fmt: skip
+    gate = {"method": "calibrated/3", "phase_pass": False, "reasons": ["per-target cap exceeded: T2"],
+            "acc": {"variant": "", "backend": "neuron", "diffusion_samples": "1", "lnc": "2"},
+            "cap_exceeded": ["T2"], "incomplete": [], "timing_only": []}  # fmt: skip
+    other = {
+        **gate,
+        "acc": {**gate["acc"], "lnc": "1"},
+        "phase_pass": True,
+        "reasons": [],
+    }
+    rows = ct.build_rows(tmp_path, TARGETS, {}, {}, prices=prices, gates=[other, gate])
+    r1 = next(r for r in rows if r["target_id"] == "T1")
+    assert r1["price_cb_usd_per_h"] == 2.235 and r1["dl_usd_per_structure_od"] is None
+    assert r1["dl_usd_per_structure_cb"] == pytest.approx(20.0 / 4 * 2.235 / 3600)
+    assert r1["price_source"] == "prices.json fetched 2026-11-25"
+    assert r1["accuracy_gate"] == "ok"
+    assert (
+        next(r for r in rows if r["target_id"] == "T2")["accuracy_gate"]
+        == "over per-target cap"
+    )
+    mean = next(r for r in rows if r["target_id"] == "__mean__")
+    assert mean["accuracy_gate"].startswith("calibrated/3 FAIL: per-target cap")
+    assert mean["dl_usd_per_structure_cb"] == pytest.approx(
+        (5.0 + 10.0) / 2 * 2.235 / 3600
+    )
+    md = ct.to_markdown(rows)
+    assert "DL warm $/structure CB" in md and "calibrated/3 FAIL" in md
+    # without a fallback the CB basis is simply absent, never invented
+    bare = ct.build_rows(tmp_path, TARGETS, {}, {})
+    assert next(r for r in bare if r["target_id"] == "T1")["price_cb_usd_per_h"] is None
+
+
+def test_warmbatch_group_manifest_is_found_one_level_up(tmp_path):
+    for s in (0, 1):
+        write_result(tmp_path, "T1", s, model_s=20.0)
+    for res in tmp_path.rglob("result.json"):
+        grp = res.parent.parent  # .../T1/s{seed} -> move the manifest up to T1/
+        (res.parent / "manifest.json").rename(grp / "manifest.json")
+        d = json.loads(res.read_text())
+        d["manifest_path"] = (
+            "results/raw/somewhere/manifest.json"  # recorded on the host
+        )
+        res.write_text(json.dumps(d))
+        break
+    rows = ct.build_rows(tmp_path, TARGETS, {}, {})
+    assert next(r for r in rows if r["target_id"] == "T1")["price_od_usd_per_h"] == 4.0
