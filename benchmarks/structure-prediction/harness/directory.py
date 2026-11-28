@@ -43,6 +43,9 @@ def run_directory(
     executor: Executor,
     manifest_fn: Callable[..., dict[str, Any]],
     repo_paths: dict[str, str | None] | None = None,
+    atom_graph_break: int | None = None,
+    cap_parallel_samples: bool = False,
+    max_parallel_samples: int | None = None,
 ) -> dict[str, Any]:
     """Shard the inputs, run one process per worker concurrently, write directory.json."""
     from harness.manifest import write_manifest
@@ -74,6 +77,9 @@ def run_directory(
             diffusion_samples=ds,
             lnc=lnc,
             visible_core=i if backend == "neuron" else None,
+            atom_graph_break=atom_graph_break,
+            max_parallel_samples_cap=cap_parallel_samples,
+            max_parallel_samples=max_parallel_samples,
         )
         invs.append(backends.build(cfg))
     manifest = manifest_fn(
@@ -118,6 +124,9 @@ def run_directory(
         "workers": workers,
         "diffusion_samples": ds,
         "seed": seed,
+        "atom_graph_break": atom_graph_break,
+        "max_parallel_samples": max_parallel_samples,
+        "cap_parallel_samples": cap_parallel_samples,
         "n_targets": len(files),
         "targets": [f.stem for f in files],
         "status": "dry-run" if dry_run else ("measured" if ok else "failed"),

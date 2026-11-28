@@ -121,16 +121,26 @@ def _prices(
 
 
 def _gate_for(
-    gates: Sequence[dict[str, Any]], backend: str, lnc: Any, ds: Any, workers: int = 1
+    gates: Sequence[dict[str, Any]],
+    backend: str,
+    lnc: Any,
+    ds: Any,
+    workers: int = 1,
+    agb: int | None = None,
+    mps: int | None = None,
 ) -> dict[str, Any] | None:
     """The calibrated gate result whose accuracy-run filter is this platform (primary rows).
 
     A gate result may name the worker count its runs used (`workers`). Without one it covers
     every neuron worker count (one per LNC) but only single-process gpu rows, so shared-GPU rows
-    are never labelled with a verdict measured on other runs.
+    are never labelled with a verdict measured on other runs. Non-default port settings must
+    match exactly: a gate result names them as `atom_graph_break` / `max_parallel_samples`
+    (absent = the port default), so a verdict never crosses configurations.
     """
     for g in gates:
         acc = g.get("acc") or {}
+        if g.get("atom_graph_break") != agb or g.get("max_parallel_samples") != mps:
+            continue
         gw = g.get("workers")
         if gw is not None and int(gw) != workers:
             continue
@@ -201,12 +211,14 @@ def build_rows(
             doc["workers"] or 1,
             doc["diffusion_samples"],
             doc.get("variant") or "",
+            doc.get("atom_graph_break"),
+            doc.get("max_parallel_samples"),
         )
         groups[key][doc["target_id"]].append((res, doc))
     directories = [(p, _load(p)) for p in sorted(results_root.rglob("directory.json"))]
 
     rows: list[dict[str, Any]] = []
-    for (inst, backend, lnc, workers, ds, variant), per_target in sorted(
+    for (inst, backend, lnc, workers, ds, variant, agb, mps), per_target in sorted(
         groups.items(), key=str
     ):
         platform = f"{inst} {backend}" + (
@@ -214,6 +226,11 @@ def build_rows(
             if lnc
             else (f" x{workers} (shared GPU)" if workers > 1 else "")
         )
+        # non-default port settings are part of the platform label (charter: baseline-model row)
+        if agb is not None:
+            platform += f" split={agb}"
+        if mps is not None:
+            platform += f" chunks<={mps}"
         ran_tokens = [
             d["tokens"]
             for docs in per_target.values()
@@ -223,7 +240,9 @@ def build_rows(
         ceiling = max(ran_tokens) if ran_tokens else None
         on_gpu_host = backend in ("gpu", "openfold-trt")
         msa = msa_gpu if on_gpu_host else msa_cpu
-        gate = None if variant else _gate_for(gates, backend, lnc, ds, workers)
+        gate = (
+            None if variant else _gate_for(gates, backend, lnc, ds, workers, agb, mps)
+        )
         plat_rows = []
         for tid, docs in sorted(per_target.items()):
             t = by_id.get(tid, {})
@@ -311,6 +330,8 @@ def build_rows(
                     ds,
                     bill_setup,
                     prices,
+                    agb,
+                    mps,
                 )
             )
             rows.append(mean)
@@ -341,6 +362,8 @@ def _batch_columns(
     ds: int,
     bill_setup: bool,
     prices: dict[str, Any] | None = None,
+    agb: int | None = None,
+    mps: int | None = None,
 ) -> dict[str, Any]:
     """End-to-end batch: billed host time amortised over the directory run's targets.
 
@@ -358,11 +381,15 @@ def _batch_columns(
             d.get("lnc"),
             d.get("workers"),
             d.get("diffusion_samples"),
+            d.get("atom_graph_break"),
+            d.get("max_parallel_samples"),
         ) != (
             backend,
             lnc,
             workers,
             ds,
+            agb,
+            mps,
         ) or d.get("status") != "measured":
             continue
         dinst, od, spot = _prices(p, d, prices)
