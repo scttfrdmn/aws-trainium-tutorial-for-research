@@ -223,6 +223,12 @@ def _record_id(batch: Any) -> str | None:
         return None
 
 
+def _float32() -> Any:
+    import torch
+
+    return torch.float32
+
+
 class StepDump:
     """Every denoising call's output coordinates, one .npz per predict record (#106).
 
@@ -252,7 +258,9 @@ class StepDump:
         def _wrapped(*args: Any, **kwargs: Any) -> Any:
             out = orig(*args, **kwargs)
             sigma = args[1] if len(args) > 1 else kwargs.get("sigma")
-            self.calls.append(out.detach().float().cpu().numpy())
+            # .to(float32), not .float(): boltz-neuron patches Tensor.float to its active dtype
+            # (bf16), and numpy has no bfloat16 (#106 window 8).
+            self.calls.append(out.detach().to(dtype=_float32()).cpu().numpy())
             self.sigma.append(
                 float(sigma)
                 if isinstance(sigma, int | float)
