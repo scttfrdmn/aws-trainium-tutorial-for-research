@@ -289,8 +289,11 @@ def test_ami_resolved_in_the_hosts_region(capsys):
     assert "capacity-block" in capsys.readouterr().out
 
 
-def test_step_dump_records_every_denoising_call(tmp_path):
+def test_step_dump_records_every_denoising_call(tmp_path, monkeypatch):
     np = pytest.importorskip("numpy")
+    monkeypatch.setattr(
+        entry, "_float32", lambda: "float32"
+    )  # torch is not needed here
 
     class _T:  # minimal tensor stand-in
         def __init__(self, a):
@@ -299,7 +302,13 @@ def test_step_dump_records_every_denoising_call(tmp_path):
         def detach(self):
             return self
 
-        def float(self):
+        def float(
+            self,
+        ):  # boltz-neuron makes .float() return bf16; the dump must not use it
+            raise AssertionError("StepDump must not call .float()")
+
+        def to(self, dtype=None):
+            assert dtype == "float32"
             return self
 
         def cpu(self):
