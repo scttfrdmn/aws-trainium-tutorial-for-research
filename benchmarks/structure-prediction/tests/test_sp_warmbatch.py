@@ -149,3 +149,33 @@ def test_gpu_share_runs_concurrent_workers_on_one_gpu(tmp_path, monkeypatch):
             "--out-root", str(tmp_path / "o2"), "--seed", "0", "--ds", "1", "--workers", "4", "--dry-run"]  # fmt: skip
     assert run.main(argv) == 2  # refused without --gpu-share
     assert run.main([*argv, "--gpu-share"]) == 0
+
+
+def test_cpu_layout_and_config_passthrough(tmp_path):
+    # #114: floor leaves 4 of 12 vCPUs idle at 8 workers; spread uses all of them
+    assert warmbatch.cpu_sets(8, 12) == [f"{i}-{i}" for i in range(8)]
+    assert warmbatch.cpu_sets(8, 12, layout="spread") == [
+        "0-1",
+        "2-3",
+        "4-5",
+        "6-7",
+        "8-8",
+        "9-9",
+        "10-10",
+        "11-11",
+    ]
+    with pytest.raises(backends.ConfigError):
+        warmbatch.cpu_sets(2, 4, layout="nope")
+    # #106: ds=5 as 1-sample chunks + split reach the worker command and the records
+    res = go(tmp_path, fake_exec(), ds=5, cap_parallel_samples=True, max_parallel_samples=1,
+             atom_graph_break=1, cpu_layout="spread")  # fmt: skip
+    assert res["max_parallel_samples"] == 1 and res["cap_parallel_samples"] is True
+    assert res["atom_graph_break"] == 1 and res["cpu_layout"] == "spread"
+    assert "-mps1cap-agb1-" in res["run_group"]
+    g = tmp_path / "out" / res["run_group"]
+    d = json.loads((g / "A" / "result.json").read_text())
+    assert d["max_parallel_samples"] == 1 and "--max_parallel_samples" in d["command"]
+    assert (
+        d["env"]["BOLTZ_FIX_MAX_PARALLEL_SAMPLES"] == "1"
+        and d["env"]["BOLTZ_NEURON_ATOM_GRAPH_BREAK"] == "1"
+    )

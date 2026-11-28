@@ -55,12 +55,29 @@ def assign(tokens: dict[str, int], workers: int) -> list[list[str]]:
     return shards
 
 
-def cpu_sets(workers: int, vcpus: int, reserve: int = 0) -> list[str]:
-    """Disjoint contiguous CPU sets, one per worker, after `reserve` CPUs for the OS."""
-    per = max((vcpus - reserve) // workers, 1)
-    return [
-        f"{reserve + i * per}-{reserve + (i + 1) * per - 1}" for i in range(workers)
-    ]
+def cpu_sets(
+    workers: int, vcpus: int, reserve: int = 0, layout: str = "floor"
+) -> list[str]:
+    """Disjoint contiguous CPU sets, one per worker, after `reserve` CPUs for the OS.
+
+    layout "floor" gives every worker (vcpus - reserve) // workers CPUs and leaves the remainder
+    idle (8 workers on 12 vCPUs: 1 each, 4 idle; #114). "spread" hands the remainder out, one
+    extra CPU to each of the first workers, so every CPU is used.
+    """
+    n = vcpus - reserve
+    if layout == "floor":
+        per = max(n // workers, 1)
+        sizes = [per] * workers
+    elif layout == "spread":
+        base, extra = divmod(n, workers)
+        sizes = [max(base + (1 if i < extra else 0), 1) for i in range(workers)]
+    else:
+        raise backends.ConfigError(f"unknown cpu layout {layout!r}")
+    out, start = [], reserve
+    for size in sizes:
+        out.append(f"{start}-{start + size - 1}")
+        start += size
+    return out
 
 
 def order_from_timing(per_record: dict[str, float], tid: str) -> tuple[str, str] | None:
@@ -98,6 +115,9 @@ def run_warmbatch(
     dry_run: bool = False,
     repo_paths: dict[str, str | None] | None = None,
     gpu_share: bool = False,
+    cap_parallel_samples: bool = False,
+    max_parallel_samples: int | None = None,
+    cpu_layout: str = "floor",
 ) -> dict[str, Any]:
     """Run the in-process warm batch and write one result.json per target plus group.json.
 
@@ -132,10 +152,18 @@ def run_warmbatch(
     group = f"{backend}-lnc{lnc}-w{workers}-ds{ds}-s{seed}" + (
         f"-{variant}" if variant else ""
     )
+    if max_parallel_samples is not None:
+        group += f"-mps{max_parallel_samples}{'cap' if cap_parallel_samples else ''}"
+    if atom_graph_break is not None:
+        group += f"-agb{atom_graph_break}"
     group += f"-{uuid.uuid4().hex[:6]}"
     gdir = out_root / group
     vc = vcpus or os.cpu_count() or 1
-    cpus = cpu_sets(len(shards), vc) if backend == "neuron" else [None] * len(shards)
+    cpus = (
+        cpu_sets(len(shards), vc, layout=cpu_layout)
+        if backend == "neuron"
+        else [None] * len(shards)
+    )
     threads = max((vc // len(shards)), 1)
 
     invs = []
@@ -157,6 +185,8 @@ def run_warmbatch(
             atom_graph_break=atom_graph_break,
             variant=variant,
             max_msa_seqs=max_msa_seqs,
+            max_parallel_samples_cap=cap_parallel_samples,
+            max_parallel_samples=max_parallel_samples,
         )
         inv = backends.build(cfg)
         env = dict(inv.env)
@@ -223,6 +253,7 @@ def run_warmbatch(
                 variant=variant,
                 max_msa_seqs=max_msa_seqs,
                 timing_method="in-process-warm",
+                max_parallel_samples=max_parallel_samples,
             )
             doc["env"] = env
             if dry_run:
@@ -282,6 +313,10 @@ def run_warmbatch(
         "seed": seed,
         "threads_per_worker": threads if backend == "neuron" else None,
         "gpu_share": bool(backend == "gpu" and workers > 1),
+        "atom_graph_break": atom_graph_break,
+        "max_parallel_samples": max_parallel_samples,
+        "cap_parallel_samples": cap_parallel_samples,
+        "cpu_layout": cpu_layout if backend == "neuron" else None,
         "mps": _mps_active() if backend == "gpu" else None,
         "cpu_sets": cpus,
         "shards": shards,

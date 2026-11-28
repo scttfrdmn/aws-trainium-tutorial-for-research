@@ -516,3 +516,23 @@ def test_gate_verdict_needs_matching_worker_count_on_gpu(tmp_path):
         r["platform"]: r["accuracy_gate"] for r in rows if r["target_id"] == "__mean__"
     }
     assert mean["g7e.2xlarge gpu x2 (shared GPU)"] == "calibrated/3 PASS"
+
+
+def test_nondefault_port_settings_are_separate_labelled_platforms(tmp_path):
+    for s in (0, 1):
+        write_result(tmp_path / "plain", "T1", s, ds=5)
+        write_result(tmp_path / "chunk", "T1", s, ds=5)
+    for res in (tmp_path / "chunk").rglob("result.json"):
+        d = json.loads(res.read_text())
+        d["max_parallel_samples"] = 1
+        res.write_text(json.dumps(d))
+    g = {"method": "calibrated/3", "phase_pass": True, "reasons": [], "cap_exceeded": [], "incomplete": [],
+         "acc": {"variant": "", "backend": "neuron", "diffusion_samples": "5", "lnc": "2"}}  # fmt: skip
+    rows = ct.build_rows(
+        tmp_path, TARGETS, {}, {}, gates=[{**g, "max_parallel_samples": 1}]
+    )
+    mean = {
+        r["platform"]: r["accuracy_gate"] for r in rows if r["target_id"] == "__mean__"
+    }
+    assert mean == {"trn2.3xlarge neuron LNC=2 x4": None,
+                    "trn2.3xlarge neuron LNC=2 x4 chunks<=1": "calibrated/3 PASS"}  # fmt: skip

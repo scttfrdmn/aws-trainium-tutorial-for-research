@@ -444,6 +444,21 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
     pw.add_argument(
         "--vcpus", type=int, help="host vCPUs to divide among workers (default: all)"
     )
+    for p_ in (pw, pd):
+        p_.add_argument(
+            "--cap-parallel-samples",
+            action="store_true",
+            help="BOLTZ_FIX_MAX_PARALLEL_SAMPLES=1",
+        )
+        p_.add_argument(
+            "--max-parallel-samples", type=int,
+            help="Boltz --max_parallel_samples (with --cap-parallel-samples: samples per chunk)",
+        )  # fmt: skip
+    pd.add_argument("--atom-graph-break", type=int, choices=(0, 1))
+    pw.add_argument(
+        "--cpu-layout", choices=("floor", "spread"), default="floor",
+        help="neuron worker CPU sets: floor (default, remainder idle) or spread (#114)",
+    )  # fmt: skip
     pw.add_argument(
         "--gpu-share",
         action="store_true",
@@ -483,6 +498,9 @@ def main(argv: Sequence[str] | None = None, executor: Executor = execute) -> int
                 dry_run=ns.dry_run,
                 repo_paths=_repo_paths(ns.repo),
                 gpu_share=ns.gpu_share,
+                cap_parallel_samples=ns.cap_parallel_samples,
+                max_parallel_samples=ns.max_parallel_samples,
+                cpu_layout=ns.cpu_layout,
             )
         except backends.ConfigError as exc:
             print(f"config error: {exc}", file=sys.stderr)
@@ -617,6 +635,9 @@ def _extra_command(ns: argparse.Namespace, executor: Executor) -> int:
         executor=executor,
         manifest_fn=capture_manifest,
         repo_paths=repos,
+        atom_graph_break=ns.atom_graph_break,
+        cap_parallel_samples=ns.cap_parallel_samples,
+        max_parallel_samples=ns.max_parallel_samples,
     )
     print(json.dumps({k: res[k] for k in ("status", "n_targets", "group_wall_s")}))
     return 0 if res["status"] in ("measured", "dry-run") else 1
